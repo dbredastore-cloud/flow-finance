@@ -14,7 +14,8 @@ const HISTORY_DAYS = 1095; // 3 anos
 const WINDOW_DAYS = 89; // a API aceita no máximo 90 dias por consulta
 const TIME_BUDGET_MS = 110_000;
 const MIN_GAP_MS = 720; // ~85 req/min, mesmo limite do kiwify_bot
-const AFFILIATES_REFRESH_MS = 6 * 3600_000;
+const AFFILIATES_REFRESH_MS = 24 * 3600_000;
+const AFFILIATES_BUDGET_MS = 40_000;
 const LOCK_TTL_MS = 5 * 60_000;
 
 const sb = createClient(
@@ -103,39 +104,68 @@ function guessTool(productName: string): string | null {
 }
 
 // ---------------- Affiliates ----------------
+// A lista de afiliados pode ter milhares de linhas (uma por afiliado × produto),
+// então é gravada página a página e retomada de onde parou na próxima execução.
+// Usa no máximo AFFILIATES_BUDGET_MS por execução para as vendas também avançarem.
 async function syncAffiliates() {
-  const last = await getState<{ at?: string }>("affiliates", {});
-  if (last.at && Date.now() - Date.parse(last.at) < AFFILIATES_REFRESH_MS) return 0;
+  const st = await getState<{ at?: string; page?: number; total?: number }>("affiliates", {});
+  const midRun = (st.page ?? 1) > 1;
+  if (!midRun && st.at && Date.now() - Date.parse(st.at) < AFFILIATES_REFRESH_MS) return 0;
 
-  const byEmail = new Map<string, any>();
-  for (let page = 1; ; page++) {
-    if (!timeLeft()) return 0; // tenta de novo na próxima execução
-    const js = await kiwifyGet("/affiliates", { page_size: 100, page_number: page });
-    const rows: any[] = js.data ?? [];
-    for (const a of rows) {
-      const email = (a.email || "").trim().toLowerCase();
-      if (!email) continue;
-      const cur = byEmail.get(email) ?? {
-        email, name: a.name ?? null, company_name: a.company_name || null,
-        company_cnpj: a.company_cnpj || null, director_cpf: a.director_cpf || null,
-        kiwify_status: a.status ?? null, kiwify_ids: [] as string[], products: [] as any[],
-      };
-      if (a.affiliate_id && !cur.kiwify_ids.includes(a.affiliate_id)) cur.kiwify_ids.push(a.affiliate_id);
-      if (a.product?.id) cur.products.push({ id: a.product.id, name: a.product.name, commission: a.commission, status: a.status });
-      if (a.status === "active") cur.kiwify_status = "active";
-      cur.company_cnpj ||= a.company_cnpj || null;
-      byEmail.set(email, cur);
-      if (a.product?.id) await ensureProduct(a.product.id, a.product.name);
+  const until = Math.min(deadline, Date.now() + AFFILIATES_BUDGET_MS);
+  let saved = 0;
+  for (let page = st.page ?? 1; ; page++) {
+    if (Date.now() >= until) {
+      await setState("affiliates", { ...st, page });
+      return saved;
     }
+    const js = await kiwifyGet("/affiliates", { page_size: 100, page_number: page });
+    const list: any[] = js.data ?? [];
+    saved += await saveAffiliatesPage(list);
     const count = js.pagination?.count ?? 0;
-    if (!rows.length || page * 100 >= count) break;
+    if (!list.length || page * 100 >= count) {
+      await setState("affiliates", { at: new Date().toISOString(), page: 1, total: count });
+      return saved;
+    }
+  }
+}
+
+// Agrupa a página por e-mail e mescla produtos/ids com o que já está no banco.
+async function saveAffiliatesPage(list: any[]) {
+  const byEmail = new Map<string, any>();
+  for (const a of list) {
+    const email = (a.email || "").trim().toLowerCase();
+    if (!email) continue;
+    const cur = byEmail.get(email) ?? {
+      email, name: a.name ?? null, company_name: a.company_name || null,
+      company_cnpj: a.company_cnpj || null, director_cpf: a.director_cpf || null,
+      kiwify_status: a.status ?? null, kiwify_ids: [] as string[], products: [] as any[],
+    };
+    if (a.affiliate_id && !cur.kiwify_ids.includes(a.affiliate_id)) cur.kiwify_ids.push(a.affiliate_id);
+    if (a.product?.id) cur.products.push({ id: a.product.id, name: a.product.name, commission: a.commission, status: a.status });
+    if (a.status === "active") cur.kiwify_status = "active";
+    cur.company_cnpj ||= a.company_cnpj || null;
+    cur.director_cpf ||= a.director_cpf || null;
+    byEmail.set(email, cur);
+    if (a.product?.id) await ensureProduct(a.product.id, a.product.name);
+  }
+  if (!byEmail.size) return 0;
+
+  const { data: existing, error: readErr } = await sb.from("affiliates")
+    .select("email, kiwify_ids, products, kiwify_status").in("email", [...byEmail.keys()]);
+  if (readErr) throw readErr;
+  for (const ex of existing ?? []) {
+    const cur = byEmail.get(ex.email);
+    const ids = new Set([...(ex.kiwify_ids ?? []), ...cur.kiwify_ids]);
+    const prods = new Map<string, any>();
+    for (const p of [...(ex.products ?? []), ...cur.products]) prods.set(p.id, p);
+    cur.kiwify_ids = [...ids];
+    cur.products = [...prods.values()];
+    if (ex.kiwify_status === "active") cur.kiwify_status = "active";
   }
   const rows = [...byEmail.values()].map((r) => ({ ...r, document: r.company_cnpj || r.director_cpf }));
-  for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await sb.from("affiliates").upsert(rows.slice(i, i + 500), { onConflict: "email" });
-    if (error) throw error;
-  }
-  await setState("affiliates", { at: new Date().toISOString(), count: rows.length });
+  const { error } = await sb.from("affiliates").upsert(rows, { onConflict: "email" });
+  if (error) throw error;
   return rows.length;
 }
 
