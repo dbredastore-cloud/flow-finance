@@ -38,16 +38,19 @@ let lastReq = 0;
 
 async function kiwifyToken(): Promise<string> {
   if (token) return token;
+  const env = (k: string) => (Deno.env.get(k) ?? "").trim();
+  const missing = ["KIWIFY_CLIENT_ID", "KIWIFY_CLIENT_SECRET", "KIWIFY_ACCOUNT_ID"].filter((k) => !env(k));
+  if (missing.length) throw new Error(`Secrets não configurados no Supabase: ${missing.join(", ")}`);
   const r = await fetch(`${KIWIFY_BASE}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: Deno.env.get("KIWIFY_CLIENT_ID") ?? "",
-      client_secret: Deno.env.get("KIWIFY_CLIENT_SECRET") ?? "",
+      client_id: env("KIWIFY_CLIENT_ID"),
+      client_secret: env("KIWIFY_CLIENT_SECRET"),
       grant_type: "client_credentials",
     }),
   });
-  if (!r.ok) throw new Error(`Kiwify OAuth falhou (${r.status}). Confira os secrets KIWIFY_*.`);
+  if (!r.ok) throw new Error(`Kiwify recusou o login (${r.status}): ${(await r.text()).slice(0, 200)}`);
   token = (await r.json()).access_token;
   return token!;
 }
@@ -62,7 +65,7 @@ async function kiwifyGet(path: string, params: Record<string, string | number | 
     const r = await fetch(url, {
       headers: {
         Authorization: `Bearer ${await kiwifyToken()}`,
-        "x-kiwify-account-id": Deno.env.get("KIWIFY_ACCOUNT_ID") ?? "",
+        "x-kiwify-account-id": (Deno.env.get("KIWIFY_ACCOUNT_ID") ?? "").trim(),
       },
     });
     if (r.status === 429) { await sleep(5000 * (attempt + 1)); continue; }
