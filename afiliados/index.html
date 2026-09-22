@@ -196,6 +196,8 @@
   .who .e { font-size: 11.5px; color: var(--text-muted); }
   .muted { color: var(--text-muted); }
   .rank { color: var(--text-muted); width: 28px; }
+  th.prod-col { max-width: 120px; white-space: normal; line-height: 1.3; vertical-align: bottom; }
+  td.prod-col { border-left: 1px solid var(--border); }
   td.products-cell { white-space: normal; min-width: 220px; }
 
   .chip {
@@ -379,21 +381,20 @@
           <div class="tools">
             <input class="search" id="base-search" type="search" placeholder="Buscar nome, e-mail, CNPJ, @…">
             <select class="search" id="base-filter" aria-label="Filtro">
-              <option value="all">Todos</option>
-              <option value="missing">Sem contato preenchido</option>
               <option value="selling">Venderam no período</option>
+              <option value="all">Todos</option>
+              <option value="missing">Venderam, sem contato preenchido</option>
               <option value="active">Ativos na Kiwify</option>
             </select>
             <button class="btn" id="base-csv">Exportar CSV</button>
           </div>
         </div>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Quantidade de vendas de cada produto por influencer, no período e filtros selecionados acima. Clique no título de qualquer coluna para ordenar do maior para o menor.</p>
         <div class="table-scroll"><table>
-          <thead><tr>
-            <th class="l">Afiliado</th><th class="l">CPF/CNPJ</th><th class="l">WhatsApp</th><th class="l">Redes</th>
-            <th class="l">Status</th><th>Vendas no período</th><th>Comissão no período</th>
-          </tr></thead>
+          <thead><tr id="base-head"></tr></thead>
           <tbody id="base-body"></tbody>
         </table></div>
+        <p class="muted" id="base-more" style="font-size:12px; margin:10px 0 4px;" hidden></p>
       </section>
     </section>
 
@@ -437,6 +438,7 @@
     affiliates: [], products: [], sales: [],
     byEmail: {}, stats: {},
     sort: { key: "commission", dir: -1 },
+    baseSort: { key: "count", dir: -1 },
     openEmail: null
   };
 
@@ -861,41 +863,98 @@
   });
 
   /* ---------------- Render: base ---------------- */
+  // Influencers: uma linha por afiliado, uma coluna por produto vendido no período/filtros.
+  var BASE_LIMIT = 300;
+  var EMPTY_STATS = { count: 0, amount: 0, commission: 0, products: {} };
+
+  // Produtos com venda no filtro atual, do mais vendido para o menos vendido.
+  function baseProductCols() {
+    return byProduct(filteredSales()).sort(function (a, b) { return b.count - a.count; }).map(function (p) { return p.name; });
+  }
+  function baseValue(x, key) {
+    if (key === "name") return (x.a.name || x.a.email || "").toLowerCase();
+    if (key.indexOf("p:") === 0) return x.st.products[key.slice(2)] || 0;
+    return x.st[key] || 0;
+  }
   function baseRows() {
     var q = $("base-search").value.trim().toLowerCase(), f = $("base-filter").value;
-    return state.affiliates.filter(function (a) {
+    var list = state.affiliates.slice();
+    // Quem vendeu mas ainda não está na lista de afiliados da Kiwify também entra.
+    Object.keys(state.stats).forEach(function (email) {
+      if (!state.byEmail[email]) list.push({ email: email, name: state.stats[email].name });
+    });
+    list = list.filter(function (a) {
       if (q && searchable(a).indexOf(q) < 0) return false;
-      if (f === "missing") return !hasContact(a);
-      if (f === "selling") return !!state.stats[a.email];
+      var sold = !!state.stats[a.email];
+      if (f === "selling") return sold;
+      if (f === "missing") return sold && !hasContact(a);
       if (f === "active") return a.kiwify_status === "active";
       return true;
+    }).map(function (a) { return { a: a, st: state.stats[a.email] || EMPTY_STATS }; });
+    var k = state.baseSort.key, d = state.baseSort.dir;
+    list.sort(function (x, y) {
+      var vx = baseValue(x, k), vy = baseValue(y, k);
+      if (vx !== vy) return vx < vy ? -d : d;
+      return y.st.commission - x.st.commission;
     });
+    return list;
   }
   function renderBase() {
+    var cols = baseProductCols();
+    var s = state.baseSort;
+    if (s.key.indexOf("p:") === 0 && cols.indexOf(s.key.slice(2)) < 0) state.baseSort = s = { key: "count", dir: -1 };
+    var th = function (key, label, cls) {
+      var arrow = s.key === key ? ' <span class="arrow">' + (s.dir < 0 ? "↓" : "↑") + "</span>" : "";
+      return '<th class="sortable ' + (cls || "") + '" data-key="' + esc(key) + '">' + label + arrow + "</th>";
+    };
+    $("base-head").innerHTML = '<th class="l">#</th>' + th("name", "Influencer", "l") +
+      th("count", "Vendas") + th("amount", "Faturamento") + th("commission", "Comissão") +
+      cols.map(function (c) { return th("p:" + c, esc(c), "prod-col"); }).join("") +
+      '<th class="l">CPF/CNPJ</th><th class="l">Contato</th>';
+
     var list = baseRows();
-    $("base-title").textContent = "Base de influencers (" + fmtInt(list.length) + ")";
-    $("base-body").innerHTML = list.length ? list.map(function (a) {
-      var st = state.stats[a.email];
+    var sellers = list.filter(function (x) { return x.st.count > 0; }).length;
+    $("base-title").textContent = "Influencers (" + fmtInt(list.length) + (sellers !== list.length ? " · " + fmtInt(sellers) + " venderam" : "") + ")";
+    var shown = list.slice(0, BASE_LIMIT);
+    var colCount = 7 + cols.length;
+    $("base-body").innerHTML = shown.length ? shown.map(function (x, i) {
+      var a = x.a, st = x.st;
       return '<tr class="clickable" data-email="' + esc(a.email) + '">' +
+        '<td class="l rank num">' + (i + 1) + "</td>" +
         '<td class="l who"><div class="n">' + esc(a.name || a.email) + '</div><div class="e">' + esc(a.email) + "</div></td>" +
-        '<td class="l num">' + esc(fmtDoc(a.company_cnpj || a.document)) + (a.company_name && a.company_name !== a.name ? '<div class="e muted" style="font-family:inherit">' + esc(a.company_name) + "</div>" : "") + "</td>" +
-        '<td class="l num">' + (a.whatsapp ? esc(a.whatsapp) : '<span class="muted">—</span>') + "</td>" +
-        '<td class="l">' + socialsHtml(a) + "</td>" +
-        '<td class="l">' + (a.kiwify_status ? '<span class="status ' + (a.kiwify_status === "active" ? "ok" : "wait") + '">' + esc(a.kiwify_status === "active" ? "Ativo" : a.kiwify_status) + "</span>" : '<span class="muted">—</span>') + "</td>" +
-        '<td class="num">' + (st ? fmtInt(st.count) : '<span class="muted">0</span>') + "</td>" +
-        '<td class="num">' + (st ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td></tr>";
-    }).join("") : '<tr><td colspan="7" class="empty">Nenhum afiliado encontrado.</td></tr>';
+        '<td class="num"><strong>' + fmtInt(st.count) + "</strong></td>" +
+        '<td class="num">' + (st.count ? fmtBRL(st.amount) : '<span class="muted">—</span>') + "</td>" +
+        '<td class="num">' + (st.count ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td>" +
+        cols.map(function (c) {
+          var n = st.products[c] || 0;
+          return '<td class="num prod-col">' + (n ? fmtInt(n) : '<span class="muted">·</span>') + "</td>";
+        }).join("") +
+        '<td class="l num">' + (a.company_cnpj || a.document ? esc(fmtDoc(a.company_cnpj || a.document)) : '<span class="muted">—</span>') + "</td>" +
+        '<td class="l">' + socialsHtml(a) + "</td></tr>";
+    }).join("") : '<tr><td colspan="' + colCount + '" class="empty">Nenhum influencer encontrado com esses filtros.</td></tr>';
+    var more = $("base-more");
+    more.hidden = list.length <= BASE_LIMIT;
+    more.textContent = "Mostrando os " + fmtInt(BASE_LIMIT) + " primeiros de " + fmtInt(list.length) + ". Use a busca para achar alguém específico ou exporte o CSV para ver todos.";
   }
+  $("base-head").addEventListener("click", function (e) {
+    var th = e.target.closest("th.sortable");
+    if (!th) return;
+    var k = th.dataset.key;
+    state.baseSort = { key: k, dir: state.baseSort.key === k ? -state.baseSort.dir : (k === "name" ? 1 : -1) };
+    renderBase();
+  });
   $("base-search").addEventListener("input", renderBase);
   $("base-filter").addEventListener("change", renderBase);
   $("base-csv").addEventListener("click", function () {
-    var rows = [["Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Status Kiwify", "Vendas no período", "Comissão no período", "Notas"]];
-    baseRows().forEach(function (a) {
-      var st = state.stats[a.email] || { count: 0, commission: 0 };
-      rows.push([a.name, a.email, fmtDoc(a.company_cnpj || a.document), a.company_name, a.whatsapp, a.instagram, a.facebook, a.youtube, a.tiktok,
-        a.kiwify_status, st.count, csvNum(st.commission), a.notes]);
+    var cols = baseProductCols(), r = periodRange();
+    var rows = [["Posição", "Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão"].concat(cols).concat(["Notas"])];
+    baseRows().forEach(function (x, i) {
+      var a = x.a, st = x.st;
+      rows.push([i + 1, a.name, a.email, fmtDoc(a.company_cnpj || a.document), a.company_name, a.whatsapp, a.instagram, a.facebook, a.youtube, a.tiktok,
+        st.count, csvNum(st.amount), csvNum(st.commission)]
+        .concat(cols.map(function (c) { return st.products[c] || 0; })).concat([a.notes]));
     });
-    downloadCsv("base_influencers.csv", rows);
+    downloadCsv("influencers_" + isoDate(r[0]) + "_a_" + isoDate(new Date(r[1] - 86400000)) + ".csv", rows);
   });
 
   /* ---------------- Render: produtos ---------------- */
