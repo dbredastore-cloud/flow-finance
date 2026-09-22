@@ -111,8 +111,8 @@ end $$;
 create or replace function public.verify_sync_secret(secret text) returns boolean
 language sql security definer set search_path = '' as $$
   select exists (
-    select 1 from vault.decrypted_secrets
-    where name = 'kiwify_sync_cron' and decrypted_secret = secret
+    select 1 from vault.decrypted_secrets ds
+    where ds.name = 'kiwify_sync_cron' and ds.decrypted_secret = verify_sync_secret.secret
   );
 $$;
 revoke all on function public.verify_sync_secret(text) from public, anon, authenticated;
