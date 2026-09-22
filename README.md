@@ -16,7 +16,7 @@ Kiwify API ──(a cada 5 min, pg_cron)──▶ Edge Function kiwify-sync ─�
 - `supabase/functions/kiwify-sync/` – busca `/affiliates` e `/sales` (com `view_full_sale_details`) e grava só as vendas que têm `affiliate_commission`. Na primeira vez importa 3 anos de histórico em partes (~110 s por execução); depois busca só o que mudou nos últimos 89 dias (aprovações, reembolsos, chargebacks).
 - `supabase/migrations/` – tabelas `affiliates`, `affiliate_sales`, `kiwify_products`, `sync_state`, a view `affiliate_sales_v` e o agendamento.
 - WhatsApp, Instagram, Facebook, YouTube, TikTok e notas são preenchidos à mão no painel; o sync nunca sobrescreve esses campos.
-- Produtos são ligados às ferramentas pelo nome; corrija na aba **Produtos** se algum ficar sem ferramenta.
+- O painel agrupa tudo por produto, com o nome cadastrado na Kiwify (todos os produtos da conta, não só as ferramentas Flow).
 
 ### Configuração (uma vez)
 

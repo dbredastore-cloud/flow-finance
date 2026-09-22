@@ -196,7 +196,7 @@
   .who .e { font-size: 11.5px; color: var(--text-muted); }
   .muted { color: var(--text-muted); }
   .rank { color: var(--text-muted); width: 28px; }
-  td.tools-cell { white-space: normal; min-width: 220px; }
+  td.products-cell { white-space: normal; min-width: 220px; }
 
   .chip {
     display: inline-block; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim);
@@ -327,7 +327,7 @@
       <span class="custom-range" id="custom-range" hidden>
         <input type="date" id="f-from" aria-label="De"> até <input type="date" id="f-to" aria-label="Até">
       </span>
-      <select id="f-tool" aria-label="Ferramenta"></select>
+      <select id="f-product" aria-label="Produto"></select>
       <select id="f-status" aria-label="Status">
         <option value="approved">Vendas aprovadas</option>
         <option value="refunded">Reembolsos e chargebacks</option>
@@ -348,10 +348,10 @@
           </div>
         </section>
         <section class="panel">
-          <div class="panel-head"><h3>Por ferramenta</h3></div>
+          <div class="panel-head"><h3>Por produto</h3></div>
           <div class="table-scroll"><table>
-            <thead><tr><th class="l">Ferramenta</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead>
-            <tbody id="tool-body"></tbody>
+            <thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead>
+            <tbody id="product-summary-body"></tbody>
           </table></div>
         </section>
       </div>
@@ -401,9 +401,9 @@
     <section id="view-products" hidden>
       <section class="panel">
         <div class="panel-head"><h3>Produtos da Kiwify</h3></div>
-        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Cada produto é ligado a uma ferramenta automaticamente pelo nome. Corrija aqui se algum ficar errado ou sem ferramenta.</p>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Todos os produtos da conta Kiwify, com as vendas feitas por afiliados no período e status selecionados.</p>
         <div class="table-scroll"><table>
-          <thead><tr><th class="l">Produto</th><th class="l">Ferramenta</th><th>Vendas c/ afiliado no período</th></tr></thead>
+          <thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>Afiliados que venderam</th></tr></thead>
           <tbody id="products-body"></tbody>
         </table></div>
       </section>
@@ -431,11 +431,10 @@
     processing: "Processando", refused: "Recusada", refunded: "Reembolsada", chargedback: "Chargeback",
     refund_requested: "Reembolso solicitado", pending_refund: "Reembolso pendente"
   };
-  var NO_TOOL = "__none__";
 
   var state = {
     view: "overview",
-    tools: [], affiliates: [], products: [], sales: [],
+    affiliates: [], products: [], sales: [],
     byEmail: {}, stats: {},
     sort: { key: "commission", dir: -1 },
     openEmail: null
@@ -596,9 +595,6 @@
   }
 
   async function loadStatic() {
-    var t = await sb.from("tools").select("id, name, slug, sort_order").order("sort_order");
-    if (t.error) throw t.error;
-    state.tools = t.data || [];
     state.affiliates = await fetchAll(function () { return sb.from("affiliates").select("*").order("name"); });
     var p = await sb.from("kiwify_products").select("*").order("name");
     if (p.error) throw p.error;
@@ -610,8 +606,8 @@
   async function loadSales() {
     var r = periodRange();
     state.sales = await fetchAll(function () {
-      return sb.from("affiliate_sales_v")
-        .select("id, affiliate_email, affiliate_name, product_id, product_name, tool_id, tool_name, status, payment_method, amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
+      return sb.from("affiliate_sales")
+        .select("id, affiliate_email, affiliate_name, product_id, product_name, status, payment_method, amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
         .gte("sale_created_at", r[0].toISOString()).lt("sale_created_at", r[1].toISOString())
         .order("sale_created_at", { ascending: false });
     });
@@ -630,10 +626,15 @@
     el.innerHTML = txt;
   }
 
+  function productName(s) { return s.product_name || "Produto sem nome"; }
+  function matchesProduct(s) {
+    var p = $("f-product").value;
+    return p === "all" || s.product_id === p;
+  }
   function filteredSales() {
-    var tool = $("f-tool").value, status = $("f-status").value;
+    var status = $("f-status").value;
     return state.sales.filter(function (s) {
-      if (tool !== "all" && (tool === NO_TOOL ? !!s.tool_id : s.tool_id !== tool)) return false;
+      if (!matchesProduct(s)) return false;
       if (status === "approved") return APPROVED.indexOf(s.status) >= 0;
       if (status === "refunded") return REFUNDED.indexOf(s.status) >= 0;
       return true;
@@ -643,14 +644,27 @@
   function computeStats(sales) {
     var by = {};
     sales.forEach(function (s) {
-      var e = by[s.affiliate_email] || (by[s.affiliate_email] = { email: s.affiliate_email, name: s.affiliate_name, count: 0, amount: 0, commission: 0, tools: {} });
+      var e = by[s.affiliate_email] || (by[s.affiliate_email] = { email: s.affiliate_email, name: s.affiliate_name, count: 0, amount: 0, commission: 0, products: {} });
       e.count++;
       e.amount += Number(s.amount) || 0;
       e.commission += Number(s.commission) || 0;
-      var tn = s.tool_name || "Sem ferramenta";
-      e.tools[tn] = (e.tools[tn] || 0) + 1;
+      var pn = productName(s);
+      e.products[pn] = (e.products[pn] || 0) + 1;
     });
     return by;
+  }
+
+  // Soma vendas/faturamento/comissão por produto (nome da Kiwify), maior comissão primeiro.
+  function byProduct(sales) {
+    var rows = {};
+    sales.forEach(function (s) {
+      var k = s.product_id || productName(s);
+      var r = rows[k] || (rows[k] = { id: s.product_id, name: productName(s), count: 0, amount: 0, commission: 0, sellers: {} });
+      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
+      r.sellers[s.affiliate_email] = 1;
+    });
+    return Object.keys(rows).map(function (k) { return rows[k]; })
+      .sort(function (a, b) { return b.commission - a.commission || b.count - a.count; });
   }
 
   /* ---------------- Render: visão geral ---------------- */
@@ -659,10 +673,10 @@
     state.stats = computeStats(sales);
     renderKpis(sales);
     renderChart(sales);
-    renderToolTable(sales);
+    renderProductSummary(sales);
     renderRanking();
     renderBase();
-    renderProducts();
+    renderProducts(sales);
   }
 
   function kpi(label, value, sub, tip) {
@@ -673,9 +687,7 @@
     sales.forEach(function (s) { amount += Number(s.amount) || 0; comm += Number(s.commission) || 0; });
     var sellers = Object.keys(state.stats).length;
     var refunds = state.sales.filter(function (s) {
-      var tool = $("f-tool").value;
-      if (tool !== "all" && (tool === NO_TOOL ? !!s.tool_id : s.tool_id !== tool)) return false;
-      return REFUNDED.indexOf(s.status) >= 0;
+      return matchesProduct(s) && REFUNDED.indexOf(s.status) >= 0;
     }).length;
     $("kpi-row").innerHTML =
       kpi("Vendas", fmtInt(sales.length), null, "Vendas com afiliado no período, conforme o filtro de status.") +
@@ -775,17 +787,10 @@
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
   }
 
-  function renderToolTable(sales) {
-    var rows = {};
-    sales.forEach(function (s) {
-      var k = s.tool_name || "Sem ferramenta";
-      var r = rows[k] || (rows[k] = { count: 0, amount: 0, commission: 0 });
-      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
-    });
-    var list = Object.keys(rows).map(function (k) { return { name: k, r: rows[k] }; })
-      .sort(function (a, b) { return b.r.commission - a.r.commission; });
-    $("tool-body").innerHTML = list.length ? list.map(function (x) {
-      return '<tr><td class="l">' + esc(x.name) + '</td><td class="num">' + fmtInt(x.r.count) + '</td><td class="num">' + fmtBRL(x.r.amount) + '</td><td class="num">' + fmtBRL(x.r.commission) + "</td></tr>";
+  function renderProductSummary(sales) {
+    var list = byProduct(sales);
+    $("product-summary-body").innerHTML = list.length ? list.map(function (x) {
+      return '<tr><td class="l">' + esc(x.name) + '</td><td class="num">' + fmtInt(x.count) + '</td><td class="num">' + fmtBRL(x.amount) + '</td><td class="num">' + fmtBRL(x.commission) + "</td></tr>";
     }).join("") : '<tr><td colspan="4" class="empty">Sem vendas no período.</td></tr>';
   }
 
@@ -796,7 +801,7 @@
     { key: "amount", label: "Faturamento", sortable: true },
     { key: "commission", label: "Comissão", sortable: true },
     { key: "socials", label: "Contato", cls: "l" },
-    { key: "tools", label: "Ferramentas", cls: "l" }
+    { key: "products", label: "Produtos", cls: "l" }
   ];
   function rankingRows() {
     var q = $("rank-search").value.trim().toLowerCase();
@@ -824,7 +829,7 @@
     var list = rankingRows();
     var maxC = list.reduce(function (m, x) { return Math.max(m, x.st.commission); }, 0) || 1;
     $("rank-body").innerHTML = list.length ? list.map(function (x, i) {
-      var tools = Object.keys(x.st.tools).map(function (t) { return '<span class="chip">' + esc(t) + " · " + x.st.tools[t] + "</span>"; }).join("");
+      var products = Object.keys(x.st.products).map(function (p) { return '<span class="chip">' + esc(p) + " · " + x.st.products[p] + "</span>"; }).join("");
       return '<tr class="clickable" data-email="' + esc(x.a.email) + '">' +
         '<td class="l rank num">' + (i + 1) + "</td>" +
         '<td class="l who"><div class="n">' + esc(x.name) + '</div><div class="e">' + esc(x.a.email) + "</div></td>" +
@@ -832,7 +837,7 @@
         '<td class="num">' + fmtBRL(x.st.amount) + "</td>" +
         '<td><div class="bar-cell"><span class="num">' + fmtBRL(x.st.commission) + '</span><span class="bar-track"><span class="bar-fill" style="display:block;width:' + (x.st.commission / maxC * 100).toFixed(1) + '%"></span></span></div></td>' +
         '<td class="l">' + socialsHtml(x.a) + "</td>" +
-        '<td class="l tools-cell">' + tools + "</td>" +
+        '<td class="l products-cell">' + products + "</td>" +
         "</tr>";
     }).join("") : '<tr><td colspan="7" class="empty">' + (state.sales.length ? "Nenhum afiliado encontrado com esse filtro." : "Nenhuma venda de afiliado no período. Se o sistema acabou de ser ligado, aguarde a importação do histórico.") + "</td></tr>";
   }
@@ -846,11 +851,11 @@
   $("rank-search").addEventListener("input", renderRanking);
   $("rank-csv").addEventListener("click", function () {
     var r = periodRange();
-    var rows = [["Afiliado", "E-mail", "CPF/CNPJ", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão", "Ferramentas"]];
+    var rows = [["Afiliado", "E-mail", "CPF/CNPJ", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão", "Produtos"]];
     rankingRows().forEach(function (x) {
       rows.push([x.name, x.a.email, fmtDoc(x.a.company_cnpj || x.a.document), x.a.whatsapp, x.a.instagram, x.a.facebook, x.a.youtube, x.a.tiktok,
         x.st.count, csvNum(x.st.amount), csvNum(x.st.commission),
-        Object.keys(x.st.tools).map(function (t) { return t + " (" + x.st.tools[t] + ")"; }).join(", ")]);
+        Object.keys(x.st.products).map(function (p) { return p + " (" + x.st.products[p] + ")"; }).join(", ")]);
     });
     downloadCsv("afiliados_" + isoDate(r[0]) + "_a_" + isoDate(new Date(r[1] - 86400000)) + ".csv", rows);
   });
@@ -894,42 +899,29 @@
   });
 
   /* ---------------- Render: produtos ---------------- */
-  function renderProducts() {
-    var counts = {};
-    state.sales.forEach(function (s) { counts[s.product_id] = (counts[s.product_id] || 0) + 1; });
-    var opts = function (sel) {
-      return '<option value="">— sem ferramenta —</option>' + state.tools.map(function (t) {
-        return '<option value="' + t.id + '"' + (t.id === sel ? " selected" : "") + ">" + esc(t.name) + "</option>";
-      }).join("");
-    };
-    $("products-body").innerHTML = state.products.length ? state.products.map(function (p) {
-      return "<tr><td class=\"l\">" + esc(p.name) + '</td><td class="l"><select class="search" data-product="' + esc(p.id) + '">' + opts(p.tool_id) + '</select></td><td class="num">' + fmtInt(counts[p.id] || 0) + "</td></tr>";
-    }).join("") : '<tr><td colspan="3" class="empty">Nenhum produto importado ainda.</td></tr>';
+  // Lista todos os produtos da conta (inclusive os sem venda no período), com os números do filtro atual.
+  function renderProducts(sales) {
+    var withSales = byProduct(sales), seen = {};
+    withSales.forEach(function (x) { if (x.id) seen[x.id] = 1; });
+    var list = withSales.concat(state.products.filter(function (p) { return !seen[p.id]; }).map(function (p) {
+      return { id: p.id, name: p.name, count: 0, amount: 0, commission: 0, sellers: {} };
+    }));
+    $("products-body").innerHTML = list.length ? list.map(function (x) {
+      var empty = !x.count;
+      return '<tr' + (empty ? ' class="muted"' : "") + '><td class="l">' + esc(x.name) + '</td><td class="num">' + fmtInt(x.count) +
+        '</td><td class="num">' + (empty ? "—" : fmtBRL(x.amount)) + '</td><td class="num">' + (empty ? "—" : fmtBRL(x.commission)) +
+        '</td><td class="num">' + fmtInt(Object.keys(x.sellers).length) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">Nenhum produto importado ainda.</td></tr>';
   }
-  $("products-body").addEventListener("change", async function (e) {
-    var sel = e.target.closest("select[data-product]");
-    if (!sel) return;
-    var res = await sb.from("kiwify_products").update({ tool_id: sel.value || null }).eq("id", sel.dataset.product);
-    if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
-    var p = state.products.find(function (x) { return x.id === sel.dataset.product; });
-    if (p) p.tool_id = sel.value || null;
-    toast("Produto atualizado.");
-    await refreshSales();
-  });
 
   /* ---------------- Drawer ---------------- */
   function openDrawer(email) {
     state.openEmail = email;
     var a = state.byEmail[email];
     var sales = filteredSales().filter(function (s) { return s.affiliate_email === email; });
-    var st = state.stats[email] || { count: 0, amount: 0, commission: 0, tools: {} };
+    var st = state.stats[email] || { count: 0, amount: 0, commission: 0, products: {} };
     if (!a) a = { email: email, name: sales[0] && sales[0].affiliate_name };
-    var toolRows = {};
-    sales.forEach(function (s) {
-      var k = s.tool_name || "Sem ferramenta";
-      var r = toolRows[k] || (toolRows[k] = { count: 0, amount: 0, commission: 0 });
-      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
-    });
+    var productRows = byProduct(sales);
     var doc = fmtDoc(a.company_cnpj || a.document);
     var products = (a.products || []).map(function (p) { return '<span class="chip">' + esc(p.name) + "</span>"; }).join("");
     var field = function (key, label, ph) {
@@ -949,11 +941,10 @@
         field("tiktok", "TikTok", "@perfil") +
         '<div class="field full"><label for="af-notes">Notas</label><textarea id="af-notes" placeholder="Nicho, combinados, observações…">' + esc(a.notes || "") + "</textarea></div>" +
         '</div><button class="btn btn-primary" type="submit" id="af-save">Salvar contato</button></form>' : "") +
-      "<h4>Por ferramenta</h4>" +
-      '<div class="table-scroll"><table><thead><tr><th class="l">Ferramenta</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead><tbody>' +
-        (Object.keys(toolRows).length ? Object.keys(toolRows).map(function (k) {
-          var r = toolRows[k];
-          return '<tr><td class="l">' + esc(k) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td></tr>";
+      "<h4>Por produto</h4>" +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead><tbody>' +
+        (productRows.length ? productRows.map(function (r) {
+          return '<tr><td class="l">' + esc(r.name) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td></tr>";
         }).join("") : '<tr><td colspan="4" class="empty">Sem vendas no período.</td></tr>') +
       "</tbody></table></div>" +
       "<h4>Vendas no período (" + fmtInt(sales.length) + ")</h4>" +
@@ -1021,7 +1012,7 @@
   });
   $("f-from").addEventListener("change", refreshSales);
   $("f-to").addEventListener("change", refreshSales);
-  $("f-tool").addEventListener("change", function () { safeSet("flow_aff_tool", this.value); renderAll(); });
+  $("f-product").addEventListener("change", function () { safeSet("flow_aff_product", this.value); renderAll(); });
   $("f-status").addEventListener("change", renderAll);
 
   $("sync-btn").addEventListener("click", async function () {
@@ -1039,16 +1030,15 @@
     else toast("Erro na sincronização: " + (data.error || "desconhecido"), true);
     await loadSyncInfo();
     try { await loadStatic(); } catch (e) {}
-    fillToolFilter();
+    fillProductFilter();
     await refreshSales();
   });
 
-  function fillToolFilter() {
-    var sel = $("f-tool"), cur = sel.value || safeGet("flow_aff_tool") || "all";
-    sel.innerHTML = '<option value="all">Todas as ferramentas</option>' +
-      state.tools.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + "</option>"; }).join("") +
-      '<option value="' + NO_TOOL + '">Sem ferramenta</option>';
-    sel.value = sel.querySelector('option[value="' + cur + '"]') ? cur : "all";
+  function fillProductFilter() {
+    var sel = $("f-product"), cur = sel.value || safeGet("flow_aff_product") || "all";
+    sel.innerHTML = '<option value="all">Todos os produtos</option>' +
+      state.products.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + "</option>"; }).join("");
+    sel.value = Array.prototype.some.call(sel.options, function (o) { return o.value === cur; }) ? cur : "all";
   }
 
   /* ---------------- Boot ---------------- */
@@ -1062,7 +1052,7 @@
     if (savedPeriod && savedPeriod !== "custom" && $("f-period").querySelector('option[value="' + savedPeriod + '"]')) $("f-period").value = savedPeriod;
     try {
       await loadStatic();
-      fillToolFilter();
+      fillProductFilter();
       await loadSales();
     } catch (e) {
       showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
