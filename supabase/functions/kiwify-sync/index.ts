@@ -228,66 +228,90 @@ async function saveSales(sales: any[]) {
   return rows.length;
 }
 
-type Cursor = { end: string; page: number; done: boolean; limit: string };
+// span = dias por janela; encolhe sozinho quando a janela passa do limite da API.
+type Cursor = { end: string; page: number; done: boolean; limit: string; span: number; startedAt: string };
+type WindowResult = { status: "complete" | "timeout" | "too_big"; count: number };
 
-// Percorre uma janela de datas página a página. Retorna false se o tempo acabou.
+// A Kiwify devolve erro 500 a partir da página 101 (10.000 vendas por consulta).
+const MAX_ROWS_PER_QUERY = 10_000;
+
+// Percorre uma janela de datas página a página.
 async function syncWindow(
   start: string, end: string, extra: Record<string, string>, fromPage: number,
   onPage: (page: number) => Promise<void>, stats: { fetched: number; saved: number },
-) {
+): Promise<WindowResult> {
   for (let page = fromPage; ; page++) {
-    if (!timeLeft()) return false;
+    if (!timeLeft()) return { status: "timeout", count: 0 };
     const js = await kiwifyGet("/sales", {
       start_date: start, end_date: end, page_size: 100, page_number: page,
       view_full_sale_details: true, ...extra,
     });
+    const count = js.pagination?.count ?? 0;
+    if (page === 1 && count > MAX_ROWS_PER_QUERY) return { status: "too_big", count };
     const sales: any[] = js.data ?? [];
     stats.fetched += sales.length;
     stats.saved += await saveSales(sales);
-    const count = js.pagination?.count ?? 0;
     const finished = !sales.length || page * 100 >= count;
     await onPage(finished ? -1 : page + 1);
-    if (finished) return true;
+    if (finished) return { status: "complete", count };
   }
 }
 
 async function syncBackfill(stats: { fetched: number; saved: number }) {
   const today = new Date();
-  const cur = await getState<Cursor>("backfill", {
+  const fresh: Cursor = {
     end: day(today), page: 1, done: false, limit: day(addDays(today, -HISTORY_DAYS)),
-  });
+    span: 30, startedAt: today.toISOString(),
+  };
+  const saved = await getState<Partial<Cursor>>("backfill", {});
+  // Estado de uma versão antiga (sem span) não é confiável: recomeça do zero.
+  const cur: Cursor = saved.span ? (saved as Cursor) : fresh;
   while (!cur.done && timeLeft()) {
     const end = new Date(cur.end + "T00:00:00Z");
     const limit = new Date(cur.limit + "T00:00:00Z");
-    const start = addDays(end, -WINDOW_DAYS) < limit ? limit : addDays(end, -WINDOW_DAYS);
-    const complete = await syncWindow(day(start), cur.end, {}, cur.page, async (next) => {
+    const start = addDays(end, -cur.span) < limit ? limit : addDays(end, -cur.span);
+    const res = await syncWindow(day(start), cur.end, {}, cur.page, async (next) => {
       if (next === -1) {
         cur.end = day(addDays(start, -1));
         cur.page = 1;
         cur.done = start <= limit;
+        cur.span = Math.min(WINDOW_DAYS, cur.span + 1); // volta a crescer aos poucos
       } else cur.page = next;
       await setState("backfill", cur);
     }, stats);
-    if (!complete) break;
+    if (res.status === "too_big") {
+      cur.span = Math.max(0, Math.floor(((cur.span + 1) * 8000) / res.count) - 1);
+      cur.page = 1;
+      await setState("backfill", cur);
+      if (cur.span === 0 && res.count > MAX_ROWS_PER_QUERY) {
+        throw new Error(`Mais de ${MAX_ROWS_PER_QUERY} vendas em um único dia (${cur.end}); a API da Kiwify não pagina além disso.`);
+      }
+      continue;
+    }
+    if (res.status === "timeout") break;
   }
   return cur;
 }
 
-async function syncRecent(stats: { fetched: number; saved: number }) {
+async function syncRecent(stats: { fetched: number; saved: number }, backfillStartedAt: string) {
   // Vendas criadas nos últimos 89 dias que mudaram desde a última passada
-  // (aprovações, reembolsos, chargebacks).
+  // (aprovações, reembolsos, chargebacks). Na primeira vez parte de quando o
+  // histórico começou a ser importado, que já cobriu tudo antes disso.
   const st = await getState<{ since?: string; page?: number; runStart?: string }>("recent", {});
   const now = new Date();
+  const since = st.since ?? backfillStartedAt;
   const runStart = st.page && st.page > 1 && st.runStart ? st.runStart : now.toISOString();
-  const extra: Record<string, string> = {};
-  if (st.since) {
-    extra.updated_at_start_date = day(addDays(new Date(st.since), -1));
-    extra.updated_at_end_date = day(addDays(now, 1));
-  }
-  const complete = await syncWindow(day(addDays(now, -WINDOW_DAYS)), day(now), extra, st.page ?? 1, async (next) => {
-    await setState("recent", next === -1 ? { since: runStart, page: 1 } : { ...st, runStart, page: next });
+  const extra = {
+    updated_at_start_date: day(addDays(new Date(since), -1)),
+    updated_at_end_date: day(addDays(now, 1)),
+  };
+  const res = await syncWindow(day(addDays(now, -WINDOW_DAYS)), day(now), extra, st.page ?? 1, async (next) => {
+    await setState("recent", next === -1 ? { since: runStart, page: 1 } : { since, runStart, page: next });
   }, stats);
-  return complete;
+  if (res.status === "too_big") {
+    throw new Error(`Mais de ${MAX_ROWS_PER_QUERY} vendas alteradas desde ${since}; rode de novo para reprocessar em partes.`);
+  }
+  return res.status === "complete";
 }
 
 // ---------------- Handler ----------------
@@ -325,7 +349,7 @@ Deno.serve(async (req) => {
     const affiliates = await syncAffiliates();
     const backfill = await syncBackfill(stats);
     let recentComplete = false;
-    if (backfill.done && timeLeft()) recentComplete = await syncRecent(stats);
+    if (backfill.done && timeLeft()) recentComplete = await syncRecent(stats, backfill.startedAt);
     result = {
       ok: true, affiliates, ...stats,
       backfill_done: backfill.done, backfill_cursor: backfill.end,
