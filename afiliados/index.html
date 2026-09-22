@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Afiliados</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f9f9f7;
+    --surface: #fcfcfb;
+    --surface-2: #f1f0ec;
+    --border: rgba(11,11,11,0.10);
+    --border-strong: rgba(11,11,11,0.16);
+    --text: #0b0b0b;
+    --text-dim: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(42,120,214,0.12);
+    --good: #0ca30c;
+    --warning: #b57c00;
+    --critical: #d03b3b;
+    --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 8px 24px -12px rgba(11,11,11,0.18);
+    --scrim: rgba(11,11,11,0.28);
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #232320;
+      --border: rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.18);
+      --text: #ffffff;
+      --text-dim: #c3c2b7;
+      --text-muted: #92908a;
+      --grid: #2c2c2a;
+      --accent: #3987e5;
+      --accent-soft: rgba(57,135,229,0.18);
+      --good: #2fbf2f;
+      --warning: #fab219;
+      --critical: #e66767;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+      --scrim: rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232320;
+    --border: rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.18);
+    --text: #ffffff;
+    --text-dim: #c3c2b7;
+    --text-muted: #92908a;
+    --grid: #2c2c2a;
+    --accent: #3987e5;
+    --accent-soft: rgba(57,135,229,0.18);
+    --good: #2fbf2f;
+    --warning: #fab219;
+    --critical: #e66767;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    --scrim: rgba(0,0,0,0.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+  }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent); }
+  button, input, select, textarea { font-family: inherit; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  [hidden] { display: none !important; }
+
+  /* ---------- Login ---------- */
+  #status-screen, #login-screen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+  }
+  .login-card {
+    width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px 28px;
+  }
+  .login-card h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .login-card p.sub { color: var(--text-muted); font-size: 13px; margin: 0 0 24px; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .field input, .field textarea {
+    width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  .field textarea { min-height: 70px; resize: vertical; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .msg { font-size: 12.5px; margin-top: 10px; border-radius: var(--radius-sm); padding: 8px 10px; }
+  .msg.error { background: color-mix(in oklab, var(--critical) 14%, transparent); color: var(--critical); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn-primary:hover { background: var(--accent); filter: brightness(1.07); }
+  .btn-block { width: 100%; padding: 10px 16px; }
+  .btn-ghost { border-color: transparent; background: transparent; }
+  .btn-ghost:hover { background: var(--surface-2); }
+
+  /* ---------- Shell ---------- */
+  #app { display: none; min-height: 100vh; }
+  #app.active { display: flex; }
+  .sidebar {
+    width: 228px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 20px 14px;
+    display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; padding: 0 6px; }
+  .brand .mark { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); flex-shrink: 0; }
+  .brand span { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-btn {
+    text-align: left; padding: 9px 10px; border-radius: var(--radius-sm); border: none; background: transparent;
+    color: var(--text-dim); font-size: 13.5px; font-weight: 500; cursor: pointer; text-decoration: none;
+  }
+  .nav-btn:hover { background: var(--surface-2); color: var(--text); }
+  .nav-btn.active { background: var(--surface-2); color: var(--text); font-weight: 700; box-shadow: inset 2px 0 0 var(--accent); }
+  .nav-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+  .sidebar-foot {
+    margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px;
+    color: var(--text-muted); display: flex; flex-direction: column; gap: 8px;
+  }
+  .sidebar-foot .note { color: var(--text-dim); word-break: break-all; }
+
+  .main { flex: 1; min-width: 0; padding: 22px 26px 60px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .topbar h2 { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+  .sync-box { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+  .sync-box .err { color: var(--critical); }
+
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  .filters select, .filters input, .search {
+    padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); font-size: 13px;
+  }
+  .filters .custom-range { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .kpi .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; }
+  .kpi .value { font-size: 21px; font-weight: 700; margin-top: 6px; letter-spacing: -0.01em; }
+  .kpi .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 18px 10px; margin-bottom: 20px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel-head h3 { font-size: 14px; margin: 0; font-weight: 700; }
+  .panel-head .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .grid-2 .panel { margin-bottom: 0; }
+  .grid-2 + .panel, .grid-2 + section { margin-top: 20px; }
+
+  .chart-wrap { position: relative; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 5; background: var(--surface); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px; min-width: 170px; display: none;
+  }
+  .tooltip .t-title { font-weight: 700; margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; justify-content: space-between; gap: 12px; }
+  .tooltip .t-row .l { color: var(--text-dim); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+    font-weight: 600; padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface); white-space: nowrap;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--text); }
+  thead th .arrow { color: var(--accent); }
+  th.l, td.l { text-align: left; }
+  tbody td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover { background: var(--surface-2); }
+  .table-scroll { overflow-x: auto; }
+  .empty { padding: 26px 10px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .who .n { font-weight: 600; }
+  .who .e { font-size: 11.5px; color: var(--text-muted); }
+  .muted { color: var(--text-muted); }
+  .rank { color: var(--text-muted); width: 28px; }
+  td.tools-cell { white-space: normal; min-width: 220px; }
+
+  .chip {
+    display: inline-block; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim);
+    font-size: 11.5px; margin: 1px 2px 1px 0; font-weight: 500;
+  }
+  .status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+  .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+  .status.ok::before { background: var(--good); }
+  .status.bad::before { background: var(--critical); }
+  .status.wait::before { background: var(--warning); }
+
+  .socials { display: inline-flex; gap: 4px; }
+  .soc {
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px;
+    background: var(--surface-2); color: var(--text-dim); font-size: 10.5px; font-weight: 700; text-decoration: none;
+  }
+  .soc:hover { background: var(--accent-soft); color: var(--accent); }
+  .soc.off { opacity: .35; pointer-events: none; }
+
+  .bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .bar-track { width: 90px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+  /* ---------- Drawer ---------- */
+  #scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 30; }
+  #drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 100%); background: var(--bg);
+    border-left: 1px solid var(--border); z-index: 31; overflow-y: auto; padding: 22px 22px 40px; box-shadow: var(--shadow);
+  }
+  .drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .drawer-head h3 { margin: 0; font-size: 18px; }
+  .drawer-head .meta { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+  .mini-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 18px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .drawer h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 20px 0 8px; }
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--text); color: var(--bg);
+    padding: 9px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: all .2s ease; z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    #app.active { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: static; flex-direction: row; align-items: center; overflow-x: auto; padding: 12px 16px; gap: 14px; }
+    .nav { flex-direction: row; }
+    .nav-sep, .sidebar-foot { display: none; }
+    .main { padding: 16px 16px 48px; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .form-grid, .mini-kpis { grid-template-columns: 1fr; }
+    #drawer { padding: 18px 16px 40px; }
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+
+<div id="status-screen" style="display:none;">
+  <div class="login-card">
+    <h1 id="status-title">Carregando…</h1>
+    <p class="sub" id="status-text">Conectando ao painel.</p>
+    <button type="button" class="btn btn-primary btn-block" id="status-retry" style="display:none;">Tentar de novo</button>
+  </div>
+</div>
+
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <h1>Flow Afiliados</h1>
+    <p class="sub">Entre com a mesma conta do painel financeiro.</p>
+    <form id="login-form">
+      <div class="field">
+        <label for="login-email">E-mail</label>
+        <input id="login-email" type="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Senha</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="login-submit">Entrar</button>
+      <div id="login-msg"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="mark"></span><span>Flow Afiliados</span></div>
+    <nav class="nav">
+      <button class="nav-btn" data-view="overview">Visão geral</button>
+      <button class="nav-btn" data-view="base">Influencers</button>
+      <button class="nav-btn" data-view="products">Produtos</button>
+      <div class="nav-sep"></div>
+      <a class="nav-btn" href="../financeiro/">Financeiro</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="note" id="user-email"></div>
+      <button class="btn btn-ghost" id="logout-btn" style="justify-content:flex-start; padding:6px 8px;">Sair</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h2 id="view-title">Visão geral</h2>
+      <div class="sync-box">
+        <span id="sync-info">—</span>
+        <button class="btn" id="sync-btn">Sincronizar agora</button>
+      </div>
+    </div>
+
+    <div class="filters" id="filters">
+      <select id="f-period" aria-label="Período">
+        <option value="this_month">Este mês</option>
+        <option value="last_month">Mês passado</option>
+        <option value="last_30">Últimos 30 dias</option>
+        <option value="last_90">Últimos 90 dias</option>
+        <option value="this_year">Este ano</option>
+        <option value="last_year">Ano passado</option>
+        <option value="all">Todo o histórico</option>
+        <option value="custom">Personalizado…</option>
+      </select>
+      <span class="custom-range" id="custom-range" hidden>
+        <input type="date" id="f-from" aria-label="De"> até <input type="date" id="f-to" aria-label="Até">
+      </span>
+      <select id="f-tool" aria-label="Ferramenta"></select>
+      <select id="f-status" aria-label="Status">
+        <option value="approved">Vendas aprovadas</option>
+        <option value="refunded">Reembolsos e chargebacks</option>
+        <option value="all">Todos os status</option>
+      </select>
+    </div>
+
+    <!-- Visão geral -->
+    <section id="view-overview">
+      <div class="kpi-row" id="kpi-row"></div>
+
+      <div class="grid-2">
+        <section class="panel">
+          <div class="panel-head"><h3 id="chart-title">Comissões pagas a afiliados</h3></div>
+          <div class="chart-wrap">
+            <svg id="chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;" role="img" aria-label="Comissões por período"></svg>
+            <div class="tooltip" id="chart-tip"></div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h3>Por ferramenta</h3></div>
+          <div class="table-scroll"><table>
+            <thead><tr><th class="l">Ferramenta</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead>
+            <tbody id="tool-body"></tbody>
+          </table></div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Ranking de afiliados</h3>
+          <div class="tools">
+            <input class="search" id="rank-search" type="search" placeholder="Buscar nome, e-mail, @…">
+            <button class="btn" id="rank-csv">Exportar CSV</button>
+          </div>
+        </div>
+        <div class="table-scroll"><table>
+          <thead><tr id="rank-head"></tr></thead>
+          <tbody id="rank-body"></tbody>
+        </table></div>
+      </section>
+    </section>
+
+    <!-- Base de influencers -->
+    <section id="view-base" hidden>
+      <section class="panel">
+        <div class="panel-head">
+          <h3 id="base-title">Base de influencers</h3>
+          <div class="tools">
+            <input class="search" id="base-search" type="search" placeholder="Buscar nome, e-mail, CNPJ, @…">
+            <select class="search" id="base-filter" aria-label="Filtro">
+              <option value="all">Todos</option>
+              <option value="missing">Sem contato preenchido</option>
+              <option value="selling">Venderam no período</option>
+              <option value="active">Ativos na Kiwify</option>
+            </select>
+            <button class="btn" id="base-csv">Exportar CSV</button>
+          </div>
+        </div>
+        <div class="table-scroll"><table>
+          <thead><tr>
+            <th class="l">Afiliado</th><th class="l">CPF/CNPJ</th><th class="l">WhatsApp</th><th class="l">Redes</th>
+            <th class="l">Status</th><th>Vendas no período</th><th>Comissão no período</th>
+          </tr></thead>
+          <tbody id="base-body"></tbody>
+        </table></div>
+      </section>
+    </section>
+
+    <!-- Produtos -->
+    <section id="view-products" hidden>
+      <section class="panel">
+        <div class="panel-head"><h3>Produtos da Kiwify</h3></div>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Cada produto é ligado a uma ferramenta automaticamente pelo nome. Corrija aqui se algum ficar errado ou sem ferramenta.</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th class="l">Produto</th><th class="l">Ferramenta</th><th>Vendas c/ afiliado no período</th></tr></thead>
+          <tbody id="products-body"></tbody>
+        </table></div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<div id="scrim" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="Detalhes do afiliado"></aside>
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SUPABASE_URL = "https://jagmnogcpxeujtsrrotd.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  var MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  var APPROVED = ["paid", "approved"];
+  var REFUNDED = ["refunded", "chargedback", "refund_requested", "pending_refund"];
+  var STATUS_LABEL = {
+    paid: "Paga", approved: "Aprovada", authorized: "Autorizada", pending: "Pendente", waiting_payment: "Aguardando pagamento",
+    processing: "Processando", refused: "Recusada", refunded: "Reembolsada", chargedback: "Chargeback",
+    refund_requested: "Reembolso solicitado", pending_refund: "Reembolso pendente"
+  };
+  var NO_TOOL = "__none__";
+
+  var state = {
+    view: "overview",
+    tools: [], affiliates: [], products: [], sales: [],
+    byEmail: {}, stats: {},
+    sort: { key: "commission", dir: -1 },
+    openEmail: null
+  };
+
+  /* ---------------- Utils ---------------- */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtBRL(v) {
+    if (v == null || isNaN(v)) return "—";
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+  }
+  function fmtInt(v) { return v == null || isNaN(v) ? "—" : new Intl.NumberFormat("pt-BR").format(v); }
+  function fmtCompact(v) {
+    var a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(1).replace(".", ",") + "M";
+    if (a >= 1e3) return (v / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(".", ",") + "k";
+    return v.toFixed(0);
+  }
+  function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString("pt-BR") : "—"; }
+  function fmtDateTime(iso) { return iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"; }
+  function fmtDoc(d) {
+    var n = String(d || "").replace(/\D/g, "");
+    if (n.length === 14) return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    if (n.length === 11) return n.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+    return d || "";
+  }
+  function toast(msg, isError) {
+    var el = document.getElementById("toast");
+    el.textContent = msg;
+    el.style.background = isError ? "var(--critical)" : "var(--text)";
+    el.style.color = isError ? "#fff" : "var(--bg)";
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove("show"); }, 2800);
+  }
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function $(id) { return document.getElementById(id); }
+
+  function waLink(v) {
+    var n = String(v || "").replace(/\D/g, "");
+    if (!n) return null;
+    if (n.length <= 11) n = "55" + n;
+    return "https://wa.me/" + n;
+  }
+  function socialLink(kind, v) {
+    v = String(v || "").trim();
+    if (!v) return null;
+    if (/^https?:\/\//i.test(v)) return v;
+    var h = v.replace(/^@/, "");
+    if (kind === "instagram") return "https://instagram.com/" + h;
+    if (kind === "facebook") return "https://facebook.com/" + h;
+    if (kind === "youtube") return "https://youtube.com/@" + h;
+    if (kind === "tiktok") return "https://tiktok.com/@" + h;
+    return null;
+  }
+  function socialsHtml(a) {
+    var items = [["whatsapp", "WA", waLink(a.whatsapp)], ["instagram", "IG", socialLink("instagram", a.instagram)],
+      ["facebook", "FB", socialLink("facebook", a.facebook)], ["youtube", "YT", socialLink("youtube", a.youtube)],
+      ["tiktok", "TT", socialLink("tiktok", a.tiktok)]];
+    return '<span class="socials">' + items.map(function (it) {
+      return it[2]
+        ? '<a class="soc" href="' + esc(it[2]) + '" target="_blank" rel="noopener" title="' + it[0] + '" data-stop>' + it[1] + "</a>"
+        : '<span class="soc off" title="' + it[0] + ' não informado">' + it[1] + "</span>";
+    }).join("") + "</span>";
+  }
+  function hasContact(a) { return !!(a.whatsapp || a.instagram || a.facebook || a.youtube || a.tiktok); }
+  function statusClass(s) {
+    if (APPROVED.indexOf(s) >= 0) return "ok";
+    if (REFUNDED.indexOf(s) >= 0 || s === "refused") return "bad";
+    return "wait";
+  }
+
+  function downloadCsv(name, rows) {
+    var csv = rows.map(function (r) {
+      return r.map(function (c) {
+        var s = String(c == null ? "" : c);
+        return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(";");
+    }).join("\n");
+    var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function csvNum(v) { return v == null ? "" : String(Number(v).toFixed(2)).replace(".", ","); }
+
+  /* ---------------- Período ---------------- */
+  function periodRange() {
+    var p = $("f-period").value;
+    var now = new Date();
+    var y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    var tomorrow = new Date(y, m, d + 1);
+    switch (p) {
+      case "this_month": return [new Date(y, m, 1), tomorrow];
+      case "last_month": return [new Date(y, m - 1, 1), new Date(y, m, 1)];
+      case "last_30": return [new Date(y, m, d - 29), tomorrow];
+      case "last_90": return [new Date(y, m, d - 89), tomorrow];
+      case "this_year": return [new Date(y, 0, 1), tomorrow];
+      case "last_year": return [new Date(y - 1, 0, 1), new Date(y, 0, 1)];
+      case "all": return [new Date(2015, 0, 1), tomorrow];
+      case "custom":
+        var f = $("f-from").value, t = $("f-to").value;
+        var from = f ? new Date(f + "T00:00:00") : new Date(y, m, 1);
+        var to = t ? new Date(t + "T00:00:00") : new Date(y, m, d);
+        return [from, new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1)];
+    }
+    return [new Date(y, m, 1), tomorrow];
+  }
+  function isoDate(dt) {
+    return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
+  }
+
+  /* ---------------- Auth ---------------- */
+  function showOnly(id) {
+    ["status-screen", "login-screen"].forEach(function (s) { $(s).style.display = s === id ? "flex" : "none"; });
+    $("app").classList.toggle("active", id === "app");
+  }
+  function showStatus(title, text, retry) {
+    $("status-title").textContent = title;
+    $("status-text").textContent = text;
+    $("status-retry").style.display = retry ? "inline-flex" : "none";
+    showOnly("status-screen");
+  }
+  $("status-retry").addEventListener("click", function () { boot(); });
+
+  $("login-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var btn = $("login-submit"), msg = $("login-msg");
+    msg.innerHTML = "";
+    btn.disabled = true; btn.textContent = "Entrando…";
+    var res = await sb.auth.signInWithPassword({ email: $("login-email").value.trim(), password: $("login-password").value });
+    btn.disabled = false; btn.textContent = "Entrar";
+    if (res.error) {
+      msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>";
+      return;
+    }
+    boot();
+  });
+  $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
+
+  /* ---------------- Dados ---------------- */
+  async function fetchAll(buildQuery) {
+    var out = [], size = 1000;
+    for (var from = 0; ; from += size) {
+      var res = await buildQuery().range(from, from + size - 1);
+      if (res.error) throw res.error;
+      out = out.concat(res.data || []);
+      if (!res.data || res.data.length < size) break;
+    }
+    return out;
+  }
+
+  async function loadStatic() {
+    var t = await sb.from("tools").select("id, name, slug, sort_order").order("sort_order");
+    if (t.error) throw t.error;
+    state.tools = t.data || [];
+    state.affiliates = await fetchAll(function () { return sb.from("affiliates").select("*").order("name"); });
+    var p = await sb.from("kiwify_products").select("*").order("name");
+    if (p.error) throw p.error;
+    state.products = p.data || [];
+    state.byEmail = {};
+    state.affiliates.forEach(function (a) { state.byEmail[a.email] = a; });
+  }
+
+  async function loadSales() {
+    var r = periodRange();
+    state.sales = await fetchAll(function () {
+      return sb.from("affiliate_sales_v")
+        .select("id, affiliate_email, affiliate_name, product_id, product_name, tool_id, tool_name, status, payment_method, amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
+        .gte("sale_created_at", r[0].toISOString()).lt("sale_created_at", r[1].toISOString())
+        .order("sale_created_at", { ascending: false });
+    });
+  }
+
+  async function loadSyncInfo() {
+    var res = await sb.from("sync_state").select("key, value").in("key", ["last_run", "backfill"]);
+    var st = {};
+    (res.data || []).forEach(function (r) { st[r.key] = r.value; });
+    var el = $("sync-info");
+    var lr = st.last_run;
+    if (!lr) { el.innerHTML = "Ainda não sincronizado"; return; }
+    var txt = "Última sincronização: " + esc(fmtDateTime(lr.at));
+    if (lr.ok === false) txt += ' · <span class="err" title="' + esc(lr.error) + '">erro na última execução</span>';
+    else if (st.backfill && !st.backfill.done) txt += " · importando histórico (até " + esc(fmtDate(st.backfill.end + "T12:00:00")) + ")";
+    el.innerHTML = txt;
+  }
+
+  function filteredSales() {
+    var tool = $("f-tool").value, status = $("f-status").value;
+    return state.sales.filter(function (s) {
+      if (tool !== "all" && (tool === NO_TOOL ? !!s.tool_id : s.tool_id !== tool)) return false;
+      if (status === "approved") return APPROVED.indexOf(s.status) >= 0;
+      if (status === "refunded") return REFUNDED.indexOf(s.status) >= 0;
+      return true;
+    });
+  }
+
+  function computeStats(sales) {
+    var by = {};
+    sales.forEach(function (s) {
+      var e = by[s.affiliate_email] || (by[s.affiliate_email] = { email: s.affiliate_email, name: s.affiliate_name, count: 0, amount: 0, commission: 0, tools: {} });
+      e.count++;
+      e.amount += Number(s.amount) || 0;
+      e.commission += Number(s.commission) || 0;
+      var tn = s.tool_name || "Sem ferramenta";
+      e.tools[tn] = (e.tools[tn] || 0) + 1;
+    });
+    return by;
+  }
+
+  /* ---------------- Render: visão geral ---------------- */
+  function renderAll() {
+    var sales = filteredSales();
+    state.stats = computeStats(sales);
+    renderKpis(sales);
+    renderChart(sales);
+    renderToolTable(sales);
+    renderRanking();
+    renderBase();
+    renderProducts();
+  }
+
+  function kpi(label, value, sub, tip) {
+    return '<div class="kpi"><div class="label"' + (tip ? ' title="' + esc(tip) + '"' : "") + ">" + label + '</div><div class="value num">' + value + "</div>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
+  }
+  function renderKpis(sales) {
+    var amount = 0, comm = 0;
+    sales.forEach(function (s) { amount += Number(s.amount) || 0; comm += Number(s.commission) || 0; });
+    var sellers = Object.keys(state.stats).length;
+    var refunds = state.sales.filter(function (s) {
+      var tool = $("f-tool").value;
+      if (tool !== "all" && (tool === NO_TOOL ? !!s.tool_id : s.tool_id !== tool)) return false;
+      return REFUNDED.indexOf(s.status) >= 0;
+    }).length;
+    $("kpi-row").innerHTML =
+      kpi("Vendas", fmtInt(sales.length), null, "Vendas com afiliado no período, conforme o filtro de status.") +
+      kpi("Faturamento", fmtBRL(amount), null, "Valor cobrado do cliente nas vendas feitas por afiliados.") +
+      kpi("Comissões", fmtBRL(comm), amount > 0 ? (comm / amount * 100).toFixed(1).replace(".", ",") + "% do faturamento" : null, "Soma das comissões dos afiliados nessas vendas.") +
+      kpi("Afiliados que venderam", fmtInt(sellers), "de " + fmtInt(state.affiliates.length) + " na base") +
+      kpi("Reembolsos", fmtInt(refunds), null, "Vendas de afiliados reembolsadas ou com chargeback no período.");
+  }
+
+  function renderChart(sales) {
+    var svg = $("chart"), tip = $("chart-tip");
+    var r = periodRange();
+    var spanDays = (r[1] - r[0]) / 86400000;
+    var byMonth = spanDays > 62;
+    if ($("f-period").value === "all" && sales.length) {
+      var oldest = new Date(sales[sales.length - 1].sale_created_at);
+      r = [new Date(oldest.getFullYear(), oldest.getMonth(), 1), r[1]];
+    }
+    var buckets = [], idx = {};
+    var cur = byMonth ? new Date(r[0].getFullYear(), r[0].getMonth(), 1) : new Date(r[0]);
+    while (cur < r[1]) {
+      var key = byMonth ? cur.getFullYear() + "-" + cur.getMonth() : isoDate(cur);
+      idx[key] = buckets.length;
+      buckets.push({
+        key: key,
+        label: byMonth ? MONTHS[cur.getMonth()] + (cur.getMonth() === 0 || buckets.length === 0 ? " " + String(cur.getFullYear()).slice(2) : "") : String(cur.getDate()),
+        title: byMonth ? MONTHS[cur.getMonth()] + " " + cur.getFullYear() : cur.toLocaleDateString("pt-BR"),
+        count: 0, amount: 0, commission: 0
+      });
+      cur = byMonth ? new Date(cur.getFullYear(), cur.getMonth() + 1, 1) : new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
+    }
+    sales.forEach(function (s) {
+      var d = new Date(s.sale_created_at);
+      var k = byMonth ? d.getFullYear() + "-" + d.getMonth() : isoDate(d);
+      var b = buckets[idx[k]];
+      if (!b) return;
+      b.count++; b.amount += Number(s.amount) || 0; b.commission += Number(s.commission) || 0;
+    });
+    $("chart-title").textContent = "Comissões pagas a afiliados, por " + (byMonth ? "mês" : "dia");
+
+    var W = 760, H = 240, padL = 48, padR = 8, padT = 12, padB = 26;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var maxV = Math.max.apply(null, buckets.map(function (b) { return b.commission; }).concat([1]));
+    var step = niceStep(maxV / 4);
+    maxV = Math.ceil(maxV / step) * step;
+    var n = Math.max(buckets.length, 1), slot = plotW / n;
+    var barW = Math.max(2, Math.min(28, slot - 2));
+    var cs = getComputedStyle(document.documentElement);
+    var gridC = cs.getPropertyValue("--grid").trim(), mutedC = cs.getPropertyValue("--text-muted").trim(), accC = cs.getPropertyValue("--accent").trim();
+    var ns = "http://www.w3.org/2000/svg", html = "";
+    for (var v = 0; v <= maxV + 1e-9; v += step) {
+      var gy = padT + plotH - (v / maxV) * plotH;
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + gridC + '" stroke-width="1"/>';
+      html += '<text x="' + (padL - 8) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + mutedC + '" font-family="IBM Plex Mono, monospace">' + fmtCompact(v) + "</text>";
+    }
+    var labelEvery = Math.ceil(n / 14);
+    buckets.forEach(function (b, i) {
+      var cx = padL + slot * i + slot / 2;
+      var h = (b.commission / maxV) * plotH;
+      if (h > 0) {
+        var x0 = cx - barW / 2, y0 = padT + plotH - h, rr = Math.min(4, barW / 2, h);
+        html += '<path d="M' + x0 + "," + (padT + plotH) + " V" + (y0 + rr) + " Q" + x0 + "," + y0 + " " + (x0 + rr) + "," + y0 +
+          " H" + (x0 + barW - rr) + " Q" + (x0 + barW) + "," + y0 + " " + (x0 + barW) + "," + (y0 + rr) + " V" + (padT + plotH) + ' Z" fill="' + accC + '" data-i="' + i + '" class="bar"/>';
+      }
+      if (i % labelEvery === 0) html += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9" fill="' + mutedC + '">' + esc(b.label) + "</text>";
+    });
+    html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + (padT + plotH) + '" y2="' + (padT + plotH) + '" stroke="' + mutedC + '" stroke-width="1"/>';
+    html += '<rect id="chart-hit" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent"/>';
+    svg.innerHTML = html;
+
+    var hit = svg.querySelector("#chart-hit");
+    hit.addEventListener("mousemove", function (evt) {
+      var rect = svg.getBoundingClientRect();
+      var relX = ((evt.clientX - rect.left) / rect.width) * W;
+      var i = Math.max(0, Math.min(n - 1, Math.floor((relX - padL) / slot)));
+      var b = buckets[i];
+      if (!b) return;
+      svg.querySelectorAll(".bar").forEach(function (el) { el.style.opacity = el.getAttribute("data-i") == i ? "1" : "0.45"; });
+      tip.innerHTML = '<div class="t-title">' + esc(b.title) + "</div>" +
+        '<div class="t-row"><span class="l">Comissões</span><span class="num">' + fmtBRL(b.commission) + "</span></div>" +
+        '<div class="t-row"><span class="l">Faturamento</span><span class="num">' + fmtBRL(b.amount) + "</span></div>" +
+        '<div class="t-row"><span class="l">Vendas</span><span class="num">' + fmtInt(b.count) + "</span></div>";
+      tip.style.display = "block";
+      var wrapW = svg.parentElement.getBoundingClientRect().width;
+      var px = ((padL + slot * i + slot / 2) / W) * wrapW;
+      tip.style.left = (px + 190 > wrapW ? px - 190 : px + 12) + "px";
+      tip.style.top = "8px";
+    });
+    hit.addEventListener("mouseleave", function () {
+      tip.style.display = "none";
+      svg.querySelectorAll(".bar").forEach(function (el) { el.style.opacity = "1"; });
+    });
+  }
+  function niceStep(raw) {
+    if (raw <= 0) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+
+  function renderToolTable(sales) {
+    var rows = {};
+    sales.forEach(function (s) {
+      var k = s.tool_name || "Sem ferramenta";
+      var r = rows[k] || (rows[k] = { count: 0, amount: 0, commission: 0 });
+      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
+    });
+    var list = Object.keys(rows).map(function (k) { return { name: k, r: rows[k] }; })
+      .sort(function (a, b) { return b.r.commission - a.r.commission; });
+    $("tool-body").innerHTML = list.length ? list.map(function (x) {
+      return '<tr><td class="l">' + esc(x.name) + '</td><td class="num">' + fmtInt(x.r.count) + '</td><td class="num">' + fmtBRL(x.r.amount) + '</td><td class="num">' + fmtBRL(x.r.commission) + "</td></tr>";
+    }).join("") : '<tr><td colspan="4" class="empty">Sem vendas no período.</td></tr>';
+  }
+
+  var RANK_COLS = [
+    { key: "rank", label: "#", cls: "l" },
+    { key: "name", label: "Afiliado", cls: "l", sortable: true },
+    { key: "count", label: "Vendas", sortable: true },
+    { key: "amount", label: "Faturamento", sortable: true },
+    { key: "commission", label: "Comissão", sortable: true },
+    { key: "socials", label: "Contato", cls: "l" },
+    { key: "tools", label: "Ferramentas", cls: "l" }
+  ];
+  function rankingRows() {
+    var q = $("rank-search").value.trim().toLowerCase();
+    var list = Object.keys(state.stats).map(function (email) {
+      var st = state.stats[email], a = state.byEmail[email] || { email: email, name: st.name };
+      return { a: a, st: st, name: a.name || st.name || email };
+    });
+    if (q) list = list.filter(function (x) { return searchable(x.a).indexOf(q) >= 0; });
+    var k = state.sort.key, d = state.sort.dir;
+    list.sort(function (x, y) {
+      var vx = k === "name" ? x.name.toLowerCase() : x.st[k], vy = k === "name" ? y.name.toLowerCase() : y.st[k];
+      return vx < vy ? -d : vx > vy ? d : 0;
+    });
+    return list;
+  }
+  function searchable(a) {
+    return [a.name, a.email, a.document, a.company_name, a.company_cnpj, a.whatsapp, a.instagram, a.facebook, a.youtube, a.tiktok]
+      .join(" ").toLowerCase();
+  }
+  function renderRanking() {
+    $("rank-head").innerHTML = RANK_COLS.map(function (c) {
+      var arrow = state.sort.key === c.key ? ' <span class="arrow">' + (state.sort.dir < 0 ? "↓" : "↑") + "</span>" : "";
+      return '<th class="' + (c.cls || "") + (c.sortable ? " sortable" : "") + '" data-key="' + c.key + '">' + c.label + arrow + "</th>";
+    }).join("");
+    var list = rankingRows();
+    var maxC = list.reduce(function (m, x) { return Math.max(m, x.st.commission); }, 0) || 1;
+    $("rank-body").innerHTML = list.length ? list.map(function (x, i) {
+      var tools = Object.keys(x.st.tools).map(function (t) { return '<span class="chip">' + esc(t) + " · " + x.st.tools[t] + "</span>"; }).join("");
+      return '<tr class="clickable" data-email="' + esc(x.a.email) + '">' +
+        '<td class="l rank num">' + (i + 1) + "</td>" +
+        '<td class="l who"><div class="n">' + esc(x.name) + '</div><div class="e">' + esc(x.a.email) + "</div></td>" +
+        '<td class="num">' + fmtInt(x.st.count) + "</td>" +
+        '<td class="num">' + fmtBRL(x.st.amount) + "</td>" +
+        '<td><div class="bar-cell"><span class="num">' + fmtBRL(x.st.commission) + '</span><span class="bar-track"><span class="bar-fill" style="display:block;width:' + (x.st.commission / maxC * 100).toFixed(1) + '%"></span></span></div></td>' +
+        '<td class="l">' + socialsHtml(x.a) + "</td>" +
+        '<td class="l tools-cell">' + tools + "</td>" +
+        "</tr>";
+    }).join("") : '<tr><td colspan="7" class="empty">' + (state.sales.length ? "Nenhum afiliado encontrado com esse filtro." : "Nenhuma venda de afiliado no período. Se o sistema acabou de ser ligado, aguarde a importação do histórico.") + "</td></tr>";
+  }
+  $("rank-head").addEventListener("click", function (e) {
+    var th = e.target.closest("th.sortable");
+    if (!th) return;
+    var k = th.dataset.key;
+    state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === "name" ? 1 : -1) };
+    renderRanking();
+  });
+  $("rank-search").addEventListener("input", renderRanking);
+  $("rank-csv").addEventListener("click", function () {
+    var r = periodRange();
+    var rows = [["Afiliado", "E-mail", "CPF/CNPJ", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão", "Ferramentas"]];
+    rankingRows().forEach(function (x) {
+      rows.push([x.name, x.a.email, fmtDoc(x.a.company_cnpj || x.a.document), x.a.whatsapp, x.a.instagram, x.a.facebook, x.a.youtube, x.a.tiktok,
+        x.st.count, csvNum(x.st.amount), csvNum(x.st.commission),
+        Object.keys(x.st.tools).map(function (t) { return t + " (" + x.st.tools[t] + ")"; }).join(", ")]);
+    });
+    downloadCsv("afiliados_" + isoDate(r[0]) + "_a_" + isoDate(new Date(r[1] - 86400000)) + ".csv", rows);
+  });
+
+  /* ---------------- Render: base ---------------- */
+  function baseRows() {
+    var q = $("base-search").value.trim().toLowerCase(), f = $("base-filter").value;
+    return state.affiliates.filter(function (a) {
+      if (q && searchable(a).indexOf(q) < 0) return false;
+      if (f === "missing") return !hasContact(a);
+      if (f === "selling") return !!state.stats[a.email];
+      if (f === "active") return a.kiwify_status === "active";
+      return true;
+    });
+  }
+  function renderBase() {
+    var list = baseRows();
+    $("base-title").textContent = "Base de influencers (" + fmtInt(list.length) + ")";
+    $("base-body").innerHTML = list.length ? list.map(function (a) {
+      var st = state.stats[a.email];
+      return '<tr class="clickable" data-email="' + esc(a.email) + '">' +
+        '<td class="l who"><div class="n">' + esc(a.name || a.email) + '</div><div class="e">' + esc(a.email) + "</div></td>" +
+        '<td class="l num">' + esc(fmtDoc(a.company_cnpj || a.document)) + (a.company_name && a.company_name !== a.name ? '<div class="e muted" style="font-family:inherit">' + esc(a.company_name) + "</div>" : "") + "</td>" +
+        '<td class="l num">' + (a.whatsapp ? esc(a.whatsapp) : '<span class="muted">—</span>') + "</td>" +
+        '<td class="l">' + socialsHtml(a) + "</td>" +
+        '<td class="l">' + (a.kiwify_status ? '<span class="status ' + (a.kiwify_status === "active" ? "ok" : "wait") + '">' + esc(a.kiwify_status === "active" ? "Ativo" : a.kiwify_status) + "</span>" : '<span class="muted">—</span>') + "</td>" +
+        '<td class="num">' + (st ? fmtInt(st.count) : '<span class="muted">0</span>') + "</td>" +
+        '<td class="num">' + (st ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td></tr>";
+    }).join("") : '<tr><td colspan="7" class="empty">Nenhum afiliado encontrado.</td></tr>';
+  }
+  $("base-search").addEventListener("input", renderBase);
+  $("base-filter").addEventListener("change", renderBase);
+  $("base-csv").addEventListener("click", function () {
+    var rows = [["Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Status Kiwify", "Vendas no período", "Comissão no período", "Notas"]];
+    baseRows().forEach(function (a) {
+      var st = state.stats[a.email] || { count: 0, commission: 0 };
+      rows.push([a.name, a.email, fmtDoc(a.company_cnpj || a.document), a.company_name, a.whatsapp, a.instagram, a.facebook, a.youtube, a.tiktok,
+        a.kiwify_status, st.count, csvNum(st.commission), a.notes]);
+    });
+    downloadCsv("base_influencers.csv", rows);
+  });
+
+  /* ---------------- Render: produtos ---------------- */
+  function renderProducts() {
+    var counts = {};
+    state.sales.forEach(function (s) { counts[s.product_id] = (counts[s.product_id] || 0) + 1; });
+    var opts = function (sel) {
+      return '<option value="">— sem ferramenta —</option>' + state.tools.map(function (t) {
+        return '<option value="' + t.id + '"' + (t.id === sel ? " selected" : "") + ">" + esc(t.name) + "</option>";
+      }).join("");
+    };
+    $("products-body").innerHTML = state.products.length ? state.products.map(function (p) {
+      return "<tr><td class=\"l\">" + esc(p.name) + '</td><td class="l"><select class="search" data-product="' + esc(p.id) + '">' + opts(p.tool_id) + '</select></td><td class="num">' + fmtInt(counts[p.id] || 0) + "</td></tr>";
+    }).join("") : '<tr><td colspan="3" class="empty">Nenhum produto importado ainda.</td></tr>';
+  }
+  $("products-body").addEventListener("change", async function (e) {
+    var sel = e.target.closest("select[data-product]");
+    if (!sel) return;
+    var res = await sb.from("kiwify_products").update({ tool_id: sel.value || null }).eq("id", sel.dataset.product);
+    if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
+    var p = state.products.find(function (x) { return x.id === sel.dataset.product; });
+    if (p) p.tool_id = sel.value || null;
+    toast("Produto atualizado.");
+    await refreshSales();
+  });
+
+  /* ---------------- Drawer ---------------- */
+  function openDrawer(email) {
+    state.openEmail = email;
+    var a = state.byEmail[email];
+    var sales = filteredSales().filter(function (s) { return s.affiliate_email === email; });
+    var st = state.stats[email] || { count: 0, amount: 0, commission: 0, tools: {} };
+    if (!a) a = { email: email, name: sales[0] && sales[0].affiliate_name };
+    var toolRows = {};
+    sales.forEach(function (s) {
+      var k = s.tool_name || "Sem ferramenta";
+      var r = toolRows[k] || (toolRows[k] = { count: 0, amount: 0, commission: 0 });
+      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
+    });
+    var doc = fmtDoc(a.company_cnpj || a.document);
+    var products = (a.products || []).map(function (p) { return '<span class="chip">' + esc(p.name) + "</span>"; }).join("");
+    var field = function (key, label, ph) {
+      return '<div class="field"><label for="af-' + key + '">' + label + '</label><input id="af-' + key + '" value="' + esc(a[key] || "") + '" placeholder="' + esc(ph) + '"></div>';
+    };
+    $("drawer").innerHTML =
+      '<div class="drawer-head"><div><h3>' + esc(a.name || email) + '</h3><div class="meta">' +
+        esc(email) + (doc ? " · " + esc(doc) : "") + (a.company_name && a.company_name !== a.name ? "<br>" + esc(a.company_name) : "") +
+        (products ? "<br>" + products : "") +
+      '</div></div><button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div>' +
+      '<div class="mini-kpis">' +
+        kpi("Vendas", fmtInt(st.count)) + kpi("Faturamento", fmtBRL(st.amount)) + kpi("Comissão", fmtBRL(st.commission)) +
+      "</div>" +
+      (a.id ? '<h4>Contato e redes</h4><form id="af-form"><div class="form-grid">' +
+        field("whatsapp", "WhatsApp", "(11) 99999-9999") + field("instagram", "Instagram", "@perfil") +
+        field("youtube", "YouTube", "@canal ou link") + field("facebook", "Facebook", "página ou link") +
+        field("tiktok", "TikTok", "@perfil") +
+        '<div class="field full"><label for="af-notes">Notas</label><textarea id="af-notes" placeholder="Nicho, combinados, observações…">' + esc(a.notes || "") + "</textarea></div>" +
+        '</div><button class="btn btn-primary" type="submit" id="af-save">Salvar contato</button></form>' : "") +
+      "<h4>Por ferramenta</h4>" +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Ferramenta</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead><tbody>' +
+        (Object.keys(toolRows).length ? Object.keys(toolRows).map(function (k) {
+          var r = toolRows[k];
+          return '<tr><td class="l">' + esc(k) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td></tr>";
+        }).join("") : '<tr><td colspan="4" class="empty">Sem vendas no período.</td></tr>') +
+      "</tbody></table></div>" +
+      "<h4>Vendas no período (" + fmtInt(sales.length) + ")</h4>" +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">Status</th><th>Valor</th><th>Comissão</th></tr></thead><tbody>' +
+        (sales.length ? sales.map(function (s) {
+          return '<tr><td class="l num">' + fmtDate(s.sale_created_at) + '</td><td class="l">' + esc(s.product_name) + '</td><td class="l">' + esc(s.customer_name || s.customer_email || "") +
+            '</td><td class="l"><span class="status ' + statusClass(s.status) + '">' + esc(STATUS_LABEL[s.status] || s.status) + '</span></td><td class="num">' + fmtBRL(s.amount) + '</td><td class="num">' + fmtBRL(s.commission) + "</td></tr>";
+        }).join("") : '<tr><td colspan="6" class="empty">Sem vendas no período.</td></tr>') +
+      "</tbody></table></div>";
+    $("drawer").hidden = false;
+    $("scrim").hidden = false;
+    $("drawer-close").addEventListener("click", closeDrawer);
+    var form = $("af-form");
+    if (form) form.addEventListener("submit", function (e) { e.preventDefault(); saveContact(a); });
+  }
+  function closeDrawer() { state.openEmail = null; $("drawer").hidden = true; $("scrim").hidden = true; }
+  $("scrim").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && state.openEmail) closeDrawer(); });
+
+  async function saveContact(a) {
+    var patch = {};
+    ["whatsapp", "instagram", "youtube", "facebook", "tiktok", "notes"].forEach(function (k) {
+      var v = $("af-" + k).value.trim();
+      patch[k] = v || null;
+    });
+    var btn = $("af-save");
+    btn.disabled = true; btn.textContent = "Salvando…";
+    var res = await sb.from("affiliates").update(patch).eq("id", a.id).select().single();
+    btn.disabled = false; btn.textContent = "Salvar contato";
+    if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
+    Object.assign(a, res.data);
+    toast("Contato salvo.");
+    renderRanking();
+    renderBase();
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest("[data-stop]")) return;
+    var tr = e.target.closest("tr.clickable[data-email]");
+    if (tr) openDrawer(tr.dataset.email);
+  });
+
+  /* ---------------- Navegação e filtros ---------------- */
+  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", products: "Produtos" };
+  function setView(v) {
+    state.view = v;
+    safeSet("flow_aff_view", v);
+    Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
+    document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
+    $("view-title").textContent = VIEW_TITLES[v];
+  }
+  document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
+    b.addEventListener("click", function () { setView(b.dataset.view); });
+  });
+
+  async function refreshSales() {
+    $("rank-body").innerHTML = '<tr><td colspan="7" class="empty">Carregando…</td></tr>';
+    try { await loadSales(); } catch (e) { toast("Erro ao carregar vendas: " + (e.message || e), true); return; }
+    renderAll();
+  }
+  $("f-period").addEventListener("change", function () {
+    $("custom-range").hidden = this.value !== "custom";
+    safeSet("flow_aff_period", this.value);
+    if (this.value !== "custom") refreshSales();
+  });
+  $("f-from").addEventListener("change", refreshSales);
+  $("f-to").addEventListener("change", refreshSales);
+  $("f-tool").addEventListener("change", function () { safeSet("flow_aff_tool", this.value); renderAll(); });
+  $("f-status").addEventListener("change", renderAll);
+
+  $("sync-btn").addEventListener("click", async function () {
+    var btn = this;
+    btn.disabled = true; btn.textContent = "Sincronizando…";
+    $("sync-info").textContent = "Buscando dados na Kiwify (pode levar até 2 min)…";
+    var res = await sb.functions.invoke("kiwify-sync", { body: {} });
+    btn.disabled = false; btn.textContent = "Sincronizar agora";
+    var data = res.data || {};
+    if (res.error && !data.error) {
+      try { data = await res.error.context.json(); } catch (e) { data = { error: res.error.message }; }
+    }
+    if (data.skipped) toast("Já existe uma sincronização rodando.");
+    else if (data.ok) toast("Sincronizado: " + fmtInt(data.saved) + " vendas de afiliados atualizadas.");
+    else toast("Erro na sincronização: " + (data.error || "desconhecido"), true);
+    await loadSyncInfo();
+    try { await loadStatic(); } catch (e) {}
+    fillToolFilter();
+    await refreshSales();
+  });
+
+  function fillToolFilter() {
+    var sel = $("f-tool"), cur = sel.value || safeGet("flow_aff_tool") || "all";
+    sel.innerHTML = '<option value="all">Todas as ferramentas</option>' +
+      state.tools.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + "</option>"; }).join("") +
+      '<option value="' + NO_TOOL + '">Sem ferramenta</option>';
+    sel.value = sel.querySelector('option[value="' + cur + '"]') ? cur : "all";
+  }
+
+  /* ---------------- Boot ---------------- */
+  async function boot() {
+    showStatus("Carregando…", "Verificando sua sessão.", false);
+    var s = await sb.auth.getSession();
+    var session = s.data && s.data.session;
+    if (!session) { showOnly("login-screen"); return; }
+    $("user-email").textContent = session.user.email;
+    var savedPeriod = safeGet("flow_aff_period");
+    if (savedPeriod && savedPeriod !== "custom" && $("f-period").querySelector('option[value="' + savedPeriod + '"]')) $("f-period").value = savedPeriod;
+    try {
+      await loadStatic();
+      fillToolFilter();
+      await loadSales();
+    } catch (e) {
+      showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
+      return;
+    }
+    showOnly("app");
+    setView(safeGet("flow_aff_view") || "overview");
+    renderAll();
+    loadSyncInfo();
+  }
+
+  sb.auth.onAuthStateChange(function (event) { if (event === "SIGNED_OUT") showOnly("login-screen"); });
+  boot();
+})();
+</script>
+</body>
+</html>
