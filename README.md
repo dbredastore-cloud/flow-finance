@@ -10,7 +10,7 @@ Painéis internos em `gestorflowtools.shop` (GitHub Pages + Supabase).
 ## Afiliados
 
 ```
-Kiwify API ──(a cada 15 min, pg_cron)──▶ Edge Function kiwify-sync ──▶ tabelas Supabase ──▶ /afiliados/
+Kiwify API ──(a cada 5 min, pg_cron)──▶ Edge Function kiwify-sync ──▶ tabelas Supabase ──▶ /afiliados/
 ```
 
 - `supabase/functions/kiwify-sync/` – busca `/affiliates` e `/sales` (com `view_full_sale_details`) e grava só as vendas que têm `affiliate_commission`. Na primeira vez importa 3 anos de histórico em partes (~110 s por execução); depois busca só o que mudou nos últimos 89 dias (aprovações, reembolsos, chargebacks).
@@ -26,7 +26,7 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - `KIWIFY_CLIENT_SECRET`
 - `KIWIFY_ACCOUNT_ID`
 
-(Kiwify → Apps → API.) Depois clique em **Sincronizar agora** no painel ou espere o próximo ciclo de 15 min.
+(Kiwify → Apps → API.) Depois clique em **Sincronizar agora** no painel ou espere o próximo ciclo de 5 min.
 
 ### Deploy
 

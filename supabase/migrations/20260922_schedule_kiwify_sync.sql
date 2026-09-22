@@ -1,10 +1,10 @@
--- Roda a Edge Function kiwify-sync a cada 15 minutos.
+-- Roda a Edge Function kiwify-sync a cada 5 minutos (a trava evita execuções sobrepostas).
 -- O Authorization usa a anon key (pública, já presente nas páginas); quem autoriza
 -- de fato é o x-cron-secret guardado no Vault.
 select cron.unschedule('kiwify-sync') where exists (select 1 from cron.job where jobname = 'kiwify-sync');
 select cron.schedule(
   'kiwify-sync',
-  '*/15 * * * *',
+  '*/5 * * * *',
   $$
   select net.http_post(
     url := 'https://jagmnogcpxeujtsrrotd.supabase.co/functions/v1/kiwify-sync',
