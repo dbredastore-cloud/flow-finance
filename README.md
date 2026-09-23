@@ -36,5 +36,5 @@ Supabase → Project Settings → Edge Functions → Secrets:
 ## YouTube
 
 - Menu **YouTube** em `/afiliados/`: só entram influencers com o link do canal cadastrado na ficha.
-- `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 50 vídeos pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
+- `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 100 envios, marcando quais são Shorts (confirmado pela URL /shorts/ID) pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
 - Secret necessário: `YOUTUBE_API_KEY` (Supabase → Edge Functions → Secrets).

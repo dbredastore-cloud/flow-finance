@@ -2,14 +2,15 @@
 // cadastrado no painel (affiliates.youtube).
 //
 // Chamado pelo pg_cron (header x-cron-secret) ou pelo botão "Atualizar YouTube"
-// do painel (JWT de usuário logado). Custo por canal ≈ 3 unidades da cota diária
+// do painel (JWT de usuário logado). Custo por canal ≈ 5 unidades da cota diária
 // da YouTube Data API (10.000/dia).
 //
 // Secret necessário (Supabase → Edge Functions → Secrets): YOUTUBE_API_KEY
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const YT = "https://www.googleapis.com/youtube/v3";
-const VIDEOS_PER_CHANNEL = 50;
+const VIDEOS_PER_CHANNEL = 100;
+const SHORT_MAX_S = 180; // Shorts têm no máximo 3 min; acima disso nem precisa checar
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -73,6 +74,34 @@ function durationSeconds(iso: string | undefined) {
   return d * 86400 + h * 3600 + mi * 60 + s;
 }
 const num = (v: unknown) => (v == null ? null : Number(v));
+
+// A API não informa se o vídeo é Short. youtube.com/shorts/ID responde 200 para
+// Shorts e redireciona (303) para /watch nos demais. Sem resposta clara, fica null
+// e o painel cai na regra da duração.
+async function checkShort(id: string): Promise<boolean | null> {
+  try {
+    const r = await fetch(`https://www.youtube.com/shorts/${id}`, { method: "HEAD", redirect: "manual" });
+    await r.body?.cancel();
+    if (r.status === 200) return true;
+    if (r.status >= 300 && r.status < 400) return false;
+  } catch { /* rede */ }
+  return null;
+}
+
+async function classifyShorts(rows: { video_id: string; duration_s: number | null; is_short?: boolean | null }[]) {
+  const ids = rows.map((r) => r.video_id);
+  const { data } = await sb.from("youtube_videos").select("video_id, is_short").in("video_id", ids);
+  const known = new Map((data ?? []).filter((r) => r.is_short != null).map((r) => [r.video_id, r.is_short]));
+  const pending: typeof rows = [];
+  for (const r of rows) {
+    if (known.has(r.video_id)) r.is_short = known.get(r.video_id);
+    else if (r.duration_s != null && r.duration_s > SHORT_MAX_S) r.is_short = false;
+    else pending.push(r);
+  }
+  for (let i = 0; i < pending.length; i += 10) {
+    await Promise.all(pending.slice(i, i + 10).map(async (r) => { r.is_short = await checkShort(r.video_id); }));
+  }
+}
 const bestThumb = (t: any) => t?.medium?.url ?? t?.high?.url ?? t?.default?.url ?? null;
 
 async function syncChannel(email: string, url: string, known: any) {
@@ -94,17 +123,31 @@ async function syncChannel(email: string, url: string, known: any) {
   const uploads = ch.contentDetails?.relatedPlaylists?.uploads;
   let videos = 0;
   if (uploads) {
-    const pl = await yt("/playlistItems", { part: "contentDetails", playlistId: uploads, maxResults: VIDEOS_PER_CHANNEL })
-      .catch((e) => (String(e).includes("404") ? { items: [] } : Promise.reject(e)));
-    const ids = (pl.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean);
+    const ids: string[] = [];
+    let pageToken = "";
+    while (ids.length < VIDEOS_PER_CHANNEL) {
+      const params: Record<string, string | number> = { part: "contentDetails", playlistId: uploads, maxResults: 50 };
+      if (pageToken) params.pageToken = pageToken;
+      const pl = await yt("/playlistItems", params)
+        .catch((e) => (String(e).includes("404") ? { items: [] } : Promise.reject(e)));
+      ids.push(...(pl.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean));
+      pageToken = pl.nextPageToken ?? "";
+      if (!pageToken) break;
+    }
+    ids.splice(VIDEOS_PER_CHANNEL);
     if (ids.length) {
-      const vs = await yt("/videos", { part: "snippet,statistics,contentDetails", id: ids.join(","), maxResults: 50 });
-      const rows = (vs.items ?? []).map((v: any) => ({
+      const items: any[] = [];
+      for (let i = 0; i < ids.length; i += 50) {
+        const vs = await yt("/videos", { part: "snippet,statistics,contentDetails", id: ids.slice(i, i + 50).join(","), maxResults: 50 });
+        items.push(...(vs.items ?? []));
+      }
+      const rows = items.map((v: any) => ({
         video_id: v.id, channel_id: channelId, title: v.snippet?.title ?? null,
         published_at: v.snippet?.publishedAt ?? null, duration_s: durationSeconds(v.contentDetails?.duration),
         views: num(v.statistics?.viewCount), likes: num(v.statistics?.likeCount), comments: num(v.statistics?.commentCount),
-        thumbnail_url: bestThumb(v.snippet?.thumbnails), fetched_at: now,
+        thumbnail_url: bestThumb(v.snippet?.thumbnails), fetched_at: now, is_short: null as boolean | null,
       }));
+      await classifyShorts(rows);
       if (rows.length) {
         const { error } = await sb.from("youtube_videos").upsert(rows, { onConflict: "video_id" });
         if (error) throw error;

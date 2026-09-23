@@ -36,3 +36,6 @@ alter table public.youtube_channels enable row level security;
 alter table public.youtube_videos   enable row level security;
 create policy auth_read_youtube_channels on public.youtube_channels for select to authenticated using (true);
 create policy auth_read_youtube_videos   on public.youtube_videos   for select to authenticated using (true);
+
+-- Short de verdade (confirmado pela URL /shorts/ID), não só pela duração.
+alter table public.youtube_videos add column if not exists is_short boolean;
