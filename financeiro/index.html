@@ -302,8 +302,11 @@
   }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://jagmnogcpxeujtsrrotd.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -609,11 +612,14 @@
     var res = await sb.from("tools").select("*").eq("active", true).order("sort_order");
     if (res.error) throw res.error;
     state.tools = res.data || [];
+    finCache.tools = state.tools;
+    saveFinCache();
   }
 
   async function loadCategories(toolId) {
     var res = await sb.from("expense_categories").select("*").eq("tool_id", toolId);
     if (res.error) throw res.error;
+    if (toolId !== state.activeToolId) return; // trocou de ferramenta no meio do caminho
     var cats = res.data || [];
     cats.sort(function (a, b) {
       if (a.group_name !== b.group_name) return a.group_name < b.group_name ? -1 : 1;
@@ -623,13 +629,19 @@
   }
 
   async function loadSummary(toolId, year) {
+    // Despesas, receita e categorias saem em paralelo.
+    var res = await Promise.all([
+      sb.from("monthly_expenses").select("category_id, month, amount").eq("tool_id", toolId).eq("year", year),
+      sb.from("monthly_revenue").select("month, faturamento, reembolsos, novos_usuarios, usuarios_totais, source, synced_at").eq("tool_id", toolId).eq("year", year),
+      state.categoriesReady || Promise.resolve()
+    ]);
+    var expRes = res[0], revRes = res[1];
     var catById = {};
     state.categories.forEach(function (c) { catById[c.id] = c; });
 
     var acc = {};
     function ensure(m) { if (!acc[m]) acc[m] = { total_despesas: 0, custo_infra: 0 }; return acc[m]; }
 
-    var expRes = await sb.from("monthly_expenses").select("category_id, month, amount").eq("tool_id", toolId).eq("year", year);
     if (expRes.error) throw expRes.error;
     (expRes.data || []).forEach(function (e) {
       var mm = ensure(e.month);
@@ -639,7 +651,6 @@
       if (cat && cat.group_name === "Infraestrutura") mm.custo_infra += amt;
     });
 
-    var revRes = await sb.from("monthly_revenue").select("month, faturamento, reembolsos, novos_usuarios, usuarios_totais, source, synced_at").eq("tool_id", toolId).eq("year", year);
     if (revRes.error) throw revRes.error;
     (revRes.data || []).forEach(function (r) {
       var mm = ensure(r.month);
@@ -673,7 +684,21 @@
         percentual_reembolso: mm.novos_usuarios > 0 ? (mm.reembolsos || 0) / mm.novos_usuarios : null
       };
     });
-    state.summaryByMonth = summary;
+    finCache.summaries[toolId + ":" + year] = summary;
+    saveFinCache();
+    // Pré-carregamentos de outras ferramentas não trocam o que está na tela.
+    if (toolId === state.activeToolId && year === state.activeYear) state.summaryByMonth = summary;
+    return summary;
+  }
+
+  /* Cache da aba (sessionStorage): mostra na hora ao voltar/trocar de ferramenta e atualiza por trás. */
+  var FIN_CACHE_KEY = "flow_fin_cache_v1";
+  var finCache = (function () {
+    try { return JSON.parse(sessionStorage.getItem(FIN_CACHE_KEY) || "null") || { tools: null, summaries: {} }; }
+    catch (e) { return { tools: null, summaries: {} }; }
+  })();
+  function saveFinCache() {
+    try { sessionStorage.setItem(FIN_CACHE_KEY, JSON.stringify(finCache)); } catch (e) {}
   }
 
   async function loadExpenseDetail(toolId, year, month) {
@@ -770,6 +795,7 @@
     renderTable();
     var wrap = document.getElementById("detail-" + m);
     wrap.innerHTML = '<p class="save-hint">Carregando…</p>';
+    await state.categoriesReady;
     var items = await loadExpenseDetail(state.activeToolId, state.activeYear, m);
     renderDetail(m, items);
   }
@@ -915,6 +941,7 @@
     renderChart();
     state.openMonth = m;
     renderTable();
+    await state.categoriesReady;
     var items = await loadExpenseDetail(state.activeToolId, state.activeYear, m);
     renderDetail(m, items);
   }
@@ -1069,22 +1096,34 @@
     var tool = state.tools.find(function (t) { return t.id === toolId; });
     document.getElementById("tool-title").textContent = tool ? tool.name : "—";
     renderSidebar();
-    await loadCategories(toolId);
-    await loadSummary(toolId, state.activeYear);
     document.getElementById("year-label").textContent = state.activeYear;
-    renderKpis();
-    renderTable();
-    renderChart();
+    state.categoriesReady = loadCategories(toolId);
+    await showSummary(toolId, state.activeYear);
   }
 
   async function selectYear(year) {
     state.activeYear = year;
     state.openMonth = null;
     document.getElementById("year-label").textContent = year;
-    await loadSummary(state.activeToolId, year);
-    renderKpis();
-    renderTable();
-    renderChart();
+    await showSummary(state.activeToolId, year);
+  }
+
+  // Desenha na hora o que estiver em cache e redesenha quando chegar o dado novo.
+  async function showSummary(toolId, year) {
+    var key = toolId + ":" + year;
+    var cached = finCache.summaries[key];
+    if (cached) { state.summaryByMonth = cached; renderKpis(); renderTable(); renderChart(); }
+    var fresh = await loadSummary(toolId, year);
+    if (toolId !== state.activeToolId || year !== state.activeYear) return;
+    // Só redesenha (e reanima o gráfico) se algo mudou.
+    if (!cached || JSON.stringify(cached) !== JSON.stringify(fresh)) { renderKpis(); renderTable(); renderChart(); }
+  }
+
+  // Depois da primeira tela, deixa as outras ferramentas prontas para a troca ser instantânea.
+  function prefetchOtherTools() {
+    state.tools.forEach(function (t) {
+      if (t.id !== state.activeToolId) loadSummary(t.id, state.activeYear).catch(function () {});
+    });
   }
 
   document.getElementById("year-prev").addEventListener("click", function () { selectYear(state.activeYear - 1); });
@@ -1224,20 +1263,26 @@
     var sessionRes = await sb.auth.getSession();
     var session = sessionRes.data && sessionRes.data.session;
     if (!session) { showLogin(); return; }
-    try {
-      await loadTools();
-    } catch (e) {
-      showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
-      return;
+    document.getElementById("user-email").textContent = session.user.email;
+    var alertsReady = loadAlerts().catch(function () { state.alerts = []; });
+
+    // Com cache da aba, abre na hora com as ferramentas conhecidas; senão espera a lista.
+    if (finCache.tools && finCache.tools.length) {
+      state.tools = finCache.tools;
+      loadTools().then(renderSidebar).catch(function () {});
+    } else {
+      try { await loadTools(); } catch (e) {
+        showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
+        return;
+      }
     }
     if (!state.tools.length) { showStatus("Sem ferramentas cadastradas", "Nenhuma ferramenta foi encontrada no banco.", true); return; }
     showApp();
-    document.getElementById("user-email").textContent = session.user.email;
     var savedTool = safeGet("flow_fin_tool");
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
-    try { await loadAlerts(); } catch (e) { state.alerts = []; }
-    renderAlerts();
+    alertsReady.then(function () { renderAlerts(); renderTable(); });
     await selectTool(initialTool.id);
+    prefetchOtherTools();
   }
 
   sb.auth.onAuthStateChange(function (event) {

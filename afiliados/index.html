@@ -225,8 +225,11 @@
   }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://jagmnogcpxeujtsrrotd.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -584,24 +587,86 @@
   $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
 
   /* ---------------- Dados ---------------- */
+  // Busca todas as páginas de 1000 linhas: a 1ª sozinha (quase sempre basta) e,
+  // se houver mais, as seguintes 4 por vez em paralelo.
   async function fetchAll(buildQuery) {
-    var out = [], size = 1000;
-    for (var from = 0; ; from += size) {
-      var res = await buildQuery().range(from, from + size - 1);
-      if (res.error) throw res.error;
-      out = out.concat(res.data || []);
-      if (!res.data || res.data.length < size) break;
+    var size = 1000, batch = 4;
+    var first = await buildQuery().range(0, size - 1);
+    if (first.error) throw first.error;
+    var out = first.data || [];
+    if (out.length < size) return out;
+    for (var page = 1; ; page += batch) {
+      var reqs = [];
+      for (var k = 0; k < batch; k++) {
+        var from = (page + k) * size;
+        reqs.push(buildQuery().range(from, from + size - 1));
+      }
+      var results = await Promise.all(reqs);
+      var done = false;
+      for (var j = 0; j < results.length; j++) {
+        if (results[j].error) throw results[j].error;
+        var rows = results[j].data || [];
+        out = out.concat(rows);
+        if (rows.length < size) { done = true; break; }
+      }
+      if (done) return out;
     }
-    return out;
   }
 
-  async function loadStatic() {
-    state.affiliates = await fetchAll(function () { return sb.from("affiliates").select("*").order("name"); });
-    var p = await sb.from("kiwify_products").select("*").order("name");
-    if (p.error) throw p.error;
-    state.products = p.data || [];
+  // Colunas usadas nas telas (a lista de produtos de cada afiliado só vem ao abrir a ficha).
+  var AFF_COLS = "id, email, name, document, company_name, company_cnpj, director_cpf, kiwify_status, whatsapp, instagram, facebook, youtube, tiktok, notes";
+
+  function indexAffiliates() {
     state.byEmail = {};
     state.affiliates.forEach(function (a) { state.byEmail[a.email] = a; });
+  }
+  function mergeAffiliates(rows) {
+    rows.forEach(function (a) {
+      if (state.byEmail[a.email]) Object.assign(state.byEmail[a.email], a);
+      else { state.affiliates.push(a); state.byEmail[a.email] = a; }
+    });
+  }
+
+  // Ao abrir: só quem já vendeu ou tem contato preenchido (a base inteira tem 20+ mil).
+  async function loadStatic() {
+    var res = await Promise.all([
+      fetchAll(function () { return sb.from("affiliates_relevant").select(AFF_COLS).order("name"); }),
+      sb.from("kiwify_products").select("id, name, tool_id").order("name")
+    ]);
+    if (res[1].error) throw res[1].error;
+    state.affiliates = res[0];
+    state.products = res[1].data || [];
+    state.fullBase = false;
+    indexAffiliates();
+  }
+
+  // Base completa sob demanda (filtro "Todos" / "Ativos na Kiwify" do menu Influencers).
+  var fullBasePromise = null;
+  function ensureFullBase() {
+    if (state.fullBase) return Promise.resolve();
+    if (!fullBasePromise) {
+      fullBasePromise = fetchAll(function () { return sb.from("affiliates").select(AFF_COLS).order("name"); })
+        .then(function (rows) { mergeAffiliates(rows); state.fullBase = true; })
+        .catch(function (e) { fullBasePromise = null; throw e; });
+    }
+    return fullBasePromise;
+  }
+
+  // Busca no servidor quem ainda não está carregado (sem baixar a base inteira).
+  var searchTimer = null, lastServerSearch = "";
+  function serverSearch(q) {
+    clearTimeout(searchTimer);
+    if (state.fullBase || q.length < 3 || q === lastServerSearch) return;
+    searchTimer = setTimeout(async function () {
+      lastServerSearch = q;
+      var like = "%" + q.replace(/[%,()]/g, " ") + "%";
+      var res = await sb.from("affiliates").select(AFF_COLS)
+        .or("name.ilike." + like + ",email.ilike." + like + ",company_name.ilike." + like + ",company_cnpj.ilike." + like)
+        .limit(50);
+      if (res.error || !res.data || !res.data.length) return;
+      mergeAffiliates(res.data);
+      renderBase();
+    }, 350);
   }
 
   async function loadSales() {
@@ -669,16 +734,22 @@
   }
 
   /* ---------------- Render: visão geral ---------------- */
+  // Recalcula os números e desenha só a aba visível; as outras são desenhadas ao serem abertas.
   function renderAll() {
-    var sales = filteredSales();
-    state.stats = computeStats(sales);
-    renderKpis(sales);
-    renderChart(sales);
-    renderProductSummary(sales);
-    renderRanking();
-    renderBase();
-    renderProducts(sales);
-    renderYoutube();
+    state.filtered = filteredSales();
+    state.stats = computeStats(state.filtered);
+    renderView(state.view);
+  }
+  function renderView(v) {
+    var sales = state.filtered || [];
+    if (v === "overview") {
+      renderKpis(sales);
+      renderChart(sales);
+      renderProductSummary(sales);
+      renderRanking();
+    } else if (v === "base") renderBase();
+    else if (v === "products") renderProducts(sales);
+    else if (v === "youtube") renderYoutube();
   }
 
   function kpi(label, value, sub, tip) {
@@ -921,7 +992,7 @@
     list = list.filter(function (a) {
       if (q && searchable(a).indexOf(q) < 0) return false;
       var sold = !!state.stats[a.email];
-      if (f === "selling") return sold;
+      if (f === "selling") return sold || !!q; // buscando por nome, mostra mesmo quem não vendeu
       if (f === "missing") return sold && !hasContact(a);
       if (f === "active") return a.kiwify_status === "active";
       return true;
@@ -978,8 +1049,19 @@
     state.baseSort = { key: k, dir: state.baseSort.key === k ? -state.baseSort.dir : (k === "name" ? 1 : -1) };
     renderBase();
   });
-  $("base-search").addEventListener("input", renderBase);
-  $("base-filter").addEventListener("change", renderBase);
+  $("base-search").addEventListener("input", function () {
+    renderBase();
+    serverSearch(this.value.trim());
+  });
+  $("base-filter").addEventListener("change", async function () {
+    var f = this.value;
+    if ((f === "all" || f === "active") && !state.fullBase) {
+      $("base-title").textContent = "Carregando a base completa de afiliados…";
+      $("base-body").innerHTML = '<tr><td colspan="8" class="empty">Carregando a base completa (mais de 20 mil afiliados)…</td></tr>';
+      try { await ensureFullBase(); } catch (e) { toast("Erro ao carregar a base: " + (e.message || e), true); }
+    }
+    renderBase();
+  });
   $("base-csv").addEventListener("click", function () {
     var cols = baseProductCols(), r = periodRange();
     var rows = [["Posição", "Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão"].concat(cols).concat(["Notas"])];
@@ -1015,15 +1097,18 @@
   var SHORT_MAX_S = 180; // Shorts podem ter até 3 min
 
   async function loadYoutube() {
-    var ch = await sb.from("youtube_channels").select("*");
+    var res = await Promise.all([
+      sb.from("youtube_channels").select("*"),
+      fetchAll(function () {
+        return sb.from("youtube_videos").select("video_id, channel_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short").order("published_at", { ascending: false });
+      }),
+      sb.from("sync_state").select("value").eq("key", "youtube_last_run").maybeSingle()
+    ]);
+    var ch = res[0], vids = res[1], lr = res[2];
     if (ch.error) throw ch.error;
-    var vids = await fetchAll(function () {
-      return sb.from("youtube_videos").select("video_id, channel_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short").order("published_at", { ascending: false });
-    });
     var byChannel = {};
     vids.forEach(function (v) { (byChannel[v.channel_id] = byChannel[v.channel_id] || []).push(v); });
     state.yt.channels = (ch.data || []).map(function (c) { return ytMetrics(c, byChannel[c.channel_id] || []); });
-    var lr = await sb.from("sync_state").select("value").eq("key", "youtube_last_run").maybeSingle();
     state.yt.lastRun = lr.data && lr.data.value;
   }
 
@@ -1292,7 +1377,7 @@
     $("drawer").innerHTML =
       '<div class="drawer-head"><div><h3>' + esc(a.name || email) + '</h3><div class="meta">' +
         esc(email) + (doc ? " · " + esc(doc) : "") + (a.company_name && a.company_name !== a.name ? "<br>" + esc(a.company_name) : "") +
-        (products ? "<br>" + products : "") +
+        '<span id="drawer-products">' + (products ? "<br>" + products : "") + "</span>" +
       '</div></div><button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div>' +
       '<div class="mini-kpis">' +
         kpi("Vendas", fmtInt(st.count)) + kpi("Faturamento", fmtBRL(st.amount)) + kpi("Comissão", fmtBRL(st.commission)) +
@@ -1319,6 +1404,16 @@
     $("drawer").hidden = false;
     $("scrim").hidden = false;
     $("drawer-close").addEventListener("click", closeDrawer);
+    // Produtos em que é afiliado: não vêm na carga inicial, busca ao abrir a ficha.
+    if (a.id && !a.products) {
+      sb.from("affiliates").select("products").eq("id", a.id).maybeSingle().then(function (res) {
+        a.products = (res.data && res.data.products) || [];
+        var el = $("drawer-products");
+        if (el && state.openEmail === email && a.products.length) {
+          el.innerHTML = "<br>" + a.products.map(function (p) { return '<span class="chip">' + esc(p.name) + "</span>"; }).join("");
+        }
+      });
+    }
     var form = $("af-form");
     if (form) form.addEventListener("submit", function (e) { e.preventDefault(); saveContact(a); });
   }
@@ -1357,6 +1452,7 @@
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
+    if (state.filtered) renderView(v);
   }
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
     b.addEventListener("click", function () { setView(b.dataset.view); });
@@ -1366,6 +1462,7 @@
     $("rank-body").innerHTML = '<tr><td colspan="7" class="empty">Carregando…</td></tr>';
     try { await loadSales(); } catch (e) { toast("Erro ao carregar vendas: " + (e.message || e), true); return; }
     renderAll();
+    writeCache();
   }
   $("f-period").addEventListener("change", function () {
     $("custom-range").hidden = this.value !== "custom";
@@ -1454,19 +1551,61 @@
     $("user-email").textContent = session.user.email;
     var savedPeriod = safeGet("flow_aff_period");
     if (savedPeriod && savedPeriod !== "custom" && $("f-period").querySelector('option[value="' + savedPeriod + '"]')) $("f-period").value = savedPeriod;
-    try {
-      await loadStatic();
+
+    // Se esta aba já abriu o painel antes (ex.: voltou do Financeiro), mostra na hora
+    // o que estava em memória e atualiza por trás.
+    var cached = readCache();
+    if (cached) {
+      state.affiliates = cached.affiliates; state.products = cached.products; state.sales = cached.sales;
+      state.yt.channels = cached.yt || []; state.yt.lastRun = cached.ytLastRun || null;
+      state.fullBase = false;
+      indexAffiliates();
       fillProductFilter();
-      await loadSales();
-      try { await loadYoutube(); } catch (e) { console.warn("YouTube:", e); }
+      showOnly("app");
+      setView(safeGet("flow_aff_view") || "overview");
+      renderAll();
+    } else {
+      showStatus("Carregando…", "Buscando vendas e afiliados.", false);
+    }
+
+    try {
+      await Promise.all([loadStatic(), loadSales()]);
     } catch (e) {
-      showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
+      if (!cached) { showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true); return; }
+      toast("Não foi possível atualizar: " + (e.message || e), true);
       return;
     }
-    showOnly("app");
-    setView(safeGet("flow_aff_view") || "overview");
+    fillProductFilter();
+    if (!cached) { showOnly("app"); setView(safeGet("flow_aff_view") || "overview"); }
     renderAll();
+    writeCache();
     loadSyncInfo();
+    // YouTube não é necessário para a primeira tela: carrega depois.
+    loadYoutube().then(function () {
+      if (state.view === "youtube") renderYoutube();
+      writeCache();
+    }).catch(function (e) { console.warn("YouTube:", e); });
+  }
+
+  /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */
+  var CACHE_KEY = "flow_aff_cache_v1";
+  function periodKey() { return $("f-period").value + "|" + $("f-from").value + "|" + $("f-to").value; }
+  function readCache() {
+    try {
+      var c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null");
+      return c && c.period === periodKey() ? c : null;
+    } catch (e) { return null; }
+  }
+  function writeCache() {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        // Mesmo com a base completa carregada, guarda só os relevantes (vendeu no período ou tem contato).
+        period: periodKey(), affiliates: !state.fullBase ? state.affiliates : state.affiliates.filter(function (a) {
+          return hasContact(a) || a.notes || state.sales.some(function (s) { return s.affiliate_email === a.email; });
+        }),
+        products: state.products, sales: state.sales, yt: state.yt.channels, ytLastRun: state.yt.lastRun
+      }));
+    } catch (e) { try { sessionStorage.removeItem(CACHE_KEY); } catch (e2) {} }
   }
 
   sb.auth.onAuthStateChange(function (event) { if (event === "SIGNED_OUT") showOnly("login-screen"); });

@@ -5,7 +5,7 @@
 :root {
   color-scheme: dark;
   --bg: #030705;
-  --surface: rgba(10, 22, 16, 0.72);
+  --surface: rgba(9, 20, 14, 0.9);
   --surface-2: rgba(34, 227, 122, 0.07);
   --surface-solid: #0a1510;
   --border: rgba(34, 227, 122, 0.13);
@@ -36,12 +36,16 @@ html { background: var(--bg); }
 body {
   font-family: var(--font-body);
   color: var(--text);
+  /* Transparente: o fundo fica no html, e as camadas fixas (::before/::after) aparecem por cima dele. */
+  background: transparent;
+  min-height: 100vh;
+}
+body::after {
+  /* Brilho verde dos cantos numa camada fixa (mais leve que background-attachment: fixed). */
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
   background:
     radial-gradient(1100px 520px at 78% -8%, rgba(34, 227, 122, 0.13), transparent 62%),
-    radial-gradient(900px 480px at -12% 108%, rgba(34, 227, 122, 0.09), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
-  min-height: 100vh;
+    radial-gradient(900px 480px at -12% 108%, rgba(34, 227, 122, 0.09), transparent 60%);
 }
 /* Grade de fundo que some nas bordas, lembrando o piso das logos. */
 body::before {
@@ -88,9 +92,8 @@ a:hover { text-shadow: 0 0 10px rgba(34, 227, 122, 0.5); }
 
 /* ---------- Estrutura ---------- */
 .sidebar {
-  background: linear-gradient(180deg, rgba(6, 16, 11, 0.92), rgba(3, 9, 6, 0.92));
+  background: linear-gradient(180deg, rgba(6, 16, 11, 0.96), rgba(3, 9, 6, 0.96));
   border-right: 1px solid var(--border);
-  backdrop-filter: blur(12px);
 }
 .nav-btn, .tool-btn {
   position: relative; border-radius: 10px; transition: background .2s ease, color .2s ease, box-shadow .2s ease;
@@ -103,11 +106,11 @@ a:hover { text-shadow: 0 0 10px rgba(34, 227, 122, 0.5); }
 .nav-sep, .sidebar-foot { border-color: var(--border); }
 
 /* ---------- Painéis de vidro ---------- */
+/* Sem backdrop-filter nos cartões: o desfoque em dezenas de elementos deixa a rolagem
+   e os cliques pesados. O fundo quase opaco já dá o efeito de vidro. */
 .panel, .kpi, .alerts, .login-card, .ms-panel, #drawer {
   background: var(--surface);
   border: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--shadow);
 }
 .panel, .kpi, .alerts, .login-card { position: relative; overflow: hidden; }
