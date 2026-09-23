@@ -45,3 +45,4 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Regras: faturamento = valor líquido das vendas pagas; reembolsos = vendas do mês com status reembolsado; novos usuários = vendas pagas no mês; usuários totais = acumulado dos novos desde `tools.revenue_start`.
 - Os valores lançados à mão antes da automação estão em `monthly_revenue_manual_backup`.
 - Ferramentas sem produto da Kiwify ligado (ex.: Flow Subscriptions) continuam com receita manual.
+- Avisos: o `kiwify-revenue` guarda cada venda em `kiwify_sales_snapshot` e relê meses fechados (os 3 últimos a cada 30 min, os demais 1x por dia). Se uma venda de um mês fechado muda de status/valor, grava em `revenue_alerts` (antes/depois + vendas afetadas) e o `/financeiro/` mostra o aviso no topo, com "marcar como visto".
