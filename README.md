@@ -32,3 +32,9 @@ Supabase → Project Settings → Edge Functions → Secrets:
 
 - Páginas: push na `main` → GitHub Pages publica sozinho.
 - Edge Function / banco: aplicados direto no projeto Supabase `jagmnogcpxeujtsrrotd`; os arquivos aqui são a fonte da verdade.
+
+## YouTube
+
+- Menu **YouTube** em `/afiliados/`: só entram influencers com o link do canal cadastrado na ficha.
+- `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 50 vídeos pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
+- Secret necessário: `YOUTUBE_API_KEY` (Supabase → Edge Functions → Secrets).

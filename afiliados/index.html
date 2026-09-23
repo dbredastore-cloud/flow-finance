@@ -196,6 +196,12 @@
   .who .e { font-size: 11.5px; color: var(--text-muted); }
   .muted { color: var(--text-muted); }
   .rank { color: var(--text-muted); width: 28px; }
+  tr.clickable-yt { cursor: pointer; }
+  tr.clickable-yt:hover, tr.clickable-yt.open { background: var(--surface-2); }
+  tr.yt-detail > td { padding: 0; background: var(--surface-2); }
+  .yt-detail-wrap { padding: 14px 12px 18px; max-height: 560px; overflow-y: auto; }
+  table.yt-videos thead th { background: var(--surface-2); }
+  table.yt-videos td { white-space: nowrap; }
   th.prod-col { max-width: 120px; white-space: normal; line-height: 1.3; vertical-align: bottom; }
   td.prod-col { border-left: 1px solid var(--border); }
   td.products-cell { white-space: normal; min-width: 220px; }
@@ -297,6 +303,7 @@
       <button class="nav-btn" data-view="overview">Visão geral</button>
       <button class="nav-btn" data-view="base">Influencers</button>
       <button class="nav-btn" data-view="products">Produtos</button>
+      <button class="nav-btn" data-view="youtube">YouTube</button>
       <div class="nav-sep"></div>
       <a class="nav-btn" href="../financeiro/">Financeiro</a>
     </nav>
@@ -409,6 +416,24 @@
         </table></div>
       </section>
     </section>
+    <!-- YouTube -->
+    <section id="view-youtube" hidden>
+      <div class="kpi-row" id="yt-kpis"></div>
+      <section class="panel">
+        <div class="panel-head">
+          <h3 id="yt-title">Canais dos influencers</h3>
+          <div class="tools">
+            <span class="muted" style="font-size:12px;" id="yt-info"></span>
+            <button class="btn" id="yt-sync">Atualizar YouTube</button>
+          </div>
+        </div>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Só aparecem influencers com o link do canal cadastrado na ficha. Métricas de postagem e views usam os últimos 50 vídeos de cada canal; vendas e comissão seguem o período e os filtros do topo. Clique num canal para ver a lista de vídeos.</p>
+        <div class="table-scroll"><table>
+          <thead><tr id="yt-head"></tr></thead>
+          <tbody id="yt-body"></tbody>
+        </table></div>
+      </section>
+    </section>
   </main>
 </div>
 
@@ -439,6 +464,7 @@
     byEmail: {}, stats: {},
     sort: { key: "commission", dir: -1 },
     baseSort: { key: "count", dir: -1 },
+    yt: { channels: [], sort: { key: "subscribers", dir: -1 }, open: null, lastRun: null },
     openEmail: null
   };
 
@@ -499,8 +525,7 @@
   }
   function socialsHtml(a) {
     var items = [["whatsapp", "WA", waLink(a.whatsapp)], ["instagram", "IG", socialLink("instagram", a.instagram)],
-      ["facebook", "FB", socialLink("facebook", a.facebook)], ["youtube", "YT", socialLink("youtube", a.youtube)],
-      ["tiktok", "TT", socialLink("tiktok", a.tiktok)]];
+      ["youtube", "YT", socialLink("youtube", a.youtube)]];
     return '<span class="socials">' + items.map(function (it) {
       return it[2]
         ? '<a class="soc" href="' + esc(it[2]) + '" target="_blank" rel="noopener" title="' + it[0] + '" data-stop>' + it[1] + "</a>"
@@ -679,6 +704,7 @@
     renderRanking();
     renderBase();
     renderProducts(sales);
+    renderYoutube();
   }
 
   function kpi(label, value, sub, tip) {
@@ -973,6 +999,219 @@
     }).join("") : '<tr><td colspan="5" class="empty">Nenhum produto importado ainda.</td></tr>';
   }
 
+  /* ---------------- YouTube ---------------- */
+  var DAY_MS = 86400000;
+  var SHORT_MAX_S = 180; // Shorts podem ter até 3 min
+
+  async function loadYoutube() {
+    var ch = await sb.from("youtube_channels").select("*");
+    if (ch.error) throw ch.error;
+    var vids = await fetchAll(function () {
+      return sb.from("youtube_videos").select("video_id, channel_id, title, published_at, duration_s, views, likes, comments, thumbnail_url").order("published_at", { ascending: false });
+    });
+    var byChannel = {};
+    vids.forEach(function (v) { (byChannel[v.channel_id] = byChannel[v.channel_id] || []).push(v); });
+    state.yt.channels = (ch.data || []).map(function (c) { return ytMetrics(c, byChannel[c.channel_id] || []); });
+    var lr = await sb.from("sync_state").select("value").eq("key", "youtube_last_run").maybeSingle();
+    state.yt.lastRun = lr.data && lr.data.value;
+  }
+
+  function avg(arr) { return arr.length ? arr.reduce(function (s, x) { return s + x; }, 0) / arr.length : null; }
+  function median(arr) {
+    if (!arr.length) return null;
+    var s = arr.slice().sort(function (a, b) { return a - b; }), m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  // Métricas derivadas dos últimos vídeos do canal (até 50, mais novo primeiro).
+  function ytMetrics(c, videos) {
+    var now = Date.now();
+    var ages = videos.map(function (v) { return (now - Date.parse(v.published_at)) / DAY_MS; });
+    var last10 = videos.slice(0, 10);
+    var views10 = last10.map(function (v) { return Number(v.views) || 0; });
+    var in30 = ages.filter(function (d) { return d <= 30; }).length;
+    var in90 = ages.filter(function (d) { return d <= 90; }).length;
+    var gaps = [];
+    for (var i = 0; i + 1 < Math.min(videos.length, 11); i++) gaps.push(ages[i + 1] - ages[i]);
+    var eng = last10.reduce(function (acc, v) {
+      acc.v += Number(v.views) || 0; acc.i += (Number(v.likes) || 0) + (Number(v.comments) || 0); return acc;
+    }, { v: 0, i: 0 });
+    var shorts = videos.filter(function (v) { return v.duration_s != null && v.duration_s <= SHORT_MAX_S; }).length;
+    var avgViews10 = avg(views10);
+    return {
+      c: c, videos: videos,
+      lastDays: videos.length ? Math.floor(ages[0]) : null,
+      in30: in30,
+      perWeek: in90 / (90 / 7),
+      gapDays: avg(gaps),
+      avgViews10: avgViews10,
+      medianViews10: median(views10),
+      viewsPerSub: c.subscribers && avgViews10 != null ? avgViews10 / c.subscribers : null,
+      engagement: eng.v ? eng.i / eng.v : null,
+      shortsPct: videos.length ? shorts / videos.length : null,
+      best: videos.reduce(function (b, v) { return !b || (Number(v.views) || 0) > (Number(b.views) || 0) ? v : b; }, null)
+    };
+  }
+
+  function fmtPct1(v) { return v == null || isNaN(v) ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
+  function fmtDec1(v) { return v == null || isNaN(v) ? "—" : v.toFixed(1).replace(".", ","); }
+  function fmtDur(s) {
+    if (s == null) return "—";
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(ss).padStart(2, "0");
+  }
+  function daysLabel(d) {
+    if (d == null) return '<span class="muted">sem vídeos</span>';
+    var cls = d <= 7 ? "ok" : d <= 30 ? "wait" : "bad";
+    return '<span class="status ' + cls + '">' + (d === 0 ? "hoje" : d === 1 ? "há 1 dia" : "há " + fmtInt(d) + " dias") + "</span>";
+  }
+  function channelUrl(c) { return c.channel_id ? "https://www.youtube.com/channel/" + c.channel_id : c.input_url; }
+
+  var YT_COLS = [
+    { key: "title", label: "Canal", cls: "l" },
+    { key: "subscribers", label: "Inscritos", tip: "Inscritos no canal." },
+    { key: "total_views", label: "Views do canal", tip: "Visualizações totais do canal desde a criação." },
+    { key: "video_count", label: "Vídeos", tip: "Total de vídeos publicados no canal." },
+    { key: "lastDays", label: "Último vídeo", tip: "Há quantos dias saiu o vídeo mais recente. Verde: até 7 dias; amarelo: até 30; vermelho: mais de 30." },
+    { key: "perWeek", label: "Vídeos/semana", tip: "Média de vídeos por semana nos últimos 90 dias." },
+    { key: "in30", label: "Vídeos 30d", tip: "Vídeos publicados nos últimos 30 dias." },
+    { key: "gapDays", label: "Intervalo médio", tip: "Média de dias entre um vídeo e o seguinte, nos últimos 10 vídeos." },
+    { key: "avgViews10", label: "Média views", tip: "Média de views por vídeo nos últimos 10 vídeos." },
+    { key: "medianViews10", label: "Mediana views", tip: "Views do vídeo \"do meio\" entre os últimos 10 — menos distorcida por um vídeo que viralizou." },
+    { key: "viewsPerSub", label: "Views/inscrito", tip: "Média de views dos últimos 10 vídeos ÷ inscritos. Mostra quanto da base assiste." },
+    { key: "engagement", label: "Engajamento", tip: "(Curtidas + comentários) ÷ views nos últimos 10 vídeos." },
+    { key: "shortsPct", label: "% Shorts", tip: "Parte dos últimos 50 vídeos com até 3 minutos." },
+    { key: "sales", label: "Vendas", tip: "Vendas do influencer no período e filtros do topo." },
+    { key: "commission", label: "Comissão", tip: "Comissão do influencer no período e filtros do topo." }
+  ];
+  function ytValue(x, key) {
+    var st = state.stats[x.c.affiliate_email];
+    if (key === "sales") return st ? st.count : 0;
+    if (key === "commission") return st ? st.commission : 0;
+    if (key === "title") return (x.c.title || "").toLowerCase();
+    var v = key in x ? x[key] : x.c[key];
+    return v == null ? null : Number(v);
+  }
+  function ytRows() {
+    var k = state.yt.sort.key, d = state.yt.sort.dir;
+    return state.yt.channels.slice().sort(function (x, y) {
+      var vx = ytValue(x, k), vy = ytValue(y, k);
+      if (vx == null && vy == null) return 0;
+      if (vx == null) return 1; // sem dado sempre no fim
+      if (vy == null) return -1;
+      return vx < vy ? -d : vx > vy ? d : 0;
+    });
+  }
+
+  function renderYoutube() {
+    if (!state.yt) return;
+    var list = ytRows();
+    var ok = list.filter(function (x) { return !x.c.error || x.c.channel_id; });
+    var subs = 0, active = 0, sales = 0, comm = 0;
+    ok.forEach(function (x) {
+      subs += Number(x.c.subscribers) || 0;
+      if (x.lastDays != null && x.lastDays <= 30) active++;
+      var st = state.stats[x.c.affiliate_email];
+      if (st) { sales += st.count; comm += st.commission; }
+    });
+    $("yt-kpis").innerHTML =
+      kpi("Canais", fmtInt(ok.length)) +
+      kpi("Inscritos somados", fmtInt(subs)) +
+      kpi("Postaram nos últimos 30 dias", fmtInt(active), ok.length ? "de " + fmtInt(ok.length) + " canais" : null) +
+      kpi("Vendas desses influencers", fmtInt(sales), null, "No período e filtros do topo.") +
+      kpi("Comissão desses influencers", fmtBRL(comm), null, "No período e filtros do topo.");
+
+    var lr = state.yt.lastRun;
+    $("yt-info").innerHTML = lr ? "Atualizado em " + esc(fmtDateTime(lr.at)) + (lr.ok === false ? ' · <span class="err" style="color:var(--critical)">' + esc(lr.error) + "</span>" : "") : "Ainda não atualizado";
+
+    var s = state.yt.sort;
+    $("yt-head").innerHTML = YT_COLS.map(function (c) {
+      var arrow = s.key === c.key ? ' <span class="arrow">' + (s.dir < 0 ? "↓" : "↑") + "</span>" : "";
+      return '<th class="sortable ' + (c.cls || "") + '" data-key="' + c.key + '"' + (c.tip ? ' title="' + esc(c.tip) + '"' : "") + ">" + c.label + arrow + "</th>";
+    }).join("");
+
+    var cols = YT_COLS.length;
+    $("yt-body").innerHTML = list.length ? list.map(function (x) {
+      var c = x.c, a = state.byEmail[c.affiliate_email] || { name: c.affiliate_email }, st = state.stats[c.affiliate_email];
+      var open = state.yt.open === c.affiliate_email;
+      var head = '<td class="l"><div style="display:flex;align-items:center;gap:10px;">' +
+        (c.thumbnail_url ? '<img src="' + esc(c.thumbnail_url) + '" alt="" width="34" height="34" style="border-radius:50%;flex-shrink:0;" loading="lazy" referrerpolicy="no-referrer">' : '<span class="soc" style="width:34px;height:34px;border-radius:50%;">YT</span>') +
+        '<div class="who"><div class="n"><a href="' + esc(channelUrl(c)) + '" target="_blank" rel="noopener" data-stop>' + esc(c.title || c.input_url) + '</a></div><div class="e">' + esc(a.name || c.affiliate_email) + (c.handle ? " · " + esc(c.handle) : "") + "</div></div></div></td>";
+      if (c.error && !c.channel_id) {
+        return '<tr class="yt-row">' + head + '<td colspan="' + (cols - 1) + '" class="l" style="color:var(--critical); white-space:normal;">Não foi possível ler este canal: ' + esc(c.error) + ". Confira o link na ficha do influencer.</td></tr>";
+      }
+      var row = '<tr class="yt-row clickable-yt' + (open ? " open" : "") + '" data-yt="' + esc(c.affiliate_email) + '">' + head +
+        '<td class="num">' + (c.hidden_subs ? '<span class="muted" title="O canal oculta o número de inscritos">oculto</span>' : fmtInt(c.subscribers)) + "</td>" +
+        '<td class="num">' + fmtInt(c.total_views) + "</td>" +
+        '<td class="num">' + fmtInt(c.video_count) + "</td>" +
+        '<td class="l">' + daysLabel(x.lastDays) + "</td>" +
+        '<td class="num">' + fmtDec1(x.perWeek) + "</td>" +
+        '<td class="num">' + fmtInt(x.in30) + "</td>" +
+        '<td class="num">' + (x.gapDays == null ? "—" : fmtDec1(x.gapDays) + " d") + "</td>" +
+        '<td class="num">' + (x.avgViews10 == null ? "—" : fmtInt(Math.round(x.avgViews10))) + "</td>" +
+        '<td class="num">' + (x.medianViews10 == null ? "—" : fmtInt(Math.round(x.medianViews10))) + "</td>" +
+        '<td class="num">' + fmtPct1(x.viewsPerSub) + "</td>" +
+        '<td class="num">' + fmtPct1(x.engagement) + "</td>" +
+        '<td class="num">' + fmtPct1(x.shortsPct) + "</td>" +
+        '<td class="num">' + (st ? fmtInt(st.count) : '<span class="muted">0</span>') + "</td>" +
+        '<td class="num">' + (st ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td></tr>";
+      if (open) row += '<tr class="yt-detail"><td colspan="' + cols + '">' + ytDetail(x) + "</td></tr>";
+      return row;
+    }).join("") : '<tr><td colspan="' + cols + '" class="empty">Nenhum canal ainda. Cadastre o link do YouTube na ficha do influencer (menu Influencers → clique no nome) e clique em "Atualizar YouTube".</td></tr>';
+  }
+
+  function ytDetail(x) {
+    var best = x.best;
+    return '<div class="yt-detail-wrap">' +
+      (best ? '<p style="margin:0 0 10px; font-size:12.5px;" class="muted">Vídeo com mais views (entre os últimos ' + fmtInt(x.videos.length) + '): <a href="https://www.youtube.com/watch?v=' + esc(best.video_id) + '" target="_blank" rel="noopener">' + esc(best.title) + "</a> — " + fmtInt(best.views) + " views</p>" : "") +
+      '<table class="yt-videos"><thead><tr><th class="l">Vídeo</th><th class="l">Publicado</th><th>Duração</th><th>Views</th><th>Curtidas</th><th>Comentários</th><th>Engajamento</th></tr></thead><tbody>' +
+      (x.videos.length ? x.videos.map(function (v) {
+        var days = Math.floor((Date.now() - Date.parse(v.published_at)) / DAY_MS);
+        var isShort = v.duration_s != null && v.duration_s <= SHORT_MAX_S;
+        var e = Number(v.views) ? ((Number(v.likes) || 0) + (Number(v.comments) || 0)) / Number(v.views) : null;
+        return '<tr><td class="l" style="white-space:normal;"><div style="display:flex;gap:10px;align-items:center;">' +
+          (v.thumbnail_url ? '<img src="' + esc(v.thumbnail_url) + '" alt="" width="96" height="54" style="border-radius:6px;object-fit:cover;flex-shrink:0;" loading="lazy" referrerpolicy="no-referrer">' : "") +
+          '<div><a href="https://www.youtube.com/watch?v=' + esc(v.video_id) + '" target="_blank" rel="noopener">' + esc(v.title) + "</a>" +
+          (isShort ? ' <span class="chip">Short</span>' : "") + "</div></div></td>" +
+          '<td class="l num">' + fmtDate(v.published_at) + '<div class="e muted" style="font-family:inherit;font-size:11.5px;">' + (days === 0 ? "hoje" : days === 1 ? "há 1 dia" : "há " + fmtInt(days) + " dias") + "</div></td>" +
+          '<td class="num">' + fmtDur(v.duration_s) + "</td>" +
+          '<td class="num">' + fmtInt(v.views) + "</td>" +
+          '<td class="num">' + (v.likes == null ? "—" : fmtInt(v.likes)) + "</td>" +
+          '<td class="num">' + (v.comments == null ? "—" : fmtInt(v.comments)) + "</td>" +
+          '<td class="num">' + fmtPct1(e) + "</td></tr>";
+      }).join("") : '<tr><td colspan="7" class="empty">Nenhum vídeo público.</td></tr>') +
+      "</tbody></table></div>";
+  }
+
+  $("yt-head").addEventListener("click", function (e) {
+    var th = e.target.closest("th.sortable");
+    if (!th) return;
+    var k = th.dataset.key;
+    state.yt.sort = { key: k, dir: state.yt.sort.key === k ? -state.yt.sort.dir : (k === "title" ? 1 : -1) };
+    renderYoutube();
+  });
+  $("yt-body").addEventListener("click", function (e) {
+    if (e.target.closest("[data-stop], a")) return;
+    var tr = e.target.closest("tr[data-yt]");
+    if (!tr) return;
+    state.yt.open = state.yt.open === tr.dataset.yt ? null : tr.dataset.yt;
+    renderYoutube();
+  });
+  $("yt-sync").addEventListener("click", async function () {
+    var btn = this;
+    btn.disabled = true; btn.textContent = "Atualizando…";
+    var res = await sb.functions.invoke("youtube-sync", { body: {} });
+    btn.disabled = false; btn.textContent = "Atualizar YouTube";
+    var data = res.data || {};
+    if (res.error && !data.error) {
+      try { data = await res.error.context.json(); } catch (err) { data = { error: res.error.message }; }
+    }
+    if (data.ok) toast("YouTube atualizado: " + fmtInt(data.channels) + " canais" + (data.failed ? ", " + data.failed + " com erro" : "") + ".");
+    else toast("Erro ao atualizar YouTube: " + (data.error || "desconhecido"), true);
+    try { await loadYoutube(); } catch (err) {}
+    renderYoutube();
+  });
+
   /* ---------------- Drawer ---------------- */
   function openDrawer(email) {
     state.openEmail = email;
@@ -1047,7 +1286,7 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", products: "Produtos" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", products: "Produtos", youtube: "YouTube" };
   function setView(v) {
     state.view = v;
     safeSet("flow_aff_view", v);
@@ -1113,6 +1352,7 @@
       await loadStatic();
       fillProductFilter();
       await loadSales();
+      try { await loadYoutube(); } catch (e) { console.warn("YouTube:", e); }
     } catch (e) {
       showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
       return;
