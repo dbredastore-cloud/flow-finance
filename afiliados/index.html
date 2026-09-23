@@ -153,6 +153,26 @@
     padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
     background: var(--surface); color: var(--text); font-size: 13px;
   }
+  .ms { position: relative; }
+  .ms-btn {
+    display: inline-flex; align-items: center; gap: 8px; max-width: 280px; padding: 7px 10px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--text); font-size: 13px; cursor: pointer;
+  }
+  .ms-btn span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ms-btn.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .ms-caret { color: var(--text-muted); font-size: 11px; }
+  .ms-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; width: 320px; max-width: calc(100vw - 32px);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow); padding: 8px;
+  }
+  .ms-actions { display: flex; gap: 14px; padding: 2px 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .ms-list { max-height: 320px; overflow-y: auto; }
+  .ms-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .ms-item:hover { background: var(--surface-2); }
+  .ms-item input { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+  .link-btn { background: none; border: none; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; }
   .filters .custom-range { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); }
 
   .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -338,7 +358,18 @@
       <span class="custom-range" id="custom-range" hidden>
         <input type="date" id="f-from" aria-label="De"> até <input type="date" id="f-to" aria-label="Até">
       </span>
-      <select id="f-product" aria-label="Produto"></select>
+      <div class="ms" id="f-product">
+        <button type="button" class="ms-btn" id="f-product-btn" aria-haspopup="true" aria-expanded="false">
+          <span id="f-product-label">Todos os produtos</span><span class="ms-caret">▾</span>
+        </button>
+        <div class="ms-panel" id="f-product-panel" hidden>
+          <div class="ms-actions">
+            <span class="muted" style="font-size:12px;">Marque um ou mais produtos</span>
+            <button type="button" class="link-btn" id="f-product-none" style="margin-left:auto;">Limpar (todos)</button>
+          </div>
+          <div class="ms-list" id="f-product-list"></div>
+        </div>
+      </div>
       <select id="f-status" aria-label="Status">
         <option value="approved">Vendas aprovadas</option>
         <option value="refunded">Reembolsos e chargebacks</option>
@@ -466,6 +497,7 @@
     byEmail: {}, stats: {},
     sort: { key: "commission", dir: -1 },
     baseSort: { key: "count", dir: -1 },
+    selProducts: null,
     yt: { channels: [], sort: { key: "subscribers", dir: -1 }, open: null, lastRun: null, detailType: "all" },
     openEmail: null
   };
@@ -656,9 +688,9 @@
   }
 
   function productName(s) { return s.product_name || "Produto sem nome"; }
+  // Nenhum produto marcado = todos.
   function matchesProduct(s) {
-    var p = $("f-product").value;
-    return p === "all" || s.product_id === p;
+    return !state.selProducts.length || state.selProducts.indexOf(s.product_id) >= 0;
   }
   function filteredSales() {
     var status = $("f-status").value;
@@ -990,7 +1022,9 @@
   function renderProducts(sales) {
     var withSales = byProduct(sales), seen = {};
     withSales.forEach(function (x) { if (x.id) seen[x.id] = 1; });
-    var list = withSales.concat(state.products.filter(function (p) { return !seen[p.id]; }).map(function (p) {
+    var list = withSales.concat(state.products.filter(function (p) {
+      return !seen[p.id] && matchesProduct({ product_id: p.id });
+    }).map(function (p) {
       return { id: p.id, name: p.name, count: 0, amount: 0, commission: 0, sellers: {} };
     }));
     $("products-body").innerHTML = list.length ? list.map(function (x) {
@@ -1365,7 +1399,42 @@
   });
   $("f-from").addEventListener("change", refreshSales);
   $("f-to").addEventListener("change", refreshSales);
-  $("f-product").addEventListener("change", function () { safeSet("flow_aff_product", this.value); renderAll(); });
+  /* Filtro de produtos com múltipla escolha (vale para todos os menus). */
+  function setSelProducts(ids) {
+    state.selProducts = ids;
+    safeSet("flow_aff_products", JSON.stringify(ids));
+    renderProductLabel();
+    renderAll();
+  }
+  function renderProductLabel() {
+    var sel = state.selProducts, label;
+    if (!sel.length) label = "Todos os produtos";
+    else if (sel.length === 1) {
+      var p = state.products.find(function (x) { return x.id === sel[0]; });
+      label = p ? p.name : "1 produto";
+    } else label = sel.length + " produtos";
+    $("f-product-label").textContent = label;
+    $("f-product-btn").classList.toggle("active", sel.length > 0);
+    $("f-product-list").querySelectorAll("input").forEach(function (cb) { cb.checked = sel.indexOf(cb.value) >= 0; });
+  }
+  function toggleProductPanel(open) {
+    var panel = $("f-product-panel");
+    open = open === undefined ? panel.hidden : open;
+    panel.hidden = !open;
+    $("f-product-btn").setAttribute("aria-expanded", String(open));
+  }
+  $("f-product-btn").addEventListener("click", function () { toggleProductPanel(); });
+  document.addEventListener("click", function (e) {
+    if (!$("f-product-panel").hidden && !e.target.closest("#f-product")) toggleProductPanel(false);
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") toggleProductPanel(false); });
+  $("f-product-list").addEventListener("change", function () {
+    var ids = [];
+    this.querySelectorAll("input:checked").forEach(function (cb) { ids.push(cb.value); });
+    // Marcar todos equivale a "Todos os produtos".
+    setSelProducts(ids.length === state.products.length ? [] : ids);
+  });
+  $("f-product-none").addEventListener("click", function () { setSelProducts([]); toggleProductPanel(false); });
   $("f-status").addEventListener("change", renderAll);
 
   $("sync-btn").addEventListener("click", async function () {
@@ -1388,10 +1457,17 @@
   });
 
   function fillProductFilter() {
-    var sel = $("f-product"), cur = sel.value || safeGet("flow_aff_product") || "all";
-    sel.innerHTML = '<option value="all">Todos os produtos</option>' +
-      state.products.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + "</option>"; }).join("");
-    sel.value = Array.prototype.some.call(sel.options, function (o) { return o.value === cur; }) ? cur : "all";
+    if (!state.selProducts) {
+      var saved = [];
+      try { saved = JSON.parse(safeGet("flow_aff_products") || "[]"); } catch (e) {}
+      state.selProducts = Array.isArray(saved) ? saved : [];
+    }
+    var known = state.products.map(function (p) { return p.id; });
+    state.selProducts = state.selProducts.filter(function (id) { return known.indexOf(id) >= 0; });
+    $("f-product-list").innerHTML = state.products.map(function (p) {
+      return '<label class="ms-item"><input type="checkbox" value="' + esc(p.id) + '"><span>' + esc(p.name) + "</span></label>";
+    }).join("") || '<p class="muted" style="margin:6px 4px;">Nenhum produto importado.</p>';
+    renderProductLabel();
   }
 
   /* ---------------- Boot ---------------- */
