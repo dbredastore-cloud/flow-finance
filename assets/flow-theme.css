@@ -1,0 +1,201 @@
+/* Flow — tema tech/futurista em verde escuro, compartilhado por /afiliados/ e /financeiro/.
+   Carregado depois do <style> de cada página: redefine os tokens e dá o acabamento
+   (vidro, brilho neon, grade de fundo) nos componentes que as duas páginas usam. */
+
+:root {
+  color-scheme: dark;
+  --bg: #030705;
+  --surface: rgba(10, 22, 16, 0.72);
+  --surface-2: rgba(34, 227, 122, 0.07);
+  --surface-solid: #0a1510;
+  --border: rgba(34, 227, 122, 0.13);
+  --border-strong: rgba(34, 227, 122, 0.28);
+  --text: #ecfff5;
+  --text-dim: #a9c7b7;
+  --text-muted: #6d8f7e;
+  --grid: rgba(34, 227, 122, 0.09);
+  --accent: #22e37a;
+  --accent-2: #ff6b81;
+  --accent-3: #37c8ff;
+  --accent-ink: #02150b;
+  --accent-soft: rgba(34, 227, 122, 0.14);
+  --good: #22e37a;
+  --warning: #f7c948;
+  --critical: #ff5c7a;
+  --glow: 0 0 22px rgba(34, 227, 122, 0.28);
+  --shadow: 0 0 0 1px rgba(34, 227, 122, 0.05), 0 18px 40px -18px rgba(0, 0, 0, 0.9);
+  --scrim: rgba(0, 6, 3, 0.7);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --font-display: "Exo 2", "Rajdhani", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html { background: var(--bg); }
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background:
+    radial-gradient(1100px 520px at 78% -8%, rgba(34, 227, 122, 0.13), transparent 62%),
+    radial-gradient(900px 480px at -12% 108%, rgba(34, 227, 122, 0.09), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+/* Grade de fundo que some nas bordas, lembrando o piso das logos. */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34, 227, 122, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 227, 122, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 100%);
+}
+.num, .kpi .value, td.num { font-family: var(--font-mono); letter-spacing: -0.01em; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+a { color: var(--accent); }
+a:hover { text-shadow: 0 0 10px rgba(34, 227, 122, 0.5); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(34, 227, 122, 0.18); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 227, 122, 0.35); background-clip: padding-box; }
+
+/* ---------- Tipografia de título (mesma família larga das logos) ---------- */
+.brand span, .topbar h2, .panel-head h3, .login-card h1, .alerts-head h3, .drawer-head h3, #status-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+.topbar h2 { font-size: 22px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+.topbar h2::after {
+  content: ""; display: block; width: 44px; height: 2px; margin-top: 6px;
+  background: linear-gradient(90deg, var(--accent), transparent); box-shadow: var(--glow);
+}
+.panel-head h3 { font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text); }
+
+/* ---------- Marca ---------- */
+.brand { align-items: center; gap: 10px; }
+.brand .mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, var(--accent) 0 3px, transparent 4px),
+    conic-gradient(from 200deg, var(--accent), #0b3d24 40%, var(--accent) 70%, #eafff3 85%, var(--accent));
+  box-shadow: 0 0 16px rgba(34, 227, 122, 0.55), inset 0 0 0 3px #051009;
+}
+.brand span { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* ---------- Estrutura ---------- */
+.sidebar {
+  background: linear-gradient(180deg, rgba(6, 16, 11, 0.92), rgba(3, 9, 6, 0.92));
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+.nav-btn, .tool-btn {
+  position: relative; border-radius: 10px; transition: background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.nav-btn:hover, .tool-btn:hover { background: var(--surface-2); color: var(--text); }
+.nav-btn.active, .tool-btn.active {
+  background: linear-gradient(90deg, rgba(34, 227, 122, 0.16), rgba(34, 227, 122, 0.02));
+  color: var(--text); box-shadow: inset 2px 0 0 var(--accent), 0 0 18px -6px rgba(34, 227, 122, 0.5);
+}
+.nav-sep, .sidebar-foot { border-color: var(--border); }
+
+/* ---------- Painéis de vidro ---------- */
+.panel, .kpi, .alerts, .login-card, .ms-panel, #drawer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+.panel, .kpi, .alerts, .login-card { position: relative; overflow: hidden; }
+/* Filete de luz no topo dos cartões. */
+.panel::before, .kpi::before, .login-card::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34, 227, 122, 0.7), transparent);
+  opacity: .7;
+}
+.alerts { border-left: 3px solid var(--warning); }
+#drawer { background: rgba(4, 12, 8, 0.96); }
+
+/* ---------- KPIs ---------- */
+.kpi { transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.kpi:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow), 0 0 28px -10px rgba(34, 227, 122, 0.6); }
+.kpi .label { color: var(--text-muted); letter-spacing: 0.1em; font-size: 11px; }
+.kpi .value { font-size: 23px; font-weight: 600; color: var(--text); text-shadow: 0 0 18px rgba(34, 227, 122, 0.25); }
+.kpi .value.good { color: var(--accent); text-shadow: 0 0 18px rgba(34, 227, 122, 0.55); }
+.kpi .value.bad { color: var(--critical); text-shadow: 0 0 18px rgba(255, 92, 122, 0.4); }
+.kpi .sub { color: var(--text-muted); }
+/* Canto decorativo, lembrando HUD. */
+.kpi::after {
+  content: ""; position: absolute; right: 10px; top: 10px; width: 10px; height: 10px;
+  border-top: 1px solid var(--border-strong); border-right: 1px solid var(--border-strong);
+}
+
+/* ---------- Tabelas ---------- */
+thead th { background: rgba(4, 12, 8, 0.85); color: var(--text-muted); letter-spacing: 0.08em; border-bottom: 1px solid var(--border-strong); }
+tbody td { border-bottom: 1px solid rgba(34, 227, 122, 0.07); }
+tbody tr.clickable:hover, tbody tr.month-row:hover, tr.clickable-yt:hover {
+  background: linear-gradient(90deg, rgba(34, 227, 122, 0.1), rgba(34, 227, 122, 0.02));
+}
+tbody tr.month-row.open, tr.clickable-yt.open { background: rgba(34, 227, 122, 0.08); }
+.bar-track { background: rgba(34, 227, 122, 0.08); }
+.bar-fill { background: linear-gradient(90deg, #0f7a44, var(--accent)); box-shadow: 0 0 10px rgba(34, 227, 122, 0.6); }
+.chip, .st, .delta { background: rgba(34, 227, 122, 0.08); border: 1px solid rgba(34, 227, 122, 0.12); color: var(--text-dim); }
+.soc { background: rgba(34, 227, 122, 0.06); border: 1px solid rgba(34, 227, 122, 0.12); }
+.soc:hover { background: var(--accent-soft); color: var(--accent); box-shadow: var(--glow); }
+
+/* ---------- Controles ---------- */
+.btn {
+  background: rgba(10, 24, 17, 0.8); border: 1px solid var(--border-strong); color: var(--text);
+  transition: box-shadow .2s ease, border-color .2s ease, background .2s ease;
+}
+.btn:hover { background: rgba(34, 227, 122, 0.1); border-color: var(--accent); box-shadow: 0 0 16px -4px rgba(34, 227, 122, 0.55); }
+.btn-primary, .btn.btn-primary {
+  background: linear-gradient(135deg, #2cf08a, #14b862); color: var(--accent-ink); border-color: transparent;
+  font-weight: 700; box-shadow: 0 0 20px -6px rgba(34, 227, 122, 0.8);
+}
+.btn-primary:hover { filter: brightness(1.08); box-shadow: 0 0 26px -4px rgba(34, 227, 122, 0.9); }
+.btn-ghost { background: transparent; border-color: transparent; }
+.filters select, .filters input, .search, .ms-btn, .field input, .field select, .field textarea,
+.rev-field input, .expense-line input[type=number], .add-cat-row select, .add-cat-row input, .year-switch button {
+  background: rgba(4, 12, 8, 0.85); border: 1px solid var(--border-strong); color: var(--text);
+}
+.filters select:hover, .search:hover, .ms-btn:hover, .year-switch button:hover { border-color: var(--accent); }
+input:focus, select:focus, textarea:focus, button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(34, 227, 122, 0.55), var(--glow); }
+.ms-btn.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), var(--glow); }
+.ms-panel { background: rgba(5, 14, 9, 0.97); }
+.year-switch .year-label { font-family: var(--font-display); font-size: 17px; letter-spacing: 0.06em; }
+input:disabled { opacity: .6; }
+
+/* ---------- Tooltip dos gráficos ---------- */
+.tooltip, #tooltip {
+  background: rgba(3, 12, 7, 0.92); border: 1px solid var(--border-strong); color: var(--text);
+  backdrop-filter: blur(8px); box-shadow: 0 0 24px -6px rgba(34, 227, 122, 0.55);
+  border-radius: 10px;
+}
+.tooltip .t-title, #tooltip .t-month { font-family: var(--font-display); letter-spacing: 0.05em; color: var(--accent); }
+
+/* ---------- Toast ---------- */
+#toast { box-shadow: var(--glow); font-weight: 700; }
+
+/* ---------- Animação de entrada ---------- */
+@keyframes flowFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.kpi, .panel, .alerts { animation: flowFadeUp .45s ease both; }
+.kpi:nth-child(2) { animation-delay: .04s; } .kpi:nth-child(3) { animation-delay: .08s; }
+.kpi:nth-child(4) { animation-delay: .12s; } .kpi:nth-child(5) { animation-delay: .16s; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Gráficos (classes usadas pelo SVG) ---------- */
+.fx-bar { transform-box: fill-box; transform-origin: bottom; animation: fxGrow .7s cubic-bezier(.2, .8, .2, 1) both; transition: filter .15s ease, opacity .15s ease; }
+@keyframes fxGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.fx-line { stroke-dasharray: var(--len, 3000); stroke-dashoffset: var(--len, 3000); animation: fxDraw 1.2s ease-out forwards; }
+@keyframes fxDraw { to { stroke-dashoffset: 0; } }
+.fx-area { animation: fxFade 1.2s ease-out both; }
+@keyframes fxFade { from { opacity: 0; } to { opacity: 1; } }
+.fx-dot { transition: r .15s ease, opacity .15s ease; }
+.fx-scan { pointer-events: none; transition: opacity .12s ease; }

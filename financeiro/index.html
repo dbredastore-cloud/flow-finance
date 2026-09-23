@@ -5,71 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flow Financeiro</title>
 <style>
-  :root {
-    color-scheme: light;
-    --bg: #f9f9f7;
-    --surface: #fcfcfb;
-    --surface-2: #f1f0ec;
-    --border: rgba(11,11,11,0.10);
-    --border-strong: rgba(11,11,11,0.16);
-    --text: #0b0b0b;
-    --text-dim: #52514e;
-    --text-muted: #898781;
-    --grid: #e1e0d9;
-    --accent: #2a78d6;
-    --accent-ink: #ffffff;
-    --accent-2: #eb6834;
-    --accent-3: #1baf7a;
-    --good: #0ca30c;
-    --warning: #fab219;
-    --critical: #d03b3b;
-    --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 8px 24px -12px rgba(11,11,11,0.18);
-    --radius: 12px;
-    --radius-sm: 8px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --bg: #0d0d0d;
-      --surface: #1a1a19;
-      --surface-2: #232320;
-      --border: rgba(255,255,255,0.10);
-      --border-strong: rgba(255,255,255,0.18);
-      --text: #ffffff;
-      --text-dim: #c3c2b7;
-      --text-muted: #92908a;
-      --grid: #2c2c2a;
-      --accent: #3987e5;
-      --accent-ink: #ffffff;
-      --accent-2: #d95926;
-      --accent-3: #199e70;
-      --good: #0ca30c;
-      --warning: #fab219;
-      --critical: #e66767;
-      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
-    }
-  }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --bg: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-2: #232320;
-    --border: rgba(255,255,255,0.10);
-    --border-strong: rgba(255,255,255,0.18);
-    --text: #ffffff;
-    --text-dim: #c3c2b7;
-    --text-muted: #92908a;
-    --grid: #2c2c2a;
-    --accent: #3987e5;
-    --accent-ink: #ffffff;
-    --accent-2: #d95926;
-    --accent-3: #199e70;
-    --good: #0ca30c;
-    --warning: #fab219;
-    --critical: #e66767;
-    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
-  }
-
+  /* Cores e tokens: ../assets/flow-theme.css */
   * { box-sizing: border-box; }
   body {
     background: var(--bg);
@@ -365,7 +301,9 @@
     .detail-grid { grid-template-columns: 1fr; }
   }
 </style>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/flow-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
@@ -541,8 +479,8 @@
   function toast(msg, isError) {
     var el = document.getElementById("toast");
     el.textContent = msg;
-    el.style.background = isError ? "var(--critical)" : "var(--text)";
-    el.style.color = isError ? "#fff" : "var(--bg)";
+    el.style.background = isError ? "var(--critical)" : "var(--accent)";
+    el.style.color = isError ? "#fff" : "var(--accent-ink)";
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
@@ -982,9 +920,23 @@
   }
 
   /* ---------------- Chart ---------------- */
+  // Curva suave (Catmull-Rom → Bézier) por um trecho de pontos consecutivos.
+  function smoothPath(pts) {
+    if (pts.length === 1) return "M" + pts[0][0] + "," + pts[0][1];
+    var d = "M" + pts[0][0] + "," + pts[0][1];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      d += " C" + (p1[0] + (p2[0] - p0[0]) / 6) + "," + (p1[1] + (p2[1] - p0[1]) / 6) + " " +
+        (p2[0] - (p3[0] - p1[0]) / 6) + "," + (p2[1] - (p3[1] - p1[1]) / 6) + " " + p2[0] + "," + p2[1];
+    }
+    return d;
+  }
+
+  // Linhas neon com brilho que se desenham ao carregar, área em degradê sob o
+  // faturamento e mira com pontos destacados no hover. Animações: .fx-* no tema.
   function renderChart() {
     var svg = document.getElementById("chart");
-    var W = 760, H = 240, padL = 46, padR = 12, padT = 14, padB = 26;
+    var W = 760, H = 260, padL = 50, padR = 14, padT = 18, padB = 28;
     var plotW = W - padL - padR, plotH = H - padT - padB;
 
     var series = { fat: [], desp: [], liq: [] };
@@ -996,123 +948,111 @@
     }
     var all = series.fat.concat(series.desp, series.liq).filter(function (v) { return v !== null; });
     var maxV = all.length ? Math.max.apply(null, all) : 1;
-    var minV = all.length ? Math.min.apply(null, all, [0]) : 0;
-    minV = Math.min(minV, 0);
+    var minV = Math.min(0, all.length ? Math.min.apply(null, all) : 0);
     if (maxV === minV) maxV = minV + 1;
     var pad = (maxV - minV) * 0.08;
-    maxV += pad; minV -= pad;
+    maxV += pad; if (minV < 0) minV -= pad;
 
     function x(i) { return padL + (plotW * i) / 11; }
     function y(v) { return padT + plotH - ((v - minV) / (maxV - minV)) * plotH; }
 
-    var svgns = "http://www.w3.org/2000/svg";
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var cs = getComputedStyle(document.documentElement);
+    var tok = function (k) { return cs.getPropertyValue(k).trim(); };
+    var gridC = tok("--grid"), mutedC = tok("--text-muted");
+    var C = { fat: tok("--accent"), desp: tok("--accent-2"), liq: tok("--accent-3") };
+    var mono = "JetBrains Mono, monospace";
 
-    var gridColor = getComputedStyle(document.body).getPropertyValue("--grid").trim() || "#e1e0d9";
-    var mutedColor = getComputedStyle(document.body).getPropertyValue("--text-muted").trim() || "#898781";
+    var html =
+      "<defs>" +
+        '<linearGradient id="fxArea" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0.35"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
+        '<linearGradient id="fxCross" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0"/><stop offset="50%" stop-color="' + C.fat + '" stop-opacity="0.9"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
+        '<filter id="fxGlowL" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/>' +
+          '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+      "</defs>";
 
-    var gridSteps = 4;
-    for (var g = 0; g <= gridSteps; g++) {
-      var gv = minV + ((maxV - minV) * g) / gridSteps;
-      var gy = y(gv);
-      var line = document.createElementNS(svgns, "line");
-      line.setAttribute("x1", padL); line.setAttribute("x2", W - padR);
-      line.setAttribute("y1", gy); line.setAttribute("y2", gy);
-      line.setAttribute("stroke", gridColor); line.setAttribute("stroke-width", "1");
-      svg.appendChild(line);
-      var label = document.createElementNS(svgns, "text");
-      label.setAttribute("x", padL - 8); label.setAttribute("y", gy + 3);
-      label.setAttribute("text-anchor", "end"); label.setAttribute("font-size", "9");
-      label.setAttribute("fill", mutedColor); label.setAttribute("font-family", "IBM Plex Mono, monospace");
-      label.textContent = fmtCompact(gv);
-      svg.appendChild(label);
+    for (var g = 0; g <= 4; g++) {
+      var gv = minV + ((maxV - minV) * g) / 4, gy = y(gv);
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + gridC + '" stroke-dasharray="2 5"/>' +
+        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + mutedC + '" font-family="' + mono + '">' + fmtCompact(gv) + "</text>";
     }
-
     for (var mi = 0; mi < 12; mi++) {
-      var lx = document.createElementNS(svgns, "text");
-      lx.setAttribute("x", x(mi)); lx.setAttribute("y", H - 6);
-      lx.setAttribute("text-anchor", "middle"); lx.setAttribute("font-size", "9");
-      lx.setAttribute("fill", mutedColor);
-      lx.textContent = MONTHS[mi];
-      svg.appendChild(lx);
+      html += '<line x1="' + x(mi) + '" x2="' + x(mi) + '" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="' + gridC + '" stroke-opacity="0.5"/>' +
+        '<text x="' + x(mi) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + mutedC + '" font-family="' + mono + '">' + MONTHS[mi].toUpperCase() + "</text>";
     }
+    html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.fat + '" stroke-opacity="0.4"/>';
 
-    var zeroY = y(0);
-    var zeroLine = document.createElementNS(svgns, "line");
-    zeroLine.setAttribute("x1", padL); zeroLine.setAttribute("x2", W - padR);
-    zeroLine.setAttribute("y1", zeroY); zeroLine.setAttribute("y2", zeroY);
-    zeroLine.setAttribute("stroke", mutedColor); zeroLine.setAttribute("stroke-width", "1");
-    svg.appendChild(zeroLine);
-
-    function drawSeries(values, color) {
-      var d = "";
+    // Trechos contínuos (meses sem dado interrompem a linha).
+    function runs(values) {
+      var out = [], cur = [];
       values.forEach(function (v, i) {
-        if (v === null) return;
-        d += (d === "" ? "M" : "L") + x(i) + "," + y(v) + " ";
+        if (v === null) { if (cur.length) out.push(cur); cur = []; } else cur.push([x(i), y(v)]);
       });
-      if (!d) return;
-      var path = document.createElementNS(svgns, "path");
-      path.setAttribute("d", d.trim());
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", color);
-      path.setAttribute("stroke-width", "2");
-      path.setAttribute("stroke-linecap", "round");
-      path.setAttribute("stroke-linejoin", "round");
-      svg.appendChild(path);
-      values.forEach(function (v, i) {
+      if (cur.length) out.push(cur);
+      return out;
+    }
+    runs(series.fat).forEach(function (pts) {
+      if (pts.length < 2) return;
+      html += '<path class="fx-area" d="' + smoothPath(pts) + " L" + pts[pts.length - 1][0] + "," + y(0) + " L" + pts[0][0] + "," + y(0) + ' Z" fill="url(#fxArea)"/>';
+    });
+    function drawSeries(key, dash) {
+      runs(series[key]).forEach(function (pts) {
+        html += '<path class="fx-line" d="' + smoothPath(pts) + '" fill="none" stroke="' + C[key] + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#fxGlowL)"' + (dash ? ' data-dash="' + dash + '"' : "") + "/>";
+      });
+      series[key].forEach(function (v, i) {
         if (v === null) return;
-        var c = document.createElementNS(svgns, "circle");
-        c.setAttribute("cx", x(i)); c.setAttribute("cy", y(v));
-        c.setAttribute("r", "2.5"); c.setAttribute("fill", color);
-        svg.appendChild(c);
+        html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="#03100a" stroke="' + C[key] + '" stroke-width="1.6"/>';
       });
     }
+    drawSeries("fat");
+    drawSeries("desp", "5 4");
+    drawSeries("liq");
 
-    var accent = getComputedStyle(document.body).getPropertyValue("--accent").trim();
-    var accent2 = getComputedStyle(document.body).getPropertyValue("--accent-2").trim();
-    var accent3 = getComputedStyle(document.body).getPropertyValue("--accent-3").trim();
-    drawSeries(series.fat, accent);
-    drawSeries(series.desp, accent2);
-    drawSeries(series.liq, accent3);
+    html += '<line id="fx-cross" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="url(#fxCross)" stroke-width="1.5" class="fx-scan" opacity="0"/>';
+    html += '<rect id="fx-hit" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = html;
 
-    var hoverRect = document.createElementNS(svgns, "rect");
-    hoverRect.setAttribute("x", padL); hoverRect.setAttribute("y", padT);
-    hoverRect.setAttribute("width", plotW); hoverRect.setAttribute("height", plotH);
-    hoverRect.setAttribute("fill", "transparent");
-    hoverRect.style.cursor = "crosshair";
-    svg.appendChild(hoverRect);
+    // Animação de "desenho": cada linha anima o próprio comprimento; a tracejada
+    // (despesas) recebe o tracejado só depois que termina de desenhar.
+    svg.querySelectorAll(".fx-line").forEach(function (p) {
+      var len = Math.ceil(p.getTotalLength()) + 2;
+      p.style.setProperty("--len", len);
+      var dash = p.getAttribute("data-dash");
+      if (dash) p.addEventListener("animationend", function () {
+        p.classList.remove("fx-line"); p.style.strokeDasharray = dash; p.style.strokeDashoffset = "0";
+      }, { once: true });
+    });
 
-    var crosshair = document.createElementNS(svgns, "line");
-    crosshair.setAttribute("y1", padT); crosshair.setAttribute("y2", padT + plotH);
-    crosshair.setAttribute("stroke", mutedColor); crosshair.setAttribute("stroke-width", "1");
-    crosshair.setAttribute("stroke-dasharray", "3,3");
-    crosshair.style.display = "none";
-    svg.appendChild(crosshair);
-
+    var hit = svg.querySelector("#fx-hit"), cross = svg.querySelector("#fx-cross");
     var tooltip = document.getElementById("tooltip");
-    hoverRect.addEventListener("mousemove", function (evt) {
+    var dot = function (c) { return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' + c + ';box-shadow:0 0 8px ' + c + '"></span>'; };
+    hit.addEventListener("mousemove", function (evt) {
       var rect = svg.getBoundingClientRect();
       var relX = ((evt.clientX - rect.left) / rect.width) * W;
-      var i = Math.round(((relX - padL) / plotW) * 11);
-      i = Math.max(0, Math.min(11, i));
-      crosshair.setAttribute("x1", x(i)); crosshair.setAttribute("x2", x(i));
-      crosshair.style.display = "block";
+      var i = Math.max(0, Math.min(11, Math.round(((relX - padL) / plotW) * 11)));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", "1");
+      svg.querySelectorAll(".fx-dot").forEach(function (c) {
+        var on = c.getAttribute("data-i") == i;
+        c.setAttribute("r", on ? "5" : "2.6");
+        c.setAttribute("fill", on ? c.getAttribute("stroke") : "#03100a");
+      });
       var r = state.summaryByMonth[i + 1];
-      tooltip.innerHTML = '<div class="t-month">' + MONTHS_FULL[i] + '</div>' +
-        '<div class="t-row"><span class="l">Faturamento</span><span class="num">' + (r ? fmtBRL(r.faturamento) : "—") + "</span></div>" +
-        '<div class="t-row"><span class="l">Despesas</span><span class="num">' + (r ? fmtBRL(r.total_despesas) : "—") + "</span></div>" +
-        '<div class="t-row"><span class="l">Líquido</span><span class="num">' + (r ? fmtBRL(r.liquido) : "—") + "</span></div>";
+      tooltip.innerHTML = '<div class="t-month">' + MONTHS_FULL[i] + "</div>" +
+        '<div class="t-row"><span class="l">' + dot(C.fat) + 'Faturamento</span><span class="num">' + (r ? fmtBRL(r.faturamento) : "—") + "</span></div>" +
+        '<div class="t-row"><span class="l">' + dot(C.desp) + 'Despesas</span><span class="num">' + (r ? fmtBRL(r.total_despesas) : "—") + "</span></div>" +
+        '<div class="t-row"><span class="l">' + dot(C.liq) + 'Líquido</span><span class="num">' + (r ? fmtBRL(r.liquido) : "—") + "</span></div>";
       tooltip.style.display = "block";
-      var leftPct = (x(i) / W) * 100;
       var wrapWidth = svg.parentElement.getBoundingClientRect().width;
-      var ttLeft = (leftPct / 100) * wrapWidth + 10;
-      if (ttLeft + 160 > wrapWidth) ttLeft = (leftPct / 100) * wrapWidth - 160;
-      tooltip.style.left = ttLeft + "px";
+      var px = (x(i) / W) * wrapWidth;
+      tooltip.style.left = (px + 200 > wrapWidth ? px - 200 : px + 14) + "px";
       tooltip.style.top = "6px";
     });
-    hoverRect.addEventListener("mouseleave", function () {
-      crosshair.style.display = "none";
+    hit.addEventListener("mouseleave", function () {
+      cross.setAttribute("opacity", "0");
       tooltip.style.display = "none";
+      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "2.6"); c.setAttribute("fill", "#03100a"); });
     });
   }
   function fmtCompact(v) {
