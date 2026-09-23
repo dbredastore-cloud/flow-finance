@@ -111,6 +111,7 @@ async function fetchMonth(productId: string, m: Ym) {
     if (!sales.length || page * 100 >= (js.pagination?.count ?? 0)) break;
   }
   const now = new Date().toISOString();
+  await registerPlans(productId, out);
   return out.map((s) => ({
     id: s.id, product_id: productId, year: m.year, month: m.month, status: s.status ?? null,
     net_amount: cents(s.net_amount ?? s.payment?.net_amount), charge_amount: cents(s.payment?.charge_amount),
@@ -118,7 +119,28 @@ async function fetchMonth(productId: string, m: Ym) {
     payment_method: s.payment_method ?? null, sale_created_at: s.created_at ?? null,
     approved_at: s.approved_date || null, refunded_at: s.refunded_at || null,
     kiwify_updated_at: s.updated_at || null, synced_at: now,
+    plan_id: s.product?.plan_id ?? null, plan_name: s.product?.plan_name ?? null,
+    parent_order_id: s.parent_order_id ?? null, utm_source: s.tracking?.utm_source ?? s.tracking?.src ?? null,
   }));
+}
+
+// Cadastra planos novos com a duração deduzida do nome; os já existentes (e os
+// corrigidos à mão no painel) não mudam.
+const knownPlans = new Set<string>();
+async function registerPlans(productId: string, sales: any[]) {
+  const fresh = new Map<string, string>();
+  for (const s of sales) {
+    const id = s.product?.plan_id;
+    if (id && !knownPlans.has(id)) fresh.set(id, s.product?.plan_name ?? "");
+  }
+  if (!fresh.size) return;
+  const rows = [...fresh].map(([plan_id, plan_name]) => ({
+    plan_id, product_id: productId, plan_name,
+    months: /mensal|monthly/i.test(plan_name) ? 1 : /trimestr/i.test(plan_name) ? 3 : /semestr/i.test(plan_name) ? 6 : 12,
+  }));
+  const { error } = await sb.from("kiwify_plans").upsert(rows, { onConflict: "plan_id", ignoreDuplicates: true });
+  if (error) throw error;
+  fresh.forEach((_, id) => knownPlans.add(id));
 }
 
 async function readSnapshot(productId: string, m: Ym) {

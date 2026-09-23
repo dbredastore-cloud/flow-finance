@@ -54,3 +54,9 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - **Sincronizadores**: só o cron (segredo no Vault) ou um administrador logado disparam `kiwify-sync`, `kiwify-revenue` e `youtube-sync`.
 - **Indexação**: `robots.txt` + `noindex` em todas as páginas.
 - A anon key nas páginas é pública por design; sozinha ela não lê nada.
+
+## Flow Health (menu do /financeiro/)
+
+- Função SQL `flow_health(ano)` calcula, venda a venda (`kiwify_sales_snapshot` + plano de cada venda em `kiwify_plans`): clientes ativos/em carência/cancelados, taxa de renovação (geral, mensal, anual), LTV histórico e projetado (ponderado por duração de plano), MRR/ARR, CAC (comissão de afiliados das 1ªs compras + despesas do grupo Marketing), payback, reembolso, coortes e planos.
+- Metas anuais em `flow_goals` (2026: 8.600 novos clientes e R$ 3 milhões), editáveis no painel. "Novo cliente" = primeira compra paga na ferramenta; há opção de contar renovações como no financeiro.
+- A duração de cada plano é deduzida do nome (Mensal=1, Trimestral=3, Semestral=6, resto=12) e pode ser corrigida na tabela "Planos".
