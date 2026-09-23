@@ -322,6 +322,32 @@
   .save-hint { font-size: 11.5px; color: var(--text-muted); }
 
   .hint-text { font-size: 12.5px; color: var(--text-muted); margin: -8px 0 16px; }
+
+  /* ---------- Avisos de mudança em meses fechados ---------- */
+  .alerts {
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warning);
+    border-radius: var(--radius); padding: 16px 18px 6px; margin-bottom: 20px;
+  }
+  .alerts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .alerts-head h3 { margin: 0; font-size: 15px; }
+  .alerts-sub { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 12px; }
+  .alert-card { border-top: 1px solid var(--border); padding: 12px 0; }
+  .alert-card.seen { opacity: .65; }
+  .alert-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .alert-title { font-weight: 700; font-size: 14px; }
+  .alert-when { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .alert-reason { font-size: 13px; margin: 8px 0; }
+  .alert-deltas { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 10px; }
+  .delta { font-size: 12.5px; background: var(--surface-2); border-radius: 999px; padding: 4px 10px; }
+  .delta .d-down { color: var(--critical); font-weight: 600; }
+  .delta .d-up { color: var(--good); font-weight: 600; }
+  .alert-table { font-size: 12.5px; }
+  .alert-table th, .alert-table td { text-align: left; }
+  .st { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); font-size: 11.5px; font-weight: 600; }
+  .st.bad { color: var(--critical); }
+  .st.ok { color: var(--good); }
+  .alert-toggle { font-size: 12.5px; }
+  tr.month-row .alert-dot { color: var(--warning); margin-left: 6px; }
   #toast {
     position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(8px);
     background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 999px;
@@ -422,6 +448,15 @@
       </div>
     </div>
 
+    <section class="alerts" id="alerts" hidden>
+      <div class="alerts-head">
+        <h3 id="alerts-title">Mudanças em meses fechados</h3>
+        <button type="button" class="btn btn-ghost" id="alerts-history">Ver avisos já vistos</button>
+      </div>
+      <p class="alerts-sub">A Kiwify releu um mês que já tinha fechado e algum número mudou. Veja abaixo quais vendas mudaram e por quê.</p>
+      <div id="alerts-list"></div>
+    </section>
+
     <div class="kpi-row" id="kpi-row"></div>
 
     <section class="panel">
@@ -485,6 +520,9 @@
     categories: [],
     summaryByMonth: {},
     expensesDetail: {},
+    alerts: [],
+    showSeenAlerts: false,
+    expandedAlert: null,
     openMonth: null
   };
 
@@ -746,6 +784,13 @@
     return '<div class="kpi"><div class="label"' + (tip ? ' title="' + tip + '"' : "") + '>' + label + '</div><div class="value ' + (cls || "") + ' num">' + value + "</div></div>";
   }
 
+  function monthAlertMark(m) {
+    var n = (state.alerts || []).filter(function (a) {
+      return !a.seen_at && a.tool_id === state.activeToolId && a.year === state.activeYear && a.month === m;
+    }).length;
+    return n ? '<span class="alert-dot" title="Este mês mudou depois de fechado — veja o aviso no topo">⚠</span>' : "";
+  }
+
   function renderTable() {
     var body = document.getElementById("table-body");
     body.innerHTML = "";
@@ -757,7 +802,7 @@
       tr.dataset.month = m;
       var liqClass = r ? (Number(r.liquido) >= 0 ? "liq-pos" : "liq-neg") : "";
       tr.innerHTML =
-        '<td><span class="caret">▸</span>' + MONTHS[m - 1] + "</td>" +
+        '<td><span class="caret">▸</span>' + MONTHS[m - 1] + monthAlertMark(m) + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.faturamento) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.total_despesas) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtInt(r.novos_usuarios) : "—") + "</td>" +
@@ -1105,6 +1150,133 @@
   document.getElementById("year-prev").addEventListener("click", function () { selectYear(state.activeYear - 1); });
   document.getElementById("year-next").addEventListener("click", function () { selectYear(state.activeYear + 1); });
 
+  /* ---------------- Avisos de mudança em meses fechados ---------------- */
+  var STATUS_PT = {
+    paid: "Paga", approved: "Aprovada", refunded: "Reembolsada", chargedback: "Chargeback",
+    refund_requested: "Reembolso solicitado", pending_refund: "Reembolso pendente", waiting_payment: "Aguardando pagamento",
+    refused: "Recusada", pending: "Pendente", processing: "Processando", authorized: "Autorizada", created: "Criada"
+  };
+  var PAY_PT = { credit_card: "Cartão", pix: "Pix", automatic_pix: "Pix automático", boleto: "Boleto" };
+  var PAID_ST = ["paid", "approved"];
+
+  function escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtDateBr(iso, withTime) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    return withTime ? d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : d.toLocaleDateString("pt-BR");
+  }
+  function stBadge(s) {
+    if (!s) return '<span class="st">—</span>';
+    var cls = PAID_ST.indexOf(s) >= 0 ? "ok" : (s === "refunded" || s === "chargedback" ? "bad" : "");
+    return '<span class="st ' + cls + '">' + escHtml(STATUS_PT[s] || s) + "</span>";
+  }
+
+  // Explica em português o que aconteceu, agrupando as vendas por tipo de mudança.
+  function alertReason(changes) {
+    var groups = {};
+    changes.forEach(function (c) {
+      var antes = STATUS_PT[c.status_antes] || c.status_antes, depois = STATUS_PT[c.status_depois] || c.status_depois;
+      var k; // [singular, plural]
+      if (c.tipo === "nova") k = PAID_ST.indexOf(c.status_depois) >= 0
+        ? ["venda paga que não existia na leitura anterior", "vendas pagas que não existiam na leitura anterior"]
+        : ["venda nova com status " + depois, "vendas novas com status " + depois];
+      else if (c.tipo === "sumiu") k = ["venda que não aparece mais na Kiwify", "vendas que não aparecem mais na Kiwify"];
+      else if (c.tipo === "valor") k = ["venda paga com valor líquido alterado", "vendas pagas com valor líquido alterado"];
+      else if (c.status_depois === "refunded") k = ["venda reembolsada depois do fechamento do mês", "vendas reembolsadas depois do fechamento do mês"];
+      else if (c.status_depois === "chargedback") k = ["venda que virou chargeback (contestação no cartão)", "vendas que viraram chargeback (contestação no cartão)"];
+      else if (PAID_ST.indexOf(c.status_depois) >= 0) k = ["venda aprovada depois do fechamento (" + antes + " → Paga)", "vendas aprovadas depois do fechamento (" + antes + " → Paga)"];
+      else k = ["venda que mudou de " + antes + " para " + depois, "vendas que mudaram de " + antes + " para " + depois];
+      var g = groups[k[0]] || (groups[k[0]] = { k: k, n: 0 });
+      g.n++;
+    });
+    return Object.keys(groups).map(function (key) { var g = groups[key]; return g.n + " " + g.k[g.n > 1 ? 1 : 0]; }).join("; ") + ".";
+  }
+  // higherIsBad: para reembolsos/chargebacks, subir é ruim (vermelho).
+  function deltaChip(label, before, after, money, higherIsBad) {
+    before = Number(before) || 0; after = Number(after) || 0;
+    var diff = after - before;
+    var fmt = money ? fmtBRL : fmtInt;
+    var bad = higherIsBad ? diff > 0 : diff < 0;
+    var d = diff === 0 ? "" : ' <span class="' + (bad ? "d-down" : "d-up") + '">(' + (diff > 0 ? "+" : "−") + fmt(Math.abs(diff)) + ")</span>";
+    return '<span class="delta">' + label + ": " + fmt(before) + " → " + fmt(after) + d + "</span>";
+  }
+
+  async function loadAlerts() {
+    var q = sb.from("revenue_alerts").select("*").order("created_at", { ascending: false }).limit(100);
+    if (!state.showSeenAlerts) q = q.is("seen_at", null);
+    var res = await q;
+    state.alerts = res.error ? [] : (res.data || []);
+  }
+
+  function renderAlerts() {
+    var box = document.getElementById("alerts");
+    var list = state.alerts || [];
+    var open = list.filter(function (a) { return !a.seen_at; }).length;
+    box.hidden = !list.length && !state.showSeenAlerts;
+    document.getElementById("alerts-title").textContent = open
+      ? "⚠ " + open + (open > 1 ? " mudanças" : " mudança") + " em meses fechados"
+      : "Mudanças em meses fechados";
+    document.getElementById("alerts-history").textContent = state.showSeenAlerts ? "Esconder avisos já vistos" : "Ver avisos já vistos";
+    var toolName = function (id) { var t = state.tools.find(function (x) { return x.id === id; }); return t ? t.name : ""; };
+    document.getElementById("alerts-list").innerHTML = list.length ? list.map(function (a) {
+      var b = a.before || {}, af = a.after || {}, changes = a.changes || [];
+      var expanded = state.expandedAlert === a.id || changes.length <= 5;
+      var rows = changes.map(function (c) {
+        return "<tr>" +
+          "<td>" + escHtml(c.cliente || "—") + '<div style="color:var(--text-muted);font-size:11.5px;">' + escHtml(c.email || "") + "</div></td>" +
+          '<td class="num">' + fmtDateBr(c.data_venda, true) + "</td>" +
+          "<td>" + escHtml(PAY_PT[c.pagamento] || c.pagamento || "—") + "</td>" +
+          "<td>" + stBadge(c.status_antes) + " → " + stBadge(c.status_depois) + "</td>" +
+          '<td class="num">' + (c.reembolsada_em ? fmtDateBr(c.reembolsada_em, true) : "—") + "</td>" +
+          '<td class="num">' + (c.tipo === "valor" ? fmtBRL(c.valor_antes) + " → " : "") + fmtBRL(c.valor_liquido) + "</td>" +
+          '<td class="num">' + escHtml(c.id) + "</td></tr>";
+      }).join("");
+      return '<div class="alert-card' + (a.seen_at ? " seen" : "") + '">' +
+        '<div class="alert-top"><div>' +
+          '<div class="alert-title">' + escHtml(toolName(a.tool_id) || a.product_name) + " · " + MONTHS_FULL[a.month - 1] + "/" + a.year +
+            (a.product_name && a.product_name.replace(/\s/g, "").toLowerCase() !== toolName(a.tool_id).replace(/\s/g, "").toLowerCase() ?' <span style="font-weight:500;color:var(--text-muted);">(produto ' + escHtml(a.product_name) + ")</span>" : "") + "</div>" +
+          '<div class="alert-when">Detectado em ' + fmtDateBr(a.created_at, true) + (a.seen_at ? " · visto em " + fmtDateBr(a.seen_at, true) + (a.seen_by ? " por " + escHtml(a.seen_by) : "") : "") + "</div>" +
+        "</div>" +
+        (a.seen_at ? "" : '<button type="button" class="btn" data-seen="' + a.id + '">Marcar como visto</button>') +
+        "</div>" +
+        '<div class="alert-reason"><strong>O que aconteceu:</strong> ' + escHtml(alertReason(changes)) + "</div>" +
+        '<div class="alert-deltas">' +
+          deltaChip("Novos usuários", b.novos, af.novos) +
+          deltaChip("Faturamento", b.faturamento, af.faturamento, true) +
+          deltaChip("Reembolsos", b.reembolsos, af.reembolsos, false, true) +
+          (b.chargebacks || af.chargebacks ? deltaChip("Chargebacks", b.chargebacks, af.chargebacks, false, true) : "") +
+        "</div>" +
+        (expanded
+          ? '<div class="table-scroll"><table class="alert-table"><thead><tr><th>Cliente</th><th>Data da venda</th><th>Pagamento</th><th>Status antes → agora</th><th>Reembolsada em</th><th>Valor líquido</th><th>ID da venda</th></tr></thead><tbody>' + rows + "</tbody></table></div>"
+          : '<button type="button" class="link-btn alert-toggle" data-expand="' + a.id + '">Ver as ' + changes.length + " vendas que mudaram</button>") +
+        "</div>";
+    }).join("") : '<p class="alerts-sub">Nenhum aviso.</p>';
+  }
+
+  document.getElementById("alerts-list").addEventListener("click", async function (e) {
+    var exp = e.target.closest("[data-expand]");
+    if (exp) { state.expandedAlert = exp.dataset.expand; renderAlerts(); return; }
+    var btn = e.target.closest("[data-seen]");
+    if (!btn) return;
+    btn.disabled = true;
+    var s = await sb.auth.getSession();
+    var who = s.data && s.data.session ? s.data.session.user.email : null;
+    var res = await sb.from("revenue_alerts").update({ seen_at: new Date().toISOString(), seen_by: who }).eq("id", btn.dataset.seen);
+    if (res.error) { btn.disabled = false; toast("Erro ao marcar: " + res.error.message, true); return; }
+    await loadAlerts();
+    renderAlerts();
+    renderTable();
+  });
+  document.getElementById("alerts-history").addEventListener("click", async function () {
+    state.showSeenAlerts = !state.showSeenAlerts;
+    await loadAlerts();
+    renderAlerts();
+  });
+
   /* ---------------- Boot ---------------- */
   async function boot() {
     if (pendingRecovery) { showRecovery(); return; }
@@ -1123,6 +1295,8 @@
     document.getElementById("user-email").textContent = session.user.email;
     var savedTool = safeGet("flow_fin_tool");
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
+    try { await loadAlerts(); } catch (e) { state.alerts = []; }
+    renderAlerts();
     await selectTool(initialTool.id);
   }
 
