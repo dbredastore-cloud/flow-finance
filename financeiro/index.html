@@ -441,7 +441,7 @@
 
     <section class="panel">
       <div class="panel-head"><h3>Detalhamento mensal</h3></div>
-      <p class="hint-text">Clique em um mês para lançar ou editar despesas e receita.</p>
+      <p class="hint-text">Clique em um mês para lançar ou editar despesas e receita. A receita de FlowPages, FlowTracking e FlowSpy vem automaticamente da Kiwify.</p>
       <div class="table-scroll">
         <table>
           <thead>
@@ -663,7 +663,7 @@
       if (cat && cat.group_name === "Infraestrutura") mm.custo_infra += amt;
     });
 
-    var revRes = await sb.from("monthly_revenue").select("month, faturamento, reembolsos, novos_usuarios, usuarios_totais").eq("tool_id", toolId).eq("year", year);
+    var revRes = await sb.from("monthly_revenue").select("month, faturamento, reembolsos, novos_usuarios, usuarios_totais, source, synced_at").eq("tool_id", toolId).eq("year", year);
     if (revRes.error) throw revRes.error;
     (revRes.data || []).forEach(function (r) {
       var mm = ensure(r.month);
@@ -671,6 +671,8 @@
       mm.reembolsos = Number(r.reembolsos) || 0;
       mm.novos_usuarios = Number(r.novos_usuarios) || 0;
       mm.usuarios_totais = Number(r.usuarios_totais) || 0;
+      mm.source = r.source;
+      mm.synced_at = r.synced_at;
     });
 
     var summary = {};
@@ -686,6 +688,8 @@
         reembolsos: mm.reembolsos || 0,
         novos_usuarios: mm.novos_usuarios || 0,
         usuarios_totais: mm.usuarios_totais || 0,
+        source: mm.source,
+        synced_at: mm.synced_at,
         liquido: liquido,
         custo_por_novo_usuario: mm.novos_usuarios > 0 ? mm.total_despesas / mm.novos_usuarios : null,
         custo_por_usuario_total: mm.usuarios_totais > 0 ? mm.total_despesas / mm.usuarios_totais : null,
@@ -791,6 +795,9 @@
     var wrap = document.getElementById("detail-" + m);
     if (!wrap) return;
     var r = state.summaryByMonth[m] || {};
+    // Receita vinda da Kiwify é recalculada sozinha; editar aqui seria sobrescrito.
+    var auto = r.source === "kiwify";
+    var lock = auto ? " disabled" : "";
     var usedCatIds = items.map(function (i) { return i.category_id; });
     var availableCats = state.categories.filter(function (c) { return usedCatIds.indexOf(c.id) === -1; });
 
@@ -831,12 +838,14 @@
         '<div class="detail-col">' +
           "<h4>Receita — " + MONTHS_FULL[m - 1] + "</h4>" +
           '<div class="rev-grid">' +
-            '<div class="rev-field"><label>Faturamento (R$)</label><input type="number" step="0.01" id="rev-fat-' + m + '" value="' + (r.faturamento !== undefined ? Number(r.faturamento).toFixed(2) : "") + '"></div>' +
-            '<div class="rev-field"><label>Reembolsos (qtd)</label><input type="number" step="1" id="rev-reemb-' + m + '" value="' + (r.reembolsos !== undefined ? r.reembolsos : "") + '"></div>' +
-            '<div class="rev-field"><label>Novos usuários</label><input type="number" step="1" id="rev-novos-' + m + '" value="' + (r.novos_usuarios !== undefined ? r.novos_usuarios : "") + '"></div>' +
-            '<div class="rev-field"><label>Usuários totais</label><input type="number" step="1" id="rev-totais-' + m + '" value="' + (r.usuarios_totais !== undefined ? r.usuarios_totais : "") + '"></div>' +
+            '<div class="rev-field"><label>Faturamento (R$)</label><input type="number" step="0.01" id="rev-fat-' + m + '"' + lock + ' value="' + (r.faturamento !== undefined ? Number(r.faturamento).toFixed(2) : "") + '"></div>' +
+            '<div class="rev-field"><label>Reembolsos (qtd)</label><input type="number" step="1" id="rev-reemb-' + m + '"' + lock + ' value="' + (r.reembolsos !== undefined ? r.reembolsos : "") + '"></div>' +
+            '<div class="rev-field"><label>Novos usuários</label><input type="number" step="1" id="rev-novos-' + m + '"' + lock + ' value="' + (r.novos_usuarios !== undefined ? r.novos_usuarios : "") + '"></div>' +
+            '<div class="rev-field"><label>Usuários totais</label><input type="number" step="1" id="rev-totais-' + m + '"' + lock + ' value="' + (r.usuarios_totais !== undefined ? r.usuarios_totais : "") + '"></div>' +
           "</div>" +
-          '<div class="detail-actions"><button class="btn btn-primary" style="width:auto;" id="save-rev-btn-' + m + '">Salvar receita</button></div>' +
+          (auto
+            ? '<div class="detail-actions"><span class="save-hint">Preenchido automaticamente pela Kiwify' + (r.synced_at ? " (atualizado em " + new Date(r.synced_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) + ")" : "") + '. Faturamento = valor líquido das vendas pagas; novos usuários = vendas pagas no mês; reembolsos = vendas do mês reembolsadas.</span></div>'
+            : '<div class="detail-actions"><button class="btn btn-primary" style="width:auto;" id="save-rev-btn-' + m + '">Salvar receita</button></div>') +
         "</div>" +
       "</div>";
 
@@ -856,9 +865,8 @@
     document.getElementById("add-exp-btn-" + m).addEventListener("click", function () {
       addExpenseLine(m);
     });
-    document.getElementById("save-rev-btn-" + m).addEventListener("click", function () {
-      saveRevenue(m);
-    });
+    var saveRevBtn = document.getElementById("save-rev-btn-" + m);
+    if (saveRevBtn) saveRevBtn.addEventListener("click", function () { saveRevenue(m); });
   }
 
   async function saveExpenseAmount(itemId, value, m) {

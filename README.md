@@ -38,3 +38,10 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Menu **YouTube** em `/afiliados/`: só entram influencers com o link do canal cadastrado na ficha.
 - `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 100 envios, marcando quais são Shorts (confirmado pela URL /shorts/ID) pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
 - Secret necessário: `YOUTUBE_API_KEY` (Supabase → Edge Functions → Secrets).
+
+## Receita automática no financeiro
+
+- `supabase/functions/kiwify-revenue/` calcula, por produto e mês (horário de Brasília), a partir das vendas da Kiwify, e grava em `kiwify_monthly_product`; a função SQL `refresh_revenue_from_kiwify()` soma por ferramenta e preenche `monthly_revenue` (`source = 'kiwify'`). Roda a cada 30 min e sempre recalcula os últimos 3 meses (reembolsos mudam meses recentes).
+- Regras: faturamento = valor líquido das vendas pagas; reembolsos = vendas do mês com status reembolsado; novos usuários = vendas pagas no mês; usuários totais = acumulado dos novos desde `tools.revenue_start`.
+- Os valores lançados à mão antes da automação estão em `monthly_revenue_manual_backup`.
+- Ferramentas sem produto da Kiwify ligado (ex.: Flow Subscriptions) continuam com receita manual.
