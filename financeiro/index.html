@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
 <title>Flow Financeiro</title>
 <style>
   /* Cores e tokens: ../assets/flow-theme.css */
@@ -264,6 +266,7 @@
     background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warning);
     border-radius: var(--radius); padding: 16px 18px 6px; margin-bottom: 20px;
   }
+  .alerts.sec-alerts { border-left-color: var(--critical); }
   .alerts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .alerts-head h3 { margin: 0; font-size: 15px; }
   .alerts-sub { font-size: 12.5px; color: var(--text-muted); margin: 4px 0 12px; }
@@ -308,6 +311,7 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/secure-login.js"></script>
 </head>
 <body>
 
@@ -388,6 +392,18 @@
         <button id="year-next" aria-label="Próximo ano">›</button>
       </div>
     </div>
+
+    <section class="alerts sec-alerts" id="sec-alerts" hidden>
+      <div class="alerts-head">
+        <h3 id="sec-title">Tentativas de acesso</h3>
+        <button type="button" class="btn" id="sec-seen">Marcar todas como vistas</button>
+      </div>
+      <p class="alerts-sub">Logins que falharam neste painel. A senha digitada nunca é guardada. Depois de 5 erros, o IP fica bloqueado por 15 minutos.</p>
+      <div class="table-scroll"><table class="alert-table">
+        <thead><tr><th>Horário</th><th>E-mail tentado</th><th>IP</th><th>Dispositivo</th><th>Resultado</th></tr></thead>
+        <tbody id="sec-body"></tbody>
+      </table></div>
+    </section>
 
     <section class="alerts" id="alerts" hidden>
       <div class="alerts-head">
@@ -579,7 +595,7 @@
     var btn = document.getElementById("login-submit");
     msg.innerHTML = "";
     btn.disabled = true; btn.textContent = "Entrando…";
-    var res = await sb.auth.signInWithPassword({ email: email, password: password });
+    var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, password);
     btn.disabled = false; btn.textContent = "Entrar";
     if (res.error) {
       msg.innerHTML = '<div class="msg error">' + (res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>";
@@ -1256,6 +1272,49 @@
     renderAlerts();
   });
 
+  /* ---------------- Tentativas de acesso (login_attempts) ---------------- */
+  function uaDevice(ua) {
+    ua = ua || "";
+    var os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Mac OS/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+    var br = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : /curl|python|node|axios|Go-http/i.test(ua) ? "Script/robô" : "Desconhecido";
+    return br + (os ? " · " + os : "");
+  }
+  async function loadSecurity() {
+    var res = await sb.from("login_attempts").select("id, created_at, email, ip, country, user_agent, reason")
+      .eq("success", false).is("seen_at", null).order("created_at", { ascending: false }).limit(100);
+    state.secAttempts = res.error ? [] : (res.data || []);
+  }
+  function renderSecurity() {
+    var list = state.secAttempts || [];
+    document.getElementById("sec-alerts").hidden = !list.length;
+    if (!list.length) return;
+    var ips = {};
+    list.forEach(function (a) { ips[a.ip] = 1; });
+    var nIps = Object.keys(ips).length;
+    document.getElementById("sec-title").textContent = "🛡 " + list.length + (list.length > 1 ? " tentativas" : " tentativa") +
+      " de acesso sem sucesso (" + nIps + " IP" + (nIps > 1 ? "s" : "") + ")";
+    document.getElementById("sec-body").innerHTML = list.map(function (a) {
+      var blocked = /bloquead/.test(a.reason || "");
+      return "<tr>" +
+        '<td class="num">' + fmtDateBr(a.created_at, true) + "</td>" +
+        "<td>" + escHtml(a.email || "—") + "</td>" +
+        '<td class="num">' + escHtml(a.ip || "—") + (a.country ? " (" + escHtml(a.country) + ")" : "") + "</td>" +
+        "<td>" + escHtml(uaDevice(a.user_agent)) + "</td>" +
+        '<td><span class="st ' + (blocked ? "bad" : "") + '">' + escHtml(a.reason || "") + "</span></td></tr>";
+    }).join("");
+  }
+  document.getElementById("sec-seen").addEventListener("click", async function () {
+    var ids = (state.secAttempts || []).map(function (a) { return a.id; });
+    if (!ids.length) return;
+    var btn = this;
+    btn.disabled = true;
+    var res = await sb.from("login_attempts").update({ seen_at: new Date().toISOString() }).in("id", ids);
+    btn.disabled = false;
+    if (res.error) { toast("Erro ao marcar: " + res.error.message, true); return; }
+    state.secAttempts = [];
+    renderSecurity();
+  });
+
   /* ---------------- Boot ---------------- */
   async function boot() {
     if (pendingRecovery) { showRecovery(); return; }
@@ -1265,6 +1324,7 @@
     if (!session) { showLogin(); return; }
     document.getElementById("user-email").textContent = session.user.email;
     var alertsReady = loadAlerts().catch(function () { state.alerts = []; });
+    loadSecurity().then(renderSecurity).catch(function () {});
 
     // Com cache da aba, abre na hora com as ferramentas conhecidas; senão espera a lista.
     if (finCache.tools && finCache.tools.length) {

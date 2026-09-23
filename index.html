@@ -3,12 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
 <title>Flow Finance</title>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/secure-login.js"></script>
 <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
 <style>
@@ -229,7 +232,7 @@ function Login({onIn}){
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");const [pw,setPw]=useState("");
   const [err,setErr]=useState("");const [info,setInfo]=useState("");const [busy,setBusy]=useState(false);
-  const submit=async()=>{setErr("");setBusy(true);const{error}=await sb.auth.signInWithPassword({email,password:pw});setBusy(false);if(error)setErr("Não foi possível entrar.");else onIn();};
+  const submit=async()=>{setErr("");setBusy(true);const{error}=await window.flowSecureLogin(sb,cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,email,pw);setBusy(false);if(error)setErr(error.message||"Não foi possível entrar.");else onIn();};
   const reset=async()=>{setErr("");setInfo("");setBusy(true);const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});setBusy(false);if(error)setErr("Não foi possível enviar.");else setInfo("Link enviado! Verifique sua caixa de entrada.");};
   if(mode==="forgot")return(<div className="lw"><div className="lc"><Brand/><div className="lsub">Informe seu e-mail para receber o link.</div>{err&&<div className="lerr">{err}</div>}{info&&<div className="linfo">{info}</div>}<div className="fl"><label>E-mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&reset()}/></div><button className="btn" onClick={reset} disabled={busy||!email}>{busy?"Enviando…":"Enviar link"}</button><button className="llink" onClick={()=>{setMode("login");setErr("");setInfo("");}}>← Voltar</button></div></div>);
   return(<div className="lw"><div className="lc"><Brand/><div className="lsub">Custos e receita das ferramentas Flow.</div>{err&&<div className="lerr">{err}</div>}<div className="fl"><label>E-mail</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/></div><div className="fl"><label>Senha</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/></div><button className="btn" onClick={submit} disabled={busy||!email||!pw}>{busy?"Entrando…":"Entrar"}</button><button className="llink" onClick={()=>{setMode("forgot");setErr("");}}>Esqueci minha senha</button><div className="lnote">Acesso restrito à equipe.</div></div></div>);

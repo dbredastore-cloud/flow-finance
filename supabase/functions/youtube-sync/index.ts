@@ -169,7 +169,10 @@ async function authorized(req: Request) {
   const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!jwt) return false;
   const { data } = await sb.auth.getUser(jwt);
-  return !!data?.user;
+  if (!data?.user) return false;
+  // Só administradores (app_admins) podem disparar a sincronização pelo painel.
+  const { data: admin } = await sb.from("app_admins").select("user_id").eq("user_id", data.user.id).maybeSingle();
+  return !!admin;
 }
 
 Deno.serve(async (req) => {

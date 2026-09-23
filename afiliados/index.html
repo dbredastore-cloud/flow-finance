@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
 <title>Flow Afiliados</title>
 <style>
   /* Cores e tokens: ../assets/flow-theme.css */
@@ -231,6 +233,7 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/secure-login.js"></script>
 </head>
 <body>
 
@@ -576,7 +579,7 @@
     var btn = $("login-submit"), msg = $("login-msg");
     msg.innerHTML = "";
     btn.disabled = true; btn.textContent = "Entrando…";
-    var res = await sb.auth.signInWithPassword({ email: $("login-email").value.trim(), password: $("login-password").value });
+    var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, $("login-email").value.trim(), $("login-password").value);
     btn.disabled = false; btn.textContent = "Entrar";
     if (res.error) {
       msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>";

@@ -46,3 +46,11 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Os valores lançados à mão antes da automação estão em `monthly_revenue_manual_backup`.
 - Ferramentas sem produto da Kiwify ligado (ex.: Flow Subscriptions) continuam com receita manual.
 - Avisos: o `kiwify-revenue` guarda cada venda em `kiwify_sales_snapshot` e relê meses fechados (os 3 últimos a cada 30 min, os demais 1x por dia). Se uma venda de um mês fechado muda de status/valor, grava em `revenue_alerts` (antes/depois + vendas afetadas) e o `/financeiro/` mostra o aviso no topo, com "marcar como visto".
+
+## Segurança
+
+- **Dados**: RLS em todas as tabelas exige `public.is_admin()` (usuário em `app_admins`). Visitante sem login (anon) não tem permissão em nenhuma tabela; conta logada fora de `app_admins` não enxerga nada. Para dar acesso a outra pessoa: `insert into app_admins (user_id, email) select id, email from auth.users where email = '...'`.
+- **Login**: as páginas entram pela Edge Function `auth-login` (`assets/secure-login.js`), que grava cada tentativa em `login_attempts` (e-mail, IP, dispositivo — nunca a senha), bloqueia IP após 5 erros em 15 min (`login_gate`, atômico) e avisa no Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). O painel financeiro mostra as tentativas falhas.
+- **Sincronizadores**: só o cron (segredo no Vault) ou um administrador logado disparam `kiwify-sync`, `kiwify-revenue` e `youtube-sync`.
+- **Indexação**: `robots.txt` + `noindex` em todas as páginas.
+- A anon key nas páginas é pública por design; sozinha ela não lê nada.
