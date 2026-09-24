@@ -167,6 +167,10 @@
   th.prod-col { max-width: 120px; white-space: normal; line-height: 1.3; vertical-align: bottom; }
   td.prod-col { border-left: 1px solid var(--border); }
   td.products-cell { white-space: normal; min-width: 220px; }
+  /* % de comissão: verde = praticado nas vendas; contorno = só o cadastrado na Kiwify. */
+  .pct-tag { display: inline-block; margin-top: 3px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    background: rgba(34,227,122,.14); color: var(--accent); cursor: help; }
+  .pct-tag.cad { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-strong); font-weight: 600; }
 
   .chip {
     display: inline-block; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim);
@@ -375,7 +379,7 @@
             <button class="btn" id="base-csv">Exportar CSV</button>
           </div>
         </div>
-        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Quantidade de vendas de cada produto por influencer, no período e filtros selecionados acima. Clique no título de qualquer coluna para ordenar do maior para o menor.</p>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Quantidade de vendas de cada produto por influencer, no período e filtros selecionados acima, com o <strong>% de comissão</strong> embaixo: <span class="pct-tag">30%</span> = praticado nas vendas do período; <span class="pct-tag cad">20%</span> = cadastrado na Kiwify (sem vendas do produto no período). Passe o mouse no % para ver o detalhe. Clique no título de qualquer coluna para ordenar.</p>
         <div class="table-scroll"><table>
           <thead><tr id="base-head"></tr></thead>
           <tbody id="base-body"></tbody>
@@ -633,7 +637,7 @@
   // Ao abrir: só quem já vendeu ou tem contato preenchido (a base inteira tem 20+ mil).
   async function loadStatic() {
     var res = await Promise.all([
-      fetchAll(function () { return sb.from("affiliates_relevant").select(AFF_COLS).order("name"); }),
+      fetchAll(function () { return sb.from("affiliates_relevant").select(AFF_COLS + ", commissions").order("name"); }),
       sb.from("kiwify_products").select("id, name, tool_id").order("name")
     ]);
     if (res[1].error) throw res[1].error;
@@ -676,7 +680,7 @@
     var r = periodRange();
     state.sales = await fetchAll(function () {
       return sb.from("affiliate_sales")
-        .select("id, affiliate_email, affiliate_name, product_id, product_name, status, payment_method, amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
+        .select("id, affiliate_email, affiliate_name, product_id, product_name, status, payment_method, amount, net_amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
         .gte("sale_created_at", r[0].toISOString()).lt("sale_created_at", r[1].toISOString())
         .order("sale_created_at", { ascending: false });
     });
@@ -710,17 +714,46 @@
     });
   }
 
+  // % de comissão de uma venda. A Kiwify aplica o % sobre o valor depois das taxas dela,
+  // que é o líquido do produtor + a comissão (ex.: 86,23 ÷ (344,91 + 86,23) = 20%).
+  function salePct(s) {
+    var c = Number(s.commission) || 0, base = (Number(s.net_amount) || 0) + c;
+    return c > 0 && base > 0 ? Math.round((c / base) * 100) : null;
+  }
+
   function computeStats(sales) {
     var by = {};
     sales.forEach(function (s) {
-      var e = by[s.affiliate_email] || (by[s.affiliate_email] = { email: s.affiliate_email, name: s.affiliate_name, count: 0, amount: 0, commission: 0, products: {} });
+      var e = by[s.affiliate_email] || (by[s.affiliate_email] = { email: s.affiliate_email, name: s.affiliate_name, count: 0, amount: 0, commission: 0, products: {}, pcts: {} });
       e.count++;
       e.amount += Number(s.amount) || 0;
       e.commission += Number(s.commission) || 0;
       var pn = productName(s);
       e.products[pn] = (e.products[pn] || 0) + 1;
+      var p = salePct(s);
+      if (p != null) {
+        var m = e.pcts[pn] || (e.pcts[pn] = {});
+        m[p] = (m[p] || 0) + 1;
+      }
     });
     return by;
+  }
+
+  // % de comissão do influencer num produto: o praticado nas vendas do período (se variou,
+  // mostra a faixa) ou, sem vendas, o cadastrado na Kiwify.
+  function commissionPct(a, st, product) {
+    var m = st && st.pcts && st.pcts[product];
+    if (m && Object.keys(m).length) {
+      var ks = Object.keys(m).map(Number).sort(function (x, y) { return x - y; });
+      var detail = ks.map(function (k) { return k + "% em " + m[k] + (m[k] > 1 ? " vendas" : " venda"); }).join(", ");
+      return {
+        text: ks.length === 1 ? ks[0] + "%" : ks[0] + "–" + ks[ks.length - 1] + "%",
+        title: "Praticado nas vendas do período: " + detail, source: "vendas", value: ks[ks.length - 1]
+      };
+    }
+    var cad = a && a.commissions && a.commissions[product];
+    if (cad != null) return { text: Math.round(cad) + "%", title: "Comissão cadastrada na Kiwify (sem vendas deste produto no período).", source: "cadastro", value: Number(cad) };
+    return null;
   }
 
   // Soma vendas/faturamento/comissão por produto (nome da Kiwify), maior comissão primeiro.
@@ -1035,8 +1068,9 @@
         '<td class="num">' + (st.count ? fmtBRL(st.amount) : '<span class="muted">—</span>') + "</td>" +
         '<td class="num">' + (st.count ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td>" +
         cols.map(function (c) {
-          var n = st.products[c] || 0;
-          return '<td class="num prod-col">' + (n ? fmtInt(n) : '<span class="muted">·</span>') + "</td>";
+          var n = st.products[c] || 0, cp = commissionPct(a, st, c);
+          return '<td class="num prod-col">' + (n ? fmtInt(n) : '<span class="muted">·</span>') +
+            (cp ? '<div class="pct-tag' + (cp.source === "cadastro" ? " cad" : "") + '" title="' + esc(cp.title) + '">' + esc(cp.text) + "</div>" : "") + "</td>";
         }).join("") +
         '<td class="l num">' + (a.company_cnpj || a.document ? esc(fmtDoc(a.company_cnpj || a.document)) : '<span class="muted">—</span>') + "</td>" +
         '<td class="l">' + socialsHtml(a) + "</td></tr>";
@@ -1067,12 +1101,15 @@
   });
   $("base-csv").addEventListener("click", function () {
     var cols = baseProductCols(), r = periodRange();
-    var rows = [["Posição", "Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão"].concat(cols).concat(["Notas"])];
+    var prodHeads = [];
+    cols.forEach(function (c) { prodHeads.push(c + " (vendas)", c + " (% comissão)"); });
+    var rows = [["Posição", "Nome", "E-mail", "CPF/CNPJ", "Empresa", "WhatsApp", "Instagram", "Facebook", "YouTube", "TikTok", "Vendas", "Faturamento", "Comissão"].concat(prodHeads).concat(["Notas"])];
     baseRows().forEach(function (x, i) {
-      var a = x.a, st = x.st;
+      var a = x.a, st = x.st, prodCells = [];
+      cols.forEach(function (c) { var cp = commissionPct(a, st, c); prodCells.push(st.products[c] || 0, cp ? cp.text : ""); });
       rows.push([i + 1, a.name, a.email, fmtDoc(a.company_cnpj || a.document), a.company_name, a.whatsapp, a.instagram, a.facebook, a.youtube, a.tiktok,
         st.count, csvNum(st.amount), csvNum(st.commission)]
-        .concat(cols.map(function (c) { return st.products[c] || 0; })).concat([a.notes]));
+        .concat(prodCells).concat([a.notes]));
     });
     downloadCsv("influencers_" + isoDate(r[0]) + "_a_" + isoDate(new Date(r[1] - 86400000)) + ".csv", rows);
   });
@@ -1392,17 +1429,24 @@
         '<div class="field full"><label for="af-notes">Notas</label><textarea id="af-notes" placeholder="Nicho, combinados, observações…">' + esc(a.notes || "") + "</textarea></div>" +
         '</div><button class="btn btn-primary" type="submit" id="af-save">Salvar contato</button></form>' : "") +
       "<h4>Por produto</h4>" +
-      '<div class="table-scroll"><table><thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% comissão</th></tr></thead><tbody>' +
         (productRows.length ? productRows.map(function (r) {
-          return '<tr><td class="l">' + esc(r.name) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td></tr>";
-        }).join("") : '<tr><td colspan="4" class="empty">Sem vendas no período.</td></tr>') +
+          var cp = commissionPct(a, st, r.name);
+          return '<tr><td class="l">' + esc(r.name) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) +
+            '</td><td class="num">' + (cp ? '<span class="pct-tag' + (cp.source === "cadastro" ? " cad" : "") + '" title="' + esc(cp.title) + '">' + esc(cp.text) + "</span>" : "—") + "</td></tr>";
+        }).join("") : '<tr><td colspan="5" class="empty">Sem vendas no período.</td></tr>') +
+      (a.commissions && Object.keys(a.commissions).length
+        ? '<p class="muted" style="font-size:12px;margin:8px 0 0;">Cadastrado na Kiwify: ' + Object.keys(a.commissions).map(function (k) { return esc(k) + " " + Math.round(a.commissions[k]) + "%"; }).join(" · ") + "</p>"
+        : "") +
       "</tbody></table></div>" +
       "<h4>Vendas no período (" + fmtInt(sales.length) + ")</h4>" +
-      '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">Status</th><th>Valor</th><th>Comissão</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">Status</th><th>Valor</th><th>Comissão</th><th>%</th></tr></thead><tbody>' +
         (sales.length ? sales.map(function (s) {
+          var p = salePct(s);
           return '<tr><td class="l num">' + fmtDate(s.sale_created_at) + '</td><td class="l">' + esc(s.product_name) + '</td><td class="l">' + esc(s.customer_name || s.customer_email || "") +
-            '</td><td class="l"><span class="status ' + statusClass(s.status) + '">' + esc(STATUS_LABEL[s.status] || s.status) + '</span></td><td class="num">' + fmtBRL(s.amount) + '</td><td class="num">' + fmtBRL(s.commission) + "</td></tr>";
-        }).join("") : '<tr><td colspan="6" class="empty">Sem vendas no período.</td></tr>') +
+            '</td><td class="l"><span class="status ' + statusClass(s.status) + '">' + esc(STATUS_LABEL[s.status] || s.status) + '</span></td><td class="num">' + fmtBRL(s.amount) + '</td><td class="num">' + fmtBRL(s.commission) +
+            '</td><td class="num">' + (p != null ? p + "%" : "—") + "</td></tr>";
+        }).join("") : '<tr><td colspan="7" class="empty">Sem vendas no período.</td></tr>') +
       "</tbody></table></div>";
     $("drawer").hidden = false;
     $("scrim").hidden = false;
@@ -1591,7 +1635,7 @@
   }
 
   /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */
-  var CACHE_KEY = "flow_aff_cache_v1";
+  var CACHE_KEY = "flow_aff_cache_v2";
   function periodKey() { return $("f-period").value + "|" + $("f-from").value + "|" + $("f-to").value; }
   function readCache() {
     try {
