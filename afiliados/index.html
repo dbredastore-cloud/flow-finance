@@ -379,7 +379,7 @@
             <button class="btn" id="base-csv">Exportar CSV</button>
           </div>
         </div>
-        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Quantidade de vendas de cada produto por influencer, no período e filtros selecionados acima, com o <strong>% de comissão</strong> embaixo: <span class="pct-tag">30%</span> = praticado nas vendas do período; <span class="pct-tag cad">20%</span> = cadastrado na Kiwify (sem vendas do produto no período). Passe o mouse no % para ver o detalhe. Clique no título de qualquer coluna para ordenar.</p>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Quantidade de vendas de cada produto por influencer, no período e filtros selecionados acima, com o <strong>% de comissão vigente</strong> (hoje, ou no último dia do período filtrado): <span class="pct-tag">40%</span> = rodando nas vendas; <span class="pct-tag">40% ↻</span> = o % mudou dentro do período; <span class="pct-tag cad">20%</span> = cadastrado na Kiwify (ainda sem vendas do produto). Passe o mouse no % para ver o histórico de mudanças. Clique no título de qualquer coluna para ordenar.</p>
         <div class="table-scroll"><table>
           <thead><tr id="base-head"></tr></thead>
           <tbody id="base-body"></tbody>
@@ -638,13 +638,23 @@
   async function loadStatic() {
     var res = await Promise.all([
       fetchAll(function () { return sb.from("affiliates_relevant").select(AFF_COLS + ", commissions").order("name"); }),
-      sb.from("kiwify_products").select("id, name, tool_id").order("name")
+      sb.from("kiwify_products").select("id, name, tool_id").order("name"),
+      fetchAll(function () { return sb.from("affiliate_commission_timeline").select("affiliate_email, product_name, pct, inicio, fim, vendas").order("inicio"); })
     ]);
     if (res[1].error) throw res[1].error;
     state.affiliates = res[0];
     state.products = res[1].data || [];
+    state.commTLRows = res[2];
+    indexTimeline();
     state.fullBase = false;
     indexAffiliates();
+  }
+  function indexTimeline() {
+    state.commTL = {};
+    (state.commTLRows || []).forEach(function (s) {
+      var k = s.affiliate_email + "|" + s.product_name;
+      (state.commTL[k] = state.commTL[k] || []).push(s);
+    });
   }
 
   // Base completa sob demanda (filtro "Todos" / "Ativos na Kiwify" do menu Influencers).
@@ -739,21 +749,67 @@
     return by;
   }
 
-  // % de comissão do influencer num produto: o praticado nas vendas do período (se variou,
-  // mostra a faixa) ou, sem vendas, o cadastrado na Kiwify.
+  function shortDate(iso) { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }); }
+  function timelineText(segs) {
+    return segs.map(function (s) {
+      var d = shortDate(s.inicio), f = shortDate(s.fim);
+      return s.pct + "% " + (d === f ? "em " + d : "de " + d + " a " + f) + " (" + s.vendas + (s.vendas > 1 ? " vendas)" : " venda)");
+    }).join(" → ");
+  }
+
+  // % de comissão do influencer num produto, vigente na data de referência: hoje, ou o último
+  // dia do período filtrado, se ele já terminou. Vem da linha do tempo (affiliate_commission_timeline);
+  // sem vendas do produto até essa data, vale o % cadastrado na Kiwify.
   function commissionPct(a, st, product) {
-    var m = st && st.pcts && st.pcts[product];
-    if (m && Object.keys(m).length) {
-      var ks = Object.keys(m).map(Number).sort(function (x, y) { return x - y; });
-      var detail = ks.map(function (k) { return k + "% em " + m[k] + (m[k] > 1 ? " vendas" : " venda"); }).join(", ");
+    var ref = Math.min(Date.now(), periodRange()[1].getTime());
+    var all = (state.commTL && state.commTL[(a && a.email) + "|" + product]) || [];
+    var segs = all.filter(function (s) { return Date.parse(s.inicio) < ref; });
+    if (segs.length) {
+      var cur = segs[segs.length - 1], note = "";
+      // Última venda sozinha com % diferente logo depois de um período firme: provável oferta
+      // antiga — mantém o período anterior como vigente e avisa.
+      var prev = segs[segs.length - 2];
+      if (cur.vendas === 1 && prev && prev.vendas >= 3 && cur === all[all.length - 1]) {
+        note = " A última venda (" + shortDate(cur.inicio) + ") saiu a " + cur.pct + "%, sozinha — a confirmar.";
+        cur = prev;
+      }
+      var r = periodRange();
+      var changed = all.filter(function (s) { return Date.parse(s.fim) >= r[0].getTime() && Date.parse(s.inicio) < r[1].getTime(); }).length > 1;
+      var refLabel = ref < Date.now() - 86400000 ? "em " + new Date(ref - 1).toLocaleDateString("pt-BR") : "hoje";
       return {
-        text: ks.length === 1 ? ks[0] + "%" : ks[0] + "–" + ks[ks.length - 1] + "%",
-        title: "Praticado nas vendas do período: " + detail, source: "vendas", value: ks[ks.length - 1]
+        text: cur.pct + "%", changed: changed, source: "vendas", value: cur.pct,
+        title: "Vigente " + refLabel + ": " + cur.pct + "% desde " + shortDate(cur.inicio) + "." + note +
+          (changed ? " O % mudou dentro do período filtrado." : "") + "\nHistórico: " + timelineText(all)
       };
     }
     var cad = a && a.commissions && a.commissions[product];
-    if (cad != null) return { text: Math.round(cad) + "%", title: "Comissão cadastrada na Kiwify (sem vendas deste produto no período).", source: "cadastro", value: Number(cad) };
+    if (cad != null) return { text: Math.round(cad) + "%", title: "Comissão cadastrada na Kiwify (ainda sem vendas deste produto até a data de referência).", source: "cadastro", value: Number(cad) };
     return null;
+  }
+  // Ficha do influencer: todas as mudanças de % por produto, do mais recente para o mais antigo.
+  function commissionHistoryHtml(a) {
+    var prefix = a.email + "|";
+    var keys = Object.keys(state.commTL || {}).filter(function (k) { return k.indexOf(prefix) === 0; });
+    var cad = a.commissions && Object.keys(a.commissions).length
+      ? '<p class="muted" style="font-size:12px;margin:6px 0 0;">Cadastrado hoje na Kiwify: ' + Object.keys(a.commissions).map(function (k) { return esc(k) + " " + Math.round(a.commissions[k]) + "%"; }).join(" · ") + "</p>"
+      : "";
+    if (!keys.length) return cad ? "<h4>Comissão</h4>" + cad : "";
+    return "<h4>Histórico de comissão</h4>" + keys.sort().map(function (k) {
+      var segs = state.commTL[k].slice().reverse();
+      return '<div style="margin-bottom:10px;"><div style="font-weight:600;font-size:13px;margin-bottom:4px;">' + esc(k.slice(prefix.length)) + "</div>" +
+        '<table><thead><tr><th class="l">De</th><th class="l">Até</th><th>%</th><th>Vendas</th></tr></thead><tbody>' +
+        segs.map(function (s, i) {
+          return "<tr><td class=\"l num\">" + shortDate(s.inicio) + '</td><td class="l num">' + (i === 0 ? shortDate(s.fim) + ' <span class="muted">(última venda)</span>' : shortDate(s.fim)) +
+            '</td><td class="num"><span class="pct-tag">' + s.pct + '%</span></td><td class="num">' + fmtInt(s.vendas) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }).join("") + cad +
+      '<p class="muted" style="font-size:11.5px;margin:6px 0 0;">Vendas isoladas com % diferente no meio de um período (ex.: oferta antiga) não contam como mudança; aparecem na lista de vendas abaixo.</p>';
+  }
+
+  function pctTag(cp, block) {
+    if (!cp) return "";
+    return "<" + (block ? "div" : "span") + ' class="pct-tag' + (cp.source === "cadastro" ? " cad" : "") + '" title="' + esc(cp.title) + '">' +
+      esc(cp.text) + (cp.changed ? " ↻" : "") + "</" + (block ? "div" : "span") + ">";
   }
 
   // Soma vendas/faturamento/comissão por produto (nome da Kiwify), maior comissão primeiro.
@@ -1070,7 +1126,7 @@
         cols.map(function (c) {
           var n = st.products[c] || 0, cp = commissionPct(a, st, c);
           return '<td class="num prod-col">' + (n ? fmtInt(n) : '<span class="muted">·</span>') +
-            (cp ? '<div class="pct-tag' + (cp.source === "cadastro" ? " cad" : "") + '" title="' + esc(cp.title) + '">' + esc(cp.text) + "</div>" : "") + "</td>";
+            pctTag(cp, true) + "</td>";
         }).join("") +
         '<td class="l num">' + (a.company_cnpj || a.document ? esc(fmtDoc(a.company_cnpj || a.document)) : '<span class="muted">—</span>') + "</td>" +
         '<td class="l">' + socialsHtml(a) + "</td></tr>";
@@ -1433,12 +1489,10 @@
         (productRows.length ? productRows.map(function (r) {
           var cp = commissionPct(a, st, r.name);
           return '<tr><td class="l">' + esc(r.name) + '</td><td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) +
-            '</td><td class="num">' + (cp ? '<span class="pct-tag' + (cp.source === "cadastro" ? " cad" : "") + '" title="' + esc(cp.title) + '">' + esc(cp.text) + "</span>" : "—") + "</td></tr>";
+            '</td><td class="num">' + (cp ? pctTag(cp) : "—") + "</td></tr>";
         }).join("") : '<tr><td colspan="5" class="empty">Sem vendas no período.</td></tr>') +
-      (a.commissions && Object.keys(a.commissions).length
-        ? '<p class="muted" style="font-size:12px;margin:8px 0 0;">Cadastrado na Kiwify: ' + Object.keys(a.commissions).map(function (k) { return esc(k) + " " + Math.round(a.commissions[k]) + "%"; }).join(" · ") + "</p>"
-        : "") +
       "</tbody></table></div>" +
+      commissionHistoryHtml(a) +
       "<h4>Vendas no período (" + fmtInt(sales.length) + ")</h4>" +
       '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">Status</th><th>Valor</th><th>Comissão</th><th>%</th></tr></thead><tbody>' +
         (sales.length ? sales.map(function (s) {
@@ -1604,6 +1658,7 @@
     var cached = readCache();
     if (cached) {
       state.affiliates = cached.affiliates; state.products = cached.products; state.sales = cached.sales;
+      state.commTLRows = cached.commTLRows || []; indexTimeline();
       state.yt.channels = cached.yt || []; state.yt.lastRun = cached.ytLastRun || null;
       state.fullBase = false;
       indexAffiliates();
@@ -1635,7 +1690,7 @@
   }
 
   /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */
-  var CACHE_KEY = "flow_aff_cache_v2";
+  var CACHE_KEY = "flow_aff_cache_v3";
   function periodKey() { return $("f-period").value + "|" + $("f-from").value + "|" + $("f-to").value; }
   function readCache() {
     try {
@@ -1650,7 +1705,7 @@
         period: periodKey(), affiliates: !state.fullBase ? state.affiliates : state.affiliates.filter(function (a) {
           return hasContact(a) || a.notes || state.sales.some(function (s) { return s.affiliate_email === a.email; });
         }),
-        products: state.products, sales: state.sales, yt: state.yt.channels, ytLastRun: state.yt.lastRun
+        products: state.products, commTLRows: state.commTLRows, sales: state.sales, yt: state.yt.channels, ytLastRun: state.yt.lastRun
       }));
     } catch (e) { try { sessionStorage.removeItem(CACHE_KEY); } catch (e2) {} }
   }
