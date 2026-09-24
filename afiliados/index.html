@@ -204,6 +204,32 @@
   .drawer-head h3 { margin: 0; font-size: 18px; }
   .drawer-head .meta { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
   .mini-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 18px; }
+  /* Influencers Flow */
+  .star { background: none; border: 0; padding: 0 6px 0 0; font-size: 16px; line-height: 1; cursor: pointer; color: var(--text-muted); vertical-align: -1px; transition: transform .15s, color .15s; }
+  .star:hover { color: var(--accent); transform: scale(1.2); }
+  .star.on { color: #f5c542; text-shadow: 0 0 8px rgba(245,197,66,.55); }
+  .nav-flow { color: #f5c542; }
+  .fi-card { margin-bottom: 18px; }
+  .fi-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 14px; }
+  .fi-head .e { margin-top: 3px; }
+  .fi-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .fi-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .fi-bonus, .fi-tot { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: rgba(0,0,0,.18); }
+  .kpi-mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
+  .fi-big { font-size: 28px; font-weight: 700; margin: 6px 0 8px; }
+  .fi-big small { font-size: 15px; color: var(--text-muted); font-weight: 500; }
+  .goal-bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #7dffb2); box-shadow: 0 0 12px var(--accent); }
+  .fi-bonus-txt { margin-top: 8px; font-size: 13px; }
+  .fi-tot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .fi-tot span { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+  .fi-tot b { font-size: 17px; }
+  .fi-tot .good { color: var(--good); } .fi-tot .bad { color: var(--critical); }
+  .fi-in { width: 48px; padding: 3px 5px; background: rgba(0,0,0,.3); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font: inherit; font-size: 12.5px; text-align: center; }
+  .fi-table td { white-space: nowrap; }
+  .fi-table tr.fi-current td { background: rgba(0,255,140,.04); }
+  .pct-tag.warn { background: rgba(245,197,66,.15); color: #f5c542; }
+  @media (max-width: 800px) { .fi-grid { grid-template-columns: 1fr; } }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .form-grid .full { grid-column: 1 / -1; }
   .drawer h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 20px 0 8px; }
@@ -274,6 +300,7 @@
     <nav class="nav">
       <button class="nav-btn" data-view="overview">Visão geral</button>
       <button class="nav-btn" data-view="base">Influencers</button>
+      <button class="nav-btn nav-flow" data-view="flowinf">★ Influencers Flow</button>
       <button class="nav-btn" data-view="products">Produtos</button>
       <button class="nav-btn" data-view="youtube">YouTube</button>
       <div class="nav-sep"></div>
@@ -399,6 +426,13 @@
         </table></div>
       </section>
     </section>
+    <!-- Influencers Flow (contratados) -->
+    <section id="view-flowinf" hidden>
+      <p class="muted" style="font-size:12.5px; margin:0 0 14px;">Influencers contratados (marcados com ★ no menu Influencers). Os números usam o <strong>período de cada contrato</strong> e só as ferramentas Flow — os filtros do topo não se aplicam aqui. Stories e reels são marcados à mão; vídeos do YouTube com "Flow" no título são detectados no canal.</p>
+      <div class="kpi-row" id="fi-kpis"></div>
+      <div id="fi-list"></div>
+    </section>
+
     <!-- YouTube -->
     <section id="view-youtube" hidden>
       <div class="kpi-row" id="yt-kpis"></div>
@@ -842,6 +876,7 @@
     } else if (v === "base") renderBase();
     else if (v === "products") renderProducts(sales);
     else if (v === "youtube") renderYoutube();
+    else if (v === "flowinf") renderFlowInf();
   }
 
   function kpi(label, value, sub, tip) {
@@ -1119,7 +1154,7 @@
       var a = x.a, st = x.st;
       return '<tr class="clickable" data-email="' + esc(a.email) + '">' +
         '<td class="l rank num">' + (i + 1) + "</td>" +
-        '<td class="l who"><div class="n">' + esc(a.name || a.email) + '</div><div class="e">' + esc(a.email) + "</div></td>" +
+        '<td class="l who"><div class="n">' + starBtn(a.email) + esc(a.name || a.email) + '</div><div class="e">' + esc(a.email) + "</div></td>" +
         '<td class="num"><strong>' + fmtInt(st.count) + "</strong></td>" +
         '<td class="num">' + (st.count ? fmtBRL(st.amount) : '<span class="muted">—</span>') + "</td>" +
         '<td class="num">' + (st.count ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td>" +
@@ -1471,7 +1506,7 @@
       return '<div class="field"><label for="af-' + key + '">' + label + '</label><input id="af-' + key + '" value="' + esc(a[key] || "") + '" placeholder="' + esc(ph) + '"></div>';
     };
     $("drawer").innerHTML =
-      '<div class="drawer-head"><div><h3>' + esc(a.name || email) + '</h3><div class="meta">' +
+      '<div class="drawer-head"><div><h3>' + starBtn(email) + esc(a.name || email) + '</h3><div class="meta">' +
         esc(email) + (doc ? " · " + esc(doc) : "") + (a.company_name && a.company_name !== a.name ? "<br>" + esc(a.company_name) : "") +
         '<span id="drawer-products">' + (products ? "<br>" + products : "") + "</span>" +
       '</div></div><button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div>' +
@@ -1546,11 +1581,12 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", products: "Produtos", youtube: "YouTube" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube" };
   function setView(v) {
     state.view = v;
     safeSet("flow_aff_view", v);
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
+    $("filters").hidden = v === "flowinf"; // contratos usam o próprio período
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
     if (state.filtered) renderView(v);
@@ -1683,10 +1719,303 @@
     writeCache();
     loadSyncInfo();
     // YouTube não é necessário para a primeira tela: carrega depois.
+    loadFlowInf().then(function () {
+      if (state.view === "flowinf") renderFlowInf();
+      if (state.view === "base") renderBase();
+    }).catch(function (e) { console.warn("Influencers Flow:", e); });
     loadYoutube().then(function () {
       if (state.view === "youtube") renderYoutube();
+      if (state.view === "flowinf") renderFlowInf(); // YouTube detectado nos contratos
       writeCache();
     }).catch(function (e) { console.warn("YouTube:", e); });
+  }
+
+  /* ---------------- Influencers Flow (contratados) ---------------- */
+  // Contratos em influencer_contracts; entregas do mês em influencer_deliverables; vendas das
+  // ferramentas Flow no período de cada contrato buscadas à parte (não dependem do filtro do topo).
+  state.fi = { contracts: [], deliv: {}, sales: [] };
+
+  function flowProductIds() { return state.products.filter(function (p) { return p.tool_id; }).map(function (p) { return p.id; }); }
+  function contractOf(email) { return state.fi.contracts.find(function (c) { return c.affiliate_email === email; }); }
+  function starBtn(email) {
+    var c = contractOf(email), on = c && c.active;
+    return '<button type="button" class="star' + (on ? " on" : "") + '" data-fav="' + esc(email) + '" data-stop title="' +
+      (on ? "Influencer Flow contratado — clique para remover" : "Marcar como Influencer Flow (contratado)") + '">' + (on ? "★" : "☆") + "</button>";
+  }
+
+  async function loadFlowInf() {
+    var res = await Promise.all([
+      sb.from("influencer_contracts").select("*").order("start_date"),
+      sb.from("influencer_deliverables").select("*")
+    ]);
+    if (res[0].error) throw res[0].error;
+    state.fi.contracts = res[0].data || [];
+    state.fi.deliv = {};
+    (res[1].data || []).forEach(function (d) { state.fi.deliv[d.contract_id + "|" + d.year + "|" + d.month] = d; });
+    var active = state.fi.contracts.filter(function (c) { return c.active; });
+    if (!active.length) { state.fi.sales = []; return; }
+    var since = active.map(function (c) { return c.start_date; }).sort()[0];
+    state.fi.sales = await fetchAll(function () {
+      return sb.from("affiliate_sales").select("id, affiliate_email, product_id, product_name, status, amount, net_amount, commission, sale_created_at")
+        .in("affiliate_email", active.map(function (c) { return c.affiliate_email; }))
+        .in("status", ["paid", "approved"])
+        .gte("sale_created_at", new Date(since + "T00:00:00").toISOString())
+        .order("sale_created_at");
+    });
+  }
+
+  // Meses do contrato (do início até o fim do contrato ou o mês atual), com os números de cada um.
+  function contractMonths(c) {
+    var flowIds = flowProductIds();
+    var start = new Date(c.start_date + "T00:00:00");
+    var end = c.end_date ? new Date(c.end_date + "T23:59:59") : null;
+    var now = new Date();
+    var sales = state.fi.sales.filter(function (s) {
+      var t = new Date(s.sale_created_at);
+      return s.affiliate_email === c.affiliate_email && flowIds.indexOf(s.product_id) >= 0 && t >= start && (!end || t <= end);
+    }).sort(function (x, y) { return x.sale_created_at < y.sale_created_at ? -1 : 1; });
+    var channel = (state.yt.channels || []).find(function (x) { return x.c.affiliate_email === c.affiliate_email; });
+    var months = [], cum = 0, bonusMonth = null;
+    var lastMonth = end && end < now ? end : now;
+    for (var d = new Date(start.getFullYear(), start.getMonth(), 1); d <= lastMonth; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      var mStart = d, mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      var ms = sales.filter(function (s) { var t = new Date(s.sale_created_at); return t >= mStart && t < mEnd; });
+      var row = { year: d.getFullYear(), month: d.getMonth() + 1, sales: ms, count: ms.length, amount: 0, net: 0, commission: 0, pcts: {} };
+      ms.forEach(function (s) {
+        row.amount += Number(s.amount) || 0; row.net += Number(s.net_amount) || 0; row.commission += Number(s.commission) || 0;
+        var p = salePct(s); if (p != null) row.pcts[p] = (row.pcts[p] || 0) + 1;
+      });
+      var before = cum; cum += row.count;
+      row.cum = cum;
+      row.bonus = 0;
+      if (!bonusMonth && before < c.bonus_sales_target && cum >= c.bonus_sales_target) {
+        bonusMonth = row; row.bonus = Number(c.bonus_amount) || 0;
+        row.bonusSale = ms[c.bonus_sales_target - before - 1];
+      }
+      row.fixed = Number(c.fixed_fee) || 0;
+      row.cost = row.fixed + row.commission + row.bonus;
+      row.current = mEnd > now;
+      // Entregas: stories/reels à mão; YouTube = ajuste manual ou vídeos com "Flow" no título.
+      var del = state.fi.deliv[c.id + "|" + row.year + "|" + row.month] || {};
+      var ytVideos = channel ? channel.videos.filter(function (v) {
+        var t = new Date(v.published_at);
+        return t >= mStart && t < mEnd && /flow/i.test(v.title || "") && !isShort(v);
+      }) : [];
+      row.ytDetected = ytVideos;
+      row.stories = del.stories_done || 0;
+      row.reels = del.reels_done || 0;
+      row.youtube = del.youtube_done != null ? del.youtube_done : ytVideos.length;
+      row.youtubeManual = del.youtube_done != null;
+      row.okStories = row.stories >= c.stories_per_month;
+      row.okReels = row.reels >= c.reels_per_month;
+      row.okYoutube = row.youtube >= c.youtube_per_month;
+      row.allOk = row.okStories && row.okReels && row.okYoutube;
+      months.push(row);
+    }
+    return { months: months, total: cum, bonusMonth: bonusMonth, channel: channel };
+  }
+
+  function mainPct(pcts) {
+    var ks = Object.keys(pcts);
+    if (!ks.length) return null;
+    return Number(ks.sort(function (a, b) { return pcts[b] - pcts[a]; })[0]);
+  }
+
+  function renderFlowInf() {
+    var list = state.fi.contracts.filter(function (c) { return c.active; });
+    var box = $("fi-list");
+    if (!list.length) {
+      $("fi-kpis").innerHTML = "";
+      box.innerHTML = '<section class="panel"><p class="empty">Nenhum influencer contratado ainda. No menu <strong>Influencers</strong>, clique na estrela ☆ ao lado do nome para adicionar.</p></section>';
+      return;
+    }
+    var now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1;
+    var k = { count: 0, amount: 0, cost: 0, delivered: 0, required: 0 };
+    var cards = list.map(function (c) {
+      var a = state.byEmail[c.affiliate_email] || { email: c.affiliate_email, name: c.affiliate_email };
+      var info = contractMonths(c);
+      var cur = info.months.find(function (r) { return r.year === y && r.month === m; });
+      if (cur) {
+        k.count += cur.count; k.amount += cur.amount; k.cost += cur.cost;
+        k.required += c.stories_per_month + c.reels_per_month + c.youtube_per_month;
+        k.delivered += Math.min(cur.stories, c.stories_per_month) + Math.min(cur.reels, c.reels_per_month) + Math.min(cur.youtube, c.youtube_per_month);
+      }
+      return fiCard(c, a, info);
+    });
+    $("fi-kpis").innerHTML =
+      kpi("Contratados", fmtInt(list.length)) +
+      kpi("Vendas no mês", fmtInt(k.count), "ferramentas Flow, " + MONTHS[m - 1].toLowerCase() + "/" + y) +
+      kpi("Faturamento no mês", fmtBRL(k.amount)) +
+      kpi("Custo no mês", fmtBRL(k.cost), "fixo + comissão + bônus") +
+      kpi("Conteúdos entregues", k.required ? Math.round(k.delivered / k.required * 100) + "%" : "—", fmtInt(k.delivered) + " de " + fmtInt(k.required) + " no mês");
+    box.innerHTML = cards.join("");
+  }
+
+  function check(ok, done, need, current) {
+    var cls = ok ? "ok" : current ? "wait" : "bad";
+    return '<span class="status ' + cls + '">' + done + "/" + need + "</span>";
+  }
+
+  function fiCard(c, a, info) {
+    var target = c.bonus_sales_target || 0;
+    var p = target ? Math.min(1, info.total / target) : 0;
+    var tot = info.months.reduce(function (t, r) {
+      t.amount += r.amount; t.net += r.net; t.commission += r.commission; t.fixed += r.fixed; t.bonus += r.bonus; return t;
+    }, { amount: 0, net: 0, commission: 0, fixed: 0, bonus: 0 });
+    var result = tot.net - tot.fixed - tot.bonus; // líquido do produtor já desconta a comissão
+    var bonusTxt = info.bonusMonth
+      ? "🎉 Meta batida em " + (info.bonusMonth.bonusSale ? new Date(info.bonusMonth.bonusSale.sale_created_at).toLocaleDateString("pt-BR") : MONTHS[info.bonusMonth.month - 1] + "/" + info.bonusMonth.year) + " — bônus de " + fmtBRL(c.bonus_amount)
+      : "Faltam <b>" + fmtInt(Math.max(0, target - info.total)) + "</b> vendas para o bônus de " + fmtBRL(c.bonus_amount);
+    var period = new Date(c.start_date + "T12:00:00").toLocaleDateString("pt-BR") + (c.end_date ? " a " + new Date(c.end_date + "T12:00:00").toLocaleDateString("pt-BR") : " · sem data de fim");
+    var rows = info.months.slice().reverse().map(function (r) {
+      var mp = mainPct(r.pcts);
+      var pctCell = mp == null ? '<span class="muted">—</span>'
+        : '<span class="pct-tag' + (Math.abs(mp - Number(c.commission_pct)) > 0.5 ? " warn" : "") + '" title="' +
+          esc(Object.keys(r.pcts).map(function (x) { return x + "% em " + r.pcts[x] + " venda(s)"; }).join(", ") +
+            (Math.abs(mp - Number(c.commission_pct)) > 0.5 ? " — contrato prevê " + Number(c.commission_pct) + "%" : "")) + '">' + mp + "%</span>";
+      var key = c.id + "|" + r.year + "|" + r.month;
+      var ytTitle = r.ytDetected.length ? "Detectados no canal: " + r.ytDetected.map(function (v) { return v.title; }).join(" · ") : (info.channel ? "Nenhum vídeo com 'Flow' no título neste mês" : "Canal do YouTube não cadastrado na ficha");
+      return '<tr class="' + (r.current ? "fi-current" : "") + '">' +
+        '<td class="l">' + MONTHS[r.month - 1] + "/" + String(r.year).slice(2) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
+        '<td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td>" +
+        "<td>" + pctCell + "</td>" +
+        '<td class="num">' + fmtBRL(r.fixed) + '</td><td class="num">' + (r.bonus ? '<span class="pct-tag">' + fmtBRL(r.bonus) + "</span>" : "—") + '</td><td class="num">' + fmtBRL(r.cost) + "</td>" +
+        '<td><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="stories_done" value="' + r.stories + '"> ' + check(r.okStories, r.stories, c.stories_per_month, r.current) + "</td>" +
+        '<td><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="reels_done" value="' + r.reels + '"> ' + check(r.okReels, r.reels, c.reels_per_month, r.current) + "</td>" +
+        '<td title="' + esc(ytTitle) + '"><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="youtube_done" value="' + r.youtube + '"> ' + check(r.okYoutube, r.youtube, c.youtube_per_month, r.current) +
+          (r.youtubeManual ? ' <span class="muted" title="Valor ajustado à mão">✎</span>' : r.ytDetected.length ? ' <span class="muted">auto</span>' : "") + "</td>" +
+        "<td>" + (r.allOk ? '<span class="status ok">entregue</span>' : r.current ? '<span class="status wait">em andamento</span>' : '<span class="status bad">pendente</span>') + "</td></tr>";
+    }).join("");
+    return '<section class="panel fi-card">' +
+      '<div class="fi-head"><div class="who"><div class="n" style="font-size:16px;">' + starBtn(c.affiliate_email) + esc(a.name || a.email) + "</div>" +
+        '<div class="e">' + esc(a.email) + " · contrato " + period + "</div>" +
+        '<div class="e">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(target) + " vendas · por mês: " +
+          c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div></div>" +
+        '<div class="fi-actions">' + socialsHtml(a) + ' <button class="btn" data-fi-edit="' + c.id + '">Editar contrato</button></div></div>' +
+      '<div class="fi-grid">' +
+        '<div class="fi-bonus"><div class="kpi-mini-label">Meta do bônus · vendas no contrato</div>' +
+          '<div class="fi-big num">' + fmtInt(info.total) + ' <small>/ ' + fmtInt(target) + "</small></div>" +
+          '<div class="goal-bar"><div class="goal-fill" style="width:' + (p * 100).toFixed(1) + '%"></div></div>' +
+          '<div class="fi-bonus-txt">' + bonusTxt + "</div></div>" +
+        '<div class="fi-tot">' +
+          '<div><span>Faturamento</span><b class="num">' + fmtBRL(tot.amount) + "</b></div>" +
+          '<div><span>Comissão paga</span><b class="num">' + fmtBRL(tot.commission) + "</b></div>" +
+          '<div><span>Fixo + bônus</span><b class="num">' + fmtBRL(tot.fixed + tot.bonus) + "</b></div>" +
+          '<div><span title="Líquido do produtor (já sem taxa e comissão) − fixo − bônus">Resultado para a empresa</span><b class="num ' + (result >= 0 ? "good" : "bad") + '">' + fmtBRL(result) + "</b></div>" +
+        "</div></div>" +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Mês</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% pago</th><th>Fixo</th><th>Bônus</th><th>Custo total</th>' +
+        '<th>Stories</th><th>Reels</th><th>YouTube</th><th>Conteúdo</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="12" class="empty">O contrato ainda não começou.</td></tr>') + "</tbody></table></div>" +
+      (c.notes ? '<p class="muted" style="font-size:12.5px;margin:8px 0 0;">' + esc(c.notes) + "</p>" : "") +
+      "</section>";
+  }
+
+  // Estrela: adiciona (com os termos padrão e abre o contrato) ou remove dos Influencers Flow.
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-fav]");
+    if (!b) return;
+    e.stopPropagation();
+    toggleFav(b.dataset.fav);
+  }, true);
+
+  async function toggleFav(email) {
+    var c = contractOf(email);
+    if (c && c.active) {
+      if (!confirm("Remover este influencer dos Influencers Flow? O histórico do contrato fica guardado.")) return;
+      var r1 = await sb.from("influencer_contracts").update({ active: false }).eq("id", c.id);
+      if (r1.error) { toast("Erro: " + r1.error.message, true); return; }
+      c.active = false;
+      toast("Removido dos Influencers Flow.");
+    } else if (c) {
+      var r2 = await sb.from("influencer_contracts").update({ active: true }).eq("id", c.id);
+      if (r2.error) { toast("Erro: " + r2.error.message, true); return; }
+      c.active = true;
+      toast("Adicionado aos Influencers Flow.");
+      openContract(c.id);
+    } else {
+      var r3 = await sb.from("influencer_contracts").insert({ affiliate_email: email }).select().single();
+      if (r3.error) { toast("Erro: " + r3.error.message, true); return; }
+      state.fi.contracts.push(r3.data);
+      toast("Adicionado aos Influencers Flow. Confira os termos do contrato.");
+      openContract(r3.data.id);
+    }
+    try { await loadFlowInf(); } catch (err) {}
+    refreshStars();
+  }
+
+  function refreshStars() {
+    document.querySelectorAll("[data-fav]").forEach(function (el) {
+      var tmp = document.createElement("span");
+      tmp.innerHTML = starBtn(el.dataset.fav);
+      el.replaceWith(tmp.firstChild);
+    });
+    if (state.view === "flowinf") renderFlowInf();
+  }
+
+  // Entregas do mês (stories, reels, YouTube): salva ao alterar o número.
+  $("fi-list").addEventListener("change", async function (e) {
+    var inp = e.target.closest("[data-del]");
+    if (!inp) return;
+    var parts = inp.dataset.del.split("|"), key = inp.dataset.del;
+    var cur = state.fi.deliv[key] || { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]), stories_done: 0, reels_done: 0, youtube_done: null };
+    var row = { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]), stories_done: cur.stories_done || 0, reels_done: cur.reels_done || 0, youtube_done: cur.youtube_done, updated_at: new Date().toISOString() };
+    var v = inp.value === "" ? null : Math.max(0, parseInt(inp.value, 10) || 0);
+    row[inp.dataset.f] = inp.dataset.f === "youtube_done" ? v : (v || 0);
+    var res = await sb.from("influencer_deliverables").upsert(row, { onConflict: "contract_id,year,month" });
+    if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
+    state.fi.deliv[key] = row;
+    toast("Entrega salva.");
+    renderFlowInf();
+  });
+  $("fi-list").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-fi-edit]");
+    if (b) openContract(b.dataset.fiEdit);
+  });
+
+  // Janela do contrato.
+  function openContract(id) {
+    var c = state.fi.contracts.find(function (x) { return x.id === id; });
+    if (!c) return;
+    var a = state.byEmail[c.affiliate_email] || { name: c.affiliate_email };
+    var f = function (k, label, type, extra) {
+      return '<div class="field"><label for="fc-' + k + '">' + label + '</label><input id="fc-' + k + '" type="' + type + '" value="' + esc(c[k] == null ? "" : c[k]) + '" ' + (extra || "") + "></div>";
+    };
+    $("drawer").innerHTML =
+      '<div class="drawer-head"><div><h3>Contrato · ' + esc(a.name || c.affiliate_email) + '</h3><div class="meta">Influencer Flow</div></div><button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div>' +
+      '<form id="fc-form"><div class="form-grid">' +
+        f("start_date", "Início do contrato", "date") + f("end_date", "Fim (opcional)", "date") +
+        f("fixed_fee", "Valor fixo por mês (R$)", "number", 'step="0.01" min="0"') + f("commission_pct", "Comissão combinada (%)", "number", 'step="0.5" min="0" max="100"') +
+        f("bonus_sales_target", "Vendas para o bônus", "number", 'min="0"') + f("bonus_amount", "Valor do bônus (R$)", "number", 'step="0.01" min="0"') +
+        f("stories_per_month", "Stories por mês", "number", 'min="0"') + f("reels_per_month", "Reels por mês", "number", 'min="0"') +
+        f("youtube_per_month", "Vídeos no YouTube por mês", "number", 'min="0"') +
+        '<div class="field full"><label for="fc-notes">Observações</label><textarea id="fc-notes">' + esc(c.notes || "") + "</textarea></div>" +
+      '</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" type="submit">Salvar contrato</button>' +
+      '<button class="btn" type="button" id="fc-remove">Remover dos Influencers Flow</button></div></form>' +
+      '<p class="muted" style="font-size:12px;margin-top:12px;">As vendas contam da data de início até o fim (ou hoje). O bônus entra no mês em que o total de vendas no contrato chega à meta. A comissão é a que a Kiwify pagou; se o % pago for diferente do combinado, o mês fica marcado em amarelo.</p>';
+    $("drawer").hidden = false; $("scrim").hidden = false;
+    state.openEmail = null;
+    $("drawer-close").addEventListener("click", closeDrawer);
+    $("fc-remove").addEventListener("click", function () { closeDrawer(); toggleFav(c.affiliate_email); });
+    $("fc-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var val = function (k) { return $("fc-" + k).value; };
+      var num = function (k) { var v = parseFloat(val(k)); return isNaN(v) ? 0 : v; };
+      if (!val("start_date")) { toast("Informe a data de início.", true); return; }
+      var patch = {
+        start_date: val("start_date"), end_date: val("end_date") || null,
+        fixed_fee: num("fixed_fee"), commission_pct: num("commission_pct"),
+        bonus_sales_target: Math.round(num("bonus_sales_target")), bonus_amount: num("bonus_amount"),
+        stories_per_month: Math.round(num("stories_per_month")), reels_per_month: Math.round(num("reels_per_month")),
+        youtube_per_month: Math.round(num("youtube_per_month")), notes: $("fc-notes").value.trim() || null
+      };
+      var res = await sb.from("influencer_contracts").update(patch).eq("id", c.id).select().single();
+      if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
+      Object.assign(c, res.data);
+      closeDrawer();
+      toast("Contrato salvo.");
+      try { await loadFlowInf(); } catch (err) {}
+      if (state.view === "flowinf") renderFlowInf();
+    });
   }
 
   /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */

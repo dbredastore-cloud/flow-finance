@@ -39,6 +39,13 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 100 envios, marcando quais são Shorts (confirmado pela URL /shorts/ID) pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
 - Secret necessário: `YOUTUBE_API_KEY` (Supabase → Edge Functions → Secrets).
 
+## Influencers Flow (menu do /afiliados/)
+
+- Influencers contratados: a estrela ☆ ao lado do nome (menu Influencers ou ficha) cria o contrato em `influencer_contracts` (padrão: fixo, 30% de comissão, bônus de R$ 3.000 ao bater 150 vendas, 12 stories + 1 reels + 1 vídeo no YouTube por mês) e abre os termos para editar. Tirar a estrela só desativa; o histórico fica.
+- Cada contrato mostra as vendas das ferramentas Flow (produtos com `tool_id`) dentro do período do contrato, o progresso até o bônus (e a data da venda que bateu a meta) e o fechamento mês a mês: vendas, faturamento, comissão paga (e o % pago, em amarelo se diferente do combinado), fixo, bônus, custo total e conteúdos.
+- Stories e reels são marcados à mão (`influencer_deliverables`). YouTube: conta sozinho os vídeos (não Shorts) com "Flow" no título publicados no mês no canal cadastrado; o número pode ser corrigido à mão.
+- Migration: `20260924_influencers_flow.sql`.
+
 ## Receita automática no financeiro
 
 - `supabase/functions/kiwify-revenue/` calcula, por produto e mês (horário de Brasília), a partir das vendas da Kiwify, e grava em `kiwify_monthly_product`; a função SQL `refresh_revenue_from_kiwify()` soma por ferramenta e preenche `monthly_revenue` (`source = 'kiwify'`). Roda a cada 30 min e sempre recalcula os últimos 3 meses (reembolsos mudam meses recentes).
