@@ -293,6 +293,13 @@
   .tool-btn.home-btn { margin-bottom: 6px; font-weight: 700; }
   .empty-note { padding: 28px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
   @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } .home-kpis { grid-template-columns: repeat(2, 1fr); } }
+  .charge-row { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
+  .charge-wrap { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+  .charge-wrap input[type=date] { padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12px; }
+  .charge-wrap.is-fixed input[type=date] { border-style: dashed; color: var(--text-dim); }
+  .exp-pin { background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; font-size: 12px; line-height: 1; opacity: .55; }
+  .exp-pin:hover { opacity: 1; background: var(--surface-2); }
+  .cat-row input.cat-edit-day { width: 66px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .exp-del { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 13px; line-height: 1; }
   .exp-del:hover { color: var(--critical); background: rgba(var(--critical-rgb), .12); }
   .cat-rename { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 14px; line-height: 1; }
@@ -1085,12 +1092,25 @@
   }
 
   async function loadExpenseDetail(toolId, year, month) {
-    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts").eq("tool_id", toolId).eq("year", year).eq("month", month);
+    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on").eq("tool_id", toolId).eq("year", year).eq("month", month);
     if (res.error) { toast("Erro ao carregar despesas: " + res.error.message, true); return []; }
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
-      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts };
+      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on };
     });
+  }
+
+  /* Data da cobrança no cartão: a data gravada na linha do mês, ou o dia fixo da categoria. */
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function chargeDateFor(year, month, day) {
+    var last = new Date(year, month, 0).getDate(); // dia 31 em mês curto cai no último dia
+    return year + "-" + pad2(month) + "-" + pad2(Math.min(day, last));
+  }
+  function chargeInfo(item, m) {
+    if (item.charged_on) return { value: item.charged_on, fixedDay: null };
+    var cat = state.categories.find(function (c) { return c.id === item.category_id; });
+    if (cat && cat.billing_day) return { value: chargeDateFor(ymY(m), ymM(m), cat.billing_day), fixedDay: cat.billing_day };
+    return { value: "", fixedDay: null };
   }
 
   /* ---------------- Rendering ---------------- */
@@ -1208,9 +1228,14 @@
 
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
+      var chg = chargeInfo(item, m);
+      var chgTitle = chg.fixedDay ? "Dia fixo da categoria (dia " + chg.fixedDay + "). Edite para registrar outra data neste mês." : "Dia em que esta despesa foi cobrada no cartão";
       return '<div class="expense-line">' +
         '<span class="cat-name">' + escHtml(catName) +
           (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
+          '<span class="charge-row"><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chgTitle) + '"><span>cobrança</span>' +
+            '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"></label>' +
+          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button></span>' +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
@@ -1231,6 +1256,7 @@
           '<div class="add-cat-row">' +
             '<select id="new-cat-select-' + m + '"><option value="">+ nova categoria</option>' + catOptions + "</select>" +
             '<input type="number" step="0.01" placeholder="R$" class="amount" id="new-cat-amount-' + m + '">' +
+            '<label class="charge-wrap" title="Data da cobrança no cartão (opcional)"><span>cobrança</span><input type="date" id="new-cat-date-' + m + '" aria-label="Data da cobrança (opcional)"></label>' +
             '<button class="btn" id="add-exp-btn-' + m + '">Adicionar</button>' +
             '<label class="split-opt"><input type="checkbox" id="split-chk-' + m + '"> Ratear o valor cheio entre ferramentas</label>' +
             '<div class="split-tools" id="split-tools-' + m + '" hidden>' + state.tools.map(function (t) {
@@ -1267,6 +1293,17 @@
 
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".exp-date").forEach(function (input) {
+      input.addEventListener("change", function () { saveChargeDate(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".exp-pin").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var input = wrap.querySelector('.exp-date[data-item-id="' + btn.dataset.itemId + '"]');
+        var v = input ? input.value : "";
+        if (!v) { toast("Escolha a data da cobrança primeiro.", true); return; }
+        setBillingDay(btn.dataset.catId, parseInt(v.slice(8, 10), 10), m);
+      });
     });
     wrap.querySelectorAll(".exp-del").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -1341,6 +1378,50 @@
     await refreshMonth(m);
   }
 
+  // Recarrega só as linhas de despesa do mês aberto (datas não mudam totais).
+  async function reloadDetail(m) {
+    var items = await loadExpenseDetail(state.activeToolId, ymY(m), ymM(m));
+    renderDetail(m, items);
+  }
+
+  async function saveChargeDate(itemId, value, m) {
+    var res = await sb.from("monthly_expenses").update({ charged_on: value || null }).eq("id", itemId).select("id");
+    if (res.error) { toast("Erro ao salvar a data: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
+    toast(value ? "Data da cobrança salva." : "Data removida (volta ao dia fixo da categoria, se houver).");
+    await reloadDetail(m);
+  }
+
+  // Dia fixo de cobrança da categoria: aparece em todos os meses que não têm data própria.
+  async function setBillingDay(catId, day, m) {
+    var cur = state.categories.find(function (c) { return c.id === catId; });
+    if (!cur) { toast("Categoria não encontrada.", true); return; }
+    if (day != null && !(day >= 1 && day <= 31)) { toast("Dia inválido: use de 1 a 31.", true); return; }
+    var res = await sb.from("expense_categories").update({ billing_day: day }).eq("id", catId).select("id");
+    if (res.error) { toast("Erro ao salvar o dia de cobrança: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta categoria.", true); return; }
+    var alsoIn = 0;
+    if (day != null) {
+      // Categoria rateada existe em outras ferramentas: oferece usar o mesmo dia lá.
+      var oth = await sb.from("expense_categories").select("id, tool_id, name, billing_day").neq("tool_id", state.activeToolId);
+      var same = oth.error ? [] : (oth.data || []).filter(function (c) { return c.name.toLowerCase() === cur.name.toLowerCase() && c.billing_day !== day; });
+      if (same.length) {
+        var names = same.map(function (c) { var t = state.tools.find(function (x) { return x.id === c.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
+        if (window.confirm('A categoria "' + cur.name + '" também existe em ' + names + ". Usar o dia " + day + " de cobrança lá também?")) {
+          var up = await sb.from("expense_categories").update({ billing_day: day }).in("id", same.map(function (c) { return c.id; })).select("id");
+          if (up.error) toast("Salvou aqui, mas falhou nas outras ferramentas: " + up.error.message, true);
+          else alsoIn = (up.data || []).length;
+        }
+      }
+    }
+    state.categoriesReady = loadCategories(state.activeToolId);
+    await state.categoriesReady;
+    renderCatManager();
+    var open = m || state.openMonth;
+    if (open) await reloadDetail(open);
+    toast(day == null ? 'Dia fixo de "' + cur.name + '" removido.' : 'Dia ' + day + ' de cobrança fixado para "' + cur.name + '" em todos os meses' + (alsoIn ? " e em mais " + alsoIn + " ferramenta" + (alsoIn > 1 ? "s" : "") : "") + ".");
+  }
+
   async function addExpenseLine(m) {
     var select = document.getElementById("new-cat-select-" + m);
     var amountInput = document.getElementById("new-cat-amount-" + m);
@@ -1353,12 +1434,13 @@
     if (split && amount <= 0) { toast("Informe o valor cheio a ratear.", true); return; }
     var splitIds = split ? selectedSplitTools(m) : [];
     if (split && splitIds.length < 2) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
+    var chargedOn = document.getElementById("new-cat-date-" + m).value || null;
 
     if (categoryId === "__new__") {
       var name = document.getElementById("new-cat-name-" + m).value.trim();
       var group = document.getElementById("new-cat-group-" + m).value;
       if (!name) { toast("Digite o nome da nova categoria.", true); return; }
-      if (split) { await addSplitExpense(m, name, group, amount, splitIds); return; }
+      if (split) { await addSplitExpense(m, name, group, amount, splitIds, chargedOn, null); return; }
       var dup = state.categories.find(function (c) { return c.name.toLowerCase() === name.toLowerCase(); });
       if (dup) {
         categoryId = dup.id;
@@ -1371,14 +1453,14 @@
     } else if (split) {
       var chosen = state.categories.find(function (c) { return c.id === categoryId; });
       if (!chosen) { toast("Categoria não encontrada.", true); return; }
-      await addSplitExpense(m, chosen.name, chosen.group_name, amount, splitIds);
+      await addSplitExpense(m, chosen.name, chosen.group_name, amount, splitIds, chargedOn, chosen.billing_day);
       return;
     }
 
-    var res = await sb.from("monthly_expenses").upsert(
-      { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount },
-      { onConflict: "tool_id,category_id,year,month" }
-    );
+    // A data só entra no upsert quando preenchida, para não apagar a de um lançamento que já existe.
+    var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount };
+    if (chargedOn) row.charged_on = chargedOn;
+    var res = await sb.from("monthly_expenses").upsert(row, { onConflict: "tool_id,category_id,year,month" });
     if (res.error) { toast("Erro ao salvar despesa: " + res.error.message, true); return; }
     toast("Despesa lançada.");
     await refreshMonth(m);
@@ -1405,7 +1487,7 @@
   }
 
   // Valor cheio (ex.: Biancode) dividido igualmente entre as ferramentas escolhidas.
-  async function addSplitExpense(m, catName, catGroup, total, pickedIds) {
+  async function addSplitExpense(m, catName, catGroup, total, pickedIds, chargedOn, billingDay) {
     var targets = (pickedIds || []).map(function (id) { return state.tools.find(function (t) { return t.id === id; }); });
     if (targets.length < 2 || targets.some(function (t) { return !t; })) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
     var shares = splitShares(total, targets.length);
@@ -1419,7 +1501,7 @@
         return c.tool_id === targets[i].id && c.name.toLowerCase() === catName.toLowerCase();
       });
       if (!cat) {
-        var ins = await sb.from("expense_categories").insert({ tool_id: targets[i].id, name: catName, group_name: catGroup }).select().single();
+        var ins = await sb.from("expense_categories").insert({ tool_id: targets[i].id, name: catName, group_name: catGroup, billing_day: billingDay || null }).select().single();
         if (ins.error) { toast("Erro ao criar a categoria em " + targets[i].name + ": " + ins.error.message, true); return; }
         cat = ins.data;
         if (targets[i].id === state.activeToolId) state.categories.push(cat);
@@ -1433,7 +1515,9 @@
     if (already.length && !window.confirm('Já existe lançamento de "' + catName + '" em ' + already.length + ' das ' + targets.length + ' ferramentas marcadas neste mês. O ratear vai SUBSTITUIR esses valores. Continuar?')) return;
 
     var rows = targets.map(function (t, idx) {
-      return { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
+      var row = { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
+      if (chargedOn) row.charged_on = chargedOn; // a cobrança é uma só no cartão: mesma data em todas as partes
+      return row;
     });
     var up = await sb.from("monthly_expenses").upsert(rows, { onConflict: "tool_id,category_id,year,month" });
     if (up.error) { toast("Erro ao ratear: " + up.error.message, true); return; }
@@ -1455,6 +1539,7 @@
         '<select class="cat-edit-group" aria-label="Grupo da categoria">' +
           CAT_GROUPS.map(function (g) { return '<option value="' + g + '"' + (g === c.group_name ? " selected" : "") + ">" + g + "</option>"; }).join("") +
         "</select>" +
+        '<input type="number" class="cat-edit-day" min="1" max="31" step="1" placeholder="dia" title="Dia fixo da cobrança no cartão (1 a 31). Deixe vazio se não tem." aria-label="Dia fixo da cobrança" value="' + (c.billing_day || "") + '">' +
         '<button type="button" class="btn cat-save">Salvar</button>' +
         '<button type="button" class="btn btn-danger cat-del">Excluir</button>' +
       "</div>";
@@ -1471,8 +1556,17 @@
     renderKpis(); renderTable(); renderChart(); renderPeriodBar();
   }
 
-  function saveCategory(id, row) {
-    return updateCategory(id, row.querySelector(".cat-edit-name").value.trim(), row.querySelector(".cat-edit-group").value);
+  async function saveCategory(id, row) {
+    var cur = state.categories.find(function (c) { return c.id === id; });
+    var name = row.querySelector(".cat-edit-name").value.trim(), group = row.querySelector(".cat-edit-group").value;
+    var raw = row.querySelector(".cat-edit-day").value.trim();
+    var day = raw === "" ? null : parseInt(raw, 10);
+    if (day !== null && !(day >= 1 && day <= 31)) { toast("Dia de cobrança inválido: use de 1 a 31.", true); return; }
+    var dayChanged = cur && (day || null) !== (cur.billing_day || null);
+    var nameGroupChanged = cur && (name !== cur.name || group !== cur.group_name);
+    if (dayChanged) await setBillingDay(id, day);
+    if (nameGroupChanged || !cur) await updateCategory(id, name, group);
+    else if (!dayChanged) toast("Nada para salvar.");
   }
 
   // Renomear direto da linha do mês: o nome fica na categoria, então vale para todos os meses.

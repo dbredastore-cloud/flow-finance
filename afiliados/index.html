@@ -113,7 +113,11 @@
   .ms-item:hover { background: var(--surface-2); }
   .ms-item input { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
   .link-btn { background: none; border: none; padding: 0; color: var(--accent); font-size: 12.5px; cursor: pointer; }
-  .filters .custom-range { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); }
+  .filters .custom-range { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); }
+  .period-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .period-pills button { border-radius: 999px; padding: 6px 13px; font-size: 12.5px; }
+  .period-pills button.on, .period-pills button.on:hover { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
+  .period-label { font-size: 12px; color: var(--text-muted); }
 
   .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
   .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
@@ -341,19 +345,12 @@
     </div>
 
     <div class="filters" id="filters">
-      <select id="f-period" aria-label="Período">
-        <option value="this_month">Este mês</option>
-        <option value="last_month">Mês passado</option>
-        <option value="last_30">Últimos 30 dias</option>
-        <option value="last_90">Últimos 90 dias</option>
-        <option value="this_year">Este ano</option>
-        <option value="last_year">Ano passado</option>
-        <option value="all">Todo o histórico</option>
-        <option value="custom">Personalizado…</option>
-      </select>
+      <div class="period-pills" id="period-pills" role="group" aria-label="Período"></div>
       <span class="custom-range" id="custom-range" hidden>
-        <input type="date" id="f-from" aria-label="De"> até <input type="date" id="f-to" aria-label="Até">
+        <label>De <input type="month" id="f-from"></label>
+        <label>Até <input type="month" id="f-to"></label>
       </span>
+      <span class="period-label" id="period-label"></span>
       <div class="ms" id="f-product">
         <button type="button" class="ms-btn" id="f-product-btn" aria-haspopup="true" aria-expanded="false">
           <span id="f-product-label">Todos os produtos</span><span class="ms-caret">▾</span>
@@ -600,26 +597,82 @@
   function csvNum(v) { return v == null ? "" : String(Number(v).toFixed(2)).replace(".", ","); }
 
   /* ---------------- Período ---------------- */
+  // Mesmas opções do filtro de período do Financeiro.
+  var PERIOD_PRESETS = [
+    { id: "month", label: "Este mês" },
+    { id: "lastmonth", label: "Mês passado" },
+    { id: "last3", label: "Últimos 3 meses" },
+    { id: "year", label: "Este ano" },
+    { id: "lastyear", label: "Ano passado" },
+    { id: "all", label: "Todo o período" },
+    { id: "custom", label: "Personalizado" }
+  ];
+  var MONTHS_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  state.period = { id: "month" };
+
+  function parseMonthInput(s) {
+    var m = /^(\d{4})-(\d{2})$/.exec(s || "");
+    return m && +m[2] >= 1 && +m[2] <= 12 ? { y: +m[1], m: +m[2] - 1 } : null;
+  }
+  // [início, fim): o fim nunca passa de amanhã (não há venda no futuro).
   function periodRange() {
-    var p = $("f-period").value;
-    var now = new Date();
-    var y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
-    var tomorrow = new Date(y, m, d + 1);
-    switch (p) {
-      case "this_month": return [new Date(y, m, 1), tomorrow];
-      case "last_month": return [new Date(y, m - 1, 1), new Date(y, m, 1)];
-      case "last_30": return [new Date(y, m, d - 29), tomorrow];
-      case "last_90": return [new Date(y, m, d - 89), tomorrow];
-      case "this_year": return [new Date(y, 0, 1), tomorrow];
-      case "last_year": return [new Date(y - 1, 0, 1), new Date(y, 0, 1)];
-      case "all": return [new Date(2015, 0, 1), tomorrow];
+    var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    var tomorrow = new Date(y, m, now.getDate() + 1), r;
+    switch (state.period.id) {
+      case "lastmonth": r = [new Date(y, m - 1, 1), new Date(y, m, 1)]; break;
+      case "last3": r = [new Date(y, m - 3, 1), new Date(y, m, 1)]; break; // 3 meses fechados, sem o atual
+      case "year": r = [new Date(y, 0, 1), new Date(y + 1, 0, 1)]; break;
+      case "lastyear": r = [new Date(y - 1, 0, 1), new Date(y, 0, 1)]; break;
+      case "all": r = [new Date(2015, 0, 1), tomorrow]; break;
       case "custom":
-        var f = $("f-from").value, t = $("f-to").value;
-        var from = f ? new Date(f + "T00:00:00") : new Date(y, m, 1);
-        var to = t ? new Date(t + "T00:00:00") : new Date(y, m, d);
-        return [from, new Date(to.getFullYear(), to.getMonth(), to.getDate() + 1)];
+        var a = parseMonthInput(state.period.from) || { y: y, m: m }, b = parseMonthInput(state.period.to) || a;
+        if (a.y * 12 + a.m > b.y * 12 + b.m) { var t = a; a = b; b = t; }
+        r = [new Date(a.y, a.m, 1), new Date(b.y, b.m + 1, 1)];
+        break;
+      default: r = [new Date(y, m, 1), new Date(y, m + 1, 1)]; // "month"
     }
-    return [new Date(y, m, 1), tomorrow];
+    if (r[1] > tomorrow) r[1] = tomorrow;
+    if (r[1] <= r[0]) r[1] = new Date(r[0].getFullYear(), r[0].getMonth(), r[0].getDate() + 1);
+    return r;
+  }
+  function restorePeriod() {
+    var raw = safeGet("flow_aff_period"), per = { id: "month" };
+    try {
+      var j = JSON.parse(raw);
+      if (j && typeof j === "object" && PERIOD_PRESETS.some(function (x) { return x.id === j.id; }) && (j.id !== "custom" || (parseMonthInput(j.from) && parseMonthInput(j.to)))) per = j;
+    } catch (e) {
+      // formato antigo (texto): converte para as opções novas
+      var legacy = { this_month: "month", last_month: "lastmonth", last_30: "month", last_90: "last3", this_year: "year", last_year: "lastyear", all: "all" };
+      if (legacy[raw]) per = { id: legacy[raw] };
+    }
+    state.period = per;
+  }
+  function renderPeriodBar() {
+    var p = state.period;
+    $("period-pills").innerHTML = PERIOD_PRESETS.map(function (x) {
+      return '<button type="button" class="btn' + (p.id === x.id ? " on" : "") + '" data-p="' + x.id + '" aria-pressed="' + (p.id === x.id) + '">' + x.label + "</button>";
+    }).join("");
+    $("custom-range").hidden = p.id !== "custom";
+    if (p.id === "custom") { $("f-from").value = p.from || ""; $("f-to").value = p.to || ""; }
+    var r = periodRange(), a = r[0], b = new Date(r[1] - 1), txt = "";
+    if (p.id !== "all") {
+      txt = a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+        ? MONTHS_FULL[a.getMonth()] + "/" + a.getFullYear()
+        : MONTHS[a.getMonth()] + "/" + a.getFullYear() + " – " + MONTHS[b.getMonth()] + "/" + b.getFullYear();
+    }
+    $("period-label").textContent = txt;
+  }
+  function setPeriod(id, from, to) {
+    var p = { id: id };
+    if (id === "custom") {
+      var now = new Date();
+      p.from = from || (state.period.from) || now.getFullYear() + "-01";
+      p.to = to || (state.period.to) || now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+    }
+    state.period = p;
+    safeSet("flow_aff_period", JSON.stringify(p));
+    renderPeriodBar();
+    refreshSales();
   }
   function isoDate(dt) {
     return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
@@ -929,7 +982,7 @@
     var r = periodRange();
     var spanDays = (r[1] - r[0]) / 86400000;
     var byMonth = spanDays > 62;
-    if ($("f-period").value === "all" && sales.length) {
+    if (state.period.id === "all" && sales.length) {
       var oldest = new Date(sales[sales.length - 1].sale_created_at);
       r = [new Date(oldest.getFullYear(), oldest.getMonth(), 1), r[1]];
     }
@@ -1784,13 +1837,17 @@
     renderAll();
     writeCache();
   }
-  $("f-period").addEventListener("change", function () {
-    $("custom-range").hidden = this.value !== "custom";
-    safeSet("flow_aff_period", this.value);
-    if (this.value !== "custom") refreshSales();
+  $("period-pills").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-p]");
+    if (b && b.dataset.p !== state.period.id) setPeriod(b.dataset.p);
   });
-  $("f-from").addEventListener("change", refreshSales);
-  $("f-to").addEventListener("change", refreshSales);
+  function customMonthsChanged() {
+    var f = $("f-from").value, t = $("f-to").value;
+    if (!parseMonthInput(f) || !parseMonthInput(t)) return; // espera os dois meses
+    setPeriod("custom", f, t);
+  }
+  $("f-from").addEventListener("change", customMonthsChanged);
+  $("f-to").addEventListener("change", customMonthsChanged);
   /* Filtro de produtos com múltipla escolha (vale para todos os menus). */
   function setSelProducts(ids) {
     state.selProducts = ids;
@@ -1871,8 +1928,8 @@
     $("user-email").textContent = session.user.email;
     state.userId = session.user.id;
     try { state.yt.widths = ytCleanWidths(JSON.parse(safeGet("flow_aff_ytw"))); } catch (e) { state.yt.widths = {}; }
-    var savedPeriod = safeGet("flow_aff_period");
-    if (savedPeriod && savedPeriod !== "custom" && $("f-period").querySelector('option[value="' + savedPeriod + '"]')) $("f-period").value = savedPeriod;
+    restorePeriod();
+    renderPeriodBar();
 
     // Se esta aba já abriu o painel antes (ex.: voltou do Financeiro), mostra na hora
     // o que estava em memória e atualiza por trás.
@@ -2208,7 +2265,7 @@
 
   /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */
   var CACHE_KEY = "flow_aff_cache_v3";
-  function periodKey() { return $("f-period").value + "|" + $("f-from").value + "|" + $("f-to").value; }
+  function periodKey() { return state.period.id + "|" + (state.period.from || "") + "|" + (state.period.to || ""); }
   function readCache() {
     try {
       var c = JSON.parse(sessionStorage.getItem(CACHE_KEY) || "null");
