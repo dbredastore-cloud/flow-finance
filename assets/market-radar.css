@@ -161,7 +161,15 @@
 .mr-tools label.ck { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
 .mr-tools label.ck input { accent-color: var(--accent); }
 .mr-tools .sp { margin-left: auto; }
-table.mr-table { min-width: 1180px; }
+table.mr-table { min-width: 1380px; }
+.mr-divulga { white-space: normal; min-width: 150px; }
+.mr-tgrp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 9px; }
+.mr-tcat { flex-basis: 100%; font-size: 11px; color: var(--text-muted); letter-spacing: .04em; }
+.mr-tool { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; color: var(--text); background: rgba(var(--accent-rgb), 0.1); border: 1px solid rgba(var(--accent-rgb), 0.35); }
+.mr-tool small { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); margin-left: 3px; }
+.mr-tool.like { background: rgba(var(--warning-rgb), 0.12); border-color: var(--warning); }
+.mr-tool.soft { background: transparent; border-color: var(--border-strong); color: var(--text-dim); }
+.mr-tool.mini { padding: 1px 8px; font-size: 11.5px; margin-right: 4px; }
 table.mr-table thead th { padding: 10px 8px; }
 table.mr-table thead th.sortable { cursor: pointer; user-select: none; }
 table.mr-table thead th.sortable:hover { color: var(--text); }

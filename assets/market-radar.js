@@ -25,13 +25,21 @@
   var STATUS = [["novo", "Novo"], ["prospectar", "Prospectar"], ["contatado", "Contatado"], ["parceiro", "Parceiro"], ["descartado", "Descartado"]];
   var COLORS = ["var(--accent)", "var(--accent-3)", "var(--warning)", "var(--accent-2)"];
   var WEIGHTS_KEY = "market_weights";
+  // Categorias de plataformas/ferramentas detectadas nas descrições (ver CATALOG em market-scan/analysis.js).
+  var TOOL_CATS = [
+    ["aff", "Plataformas de afiliados"], ["mkt", "Marketplaces"], ["net", "Redes de afiliados"],
+    ["trk", "Rastreamento"], ["pg", "Páginas e funis"], ["spy", "Espionagem de anúncios"],
+    ["auto", "Automação e e-mail"], ["host", "Hospedagem"], ["ads", "Tráfego e anúncios (só citados)"]
+  ];
+  var FLOW_LIKE = { trk: "FlowTracking", pg: "FlowPages", spy: "FlowSpy" }; // categorias parecidas com as ferramentas Flow
+  var PLATFORM_CATS = ["aff", "mkt", "net"];
 
   var A = null; // dependências do painel
   var S = {
     ready: false, loading: false, running: false,
     scans: [], scan: null, channels: [], targets: {}, weights: Object.assign({}, DEFAULT_W),
     quotaUsed: 0, sort: { key: "score", dir: -1 }, compare: [],
-    filter: { text: "", minSubs: 0, hidePartners: false, onlyContact: false, status: "" }
+    filter: { text: "", minSubs: 0, hidePartners: false, onlyContact: false, status: "", tool: "" }
   };
   var logCount = 0, weightsTimer = null, resizeTimer = null;
 
@@ -109,6 +117,26 @@
     S.channels.forEach(function (c) { c.score = c.ok ? Math.round(scoreOf(c.ax, S.weights)) : null; });
   }
   function analyzed() { return S.channels.filter(function (c) { return c.ok; }); }
+
+  /* ---- plataformas e ferramentas que o canal divulga ---- */
+  // null = varredura anterior a este recurso (sem o dado).
+  function toolsOf(c) { return c.metrics && Array.isArray(c.metrics.tools) ? c.metrics.tools : null; }
+  // "Divulga" = tem link ou aparece em 2+ vídeos; plataformas de anúncio entram só como assunto citado.
+  function promoted(c) {
+    return (toolsOf(c) || []).filter(function (t) { return t.c !== "ads" && (t.l > 0 || t.v >= 2); });
+  }
+  function toolList(arr, max) {
+    var shown = arr.slice(0, max).map(function (t) { return "<b>" + esc(t.n) + "</b> (" + t.v + " víd." + (t.l ? ", " + t.l + " com link" : "") + ")"; });
+    return shown.join(", ") + (arr.length > max ? " e mais " + (arr.length - max) : "");
+  }
+  // Quantos canais divulgam cada ferramenta nesta varredura.
+  function toolMarket() {
+    var agg = {};
+    analyzed().forEach(function (c) {
+      promoted(c).forEach(function (t) { var e = agg[t.n] = agg[t.n] || { n: t.n, c: t.c, ch: 0 }; e.ch++; });
+    });
+    return Object.keys(agg).map(function (k) { return agg[k]; }).sort(function (a, b) { return b.ch - a.ch || (a.n < b.n ? -1 : 1); });
+  }
   function isPartner(c) { return !!(A.partnerIds && A.partnerIds().has(c.channel_id)); }
   function statusOf(c) { return (S.targets[c.channel_id] || {}).status || "novo"; }
 
@@ -218,6 +246,7 @@
             '<input type="search" id="mr-f-text" placeholder="Filtrar por nome…" aria-label="Filtrar por nome">' +
             '<select id="mr-f-subs" aria-label="Inscritos mínimos"><option value="0">Qualquer tamanho</option><option value="1000">1 mil+ inscritos</option><option value="10000">10 mil+</option><option value="50000">50 mil+</option><option value="100000">100 mil+</option><option value="500000">500 mil+</option></select>' +
             '<select id="mr-f-status" aria-label="Etapa do funil"><option value="">Todas as etapas</option>' + STATUS.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + "</option>"; }).join("") + "</select>" +
+            '<select id="mr-f-tool" aria-label="Filtrar por ferramenta divulgada" hidden></select>' +
             '<label class="ck"><input type="checkbox" id="mr-f-partners"> Ocultar quem já é parceiro</label>' +
             '<label class="ck"><input type="checkbox" id="mr-f-contact"> Só com contato público</label>' +
           "</div>" +
@@ -343,7 +372,7 @@
   }
   // Tudo que depende dos pesos/filtros/seleção.
   function renderAnalysis() {
-    renderKpis(); renderInsights(); renderCharts(); renderCompare(); renderHead(); renderTable();
+    renderKpis(); renderInsights(); renderCharts(); renderCompare(); renderToolFilter(); renderHead(); renderTable();
   }
 
   function renderKpis() {
@@ -412,8 +441,16 @@
     var weekly = L.filter(function (c) { return c.metrics.perWeek >= 1; }).length;
     var affN = L.filter(function (c) { return c.metrics.affShare >= 0.2; }).length;
     var kws = S.scan ? (S.scan.keywords || []).map(function (k) { return "<b>" + esc(k) + "</b>"; }).join(", ") : "";
-    $("mr-read").innerHTML = "Para " + kws + ", o radar analisou <b>" + L.length + " canais</b>. Mediana de <b>" + fmtN(subsMed) + "</b> inscritos, <b>" + fmtN(views) + "</b> views por vídeo e <b>" + pct(engMed) + "</b> de engajamento. " +
+    var read = "Para " + kws + ", o radar analisou <b>" + L.length + " canais</b>. Mediana de <b>" + fmtN(subsMed) + "</b> inscritos, <b>" + fmtN(views) + "</b> views por vídeo e <b>" + pct(engMed) + "</b> de engajamento. " +
       "<b>" + weekly + "</b> postam toda semana e <b>" + affN + "</b> já colocam links de afiliado em pelo menos 20% dos vídeos.";
+    if (L.some(function (c) { return toolsOf(c); })) {
+      var market = toolMarket();
+      var plats = market.filter(function (t) { return PLATFORM_CATS.indexOf(t.c) >= 0; }).slice(0, 4);
+      var like = market.filter(function (t) { return FLOW_LIKE[t.c]; }).slice(0, 4);
+      if (plats.length) read += " Plataformas mais divulgadas: " + plats.map(function (t) { return "<b>" + esc(t.n) + "</b> (" + t.ch + (t.ch === 1 ? " canal" : " canais") + ")"; }).join(", ") + ".";
+      if (like.length) read += " Ferramentas parecidas com as da Flow aparecem em " + like.map(function (t) { return "<b>" + esc(t.n) + "</b> (" + FLOW_LIKE[t.c] + ", " + t.ch + (t.ch === 1 ? " canal" : " canais") + ")"; }).join(", ") + ".";
+    }
+    $("mr-read").innerHTML = read;
     var cards = buildInsights();
     $("mr-cards").innerHTML = cards.map(function (x) {
       return '<div class="mr-card"><div class="tag">' + x.tag + '</div><div class="who">' + avHtml(x.ch) + "<b>" + esc(x.ch.title) + "</b></div><p>" + x.text + '</p><div class="acts">' +
@@ -565,6 +602,7 @@
     { key: "aff", label: "Afiliado", sort: true, tip: "Parte dos vídeos com links de plataformas de afiliado na descrição." },
     { key: "mom", label: "Momentum", sort: true, tip: "Views/dia dos 5 vídeos mais novos ÷ os 5 anteriores." },
     { key: "shorts", label: "Shorts", sort: true, tip: "Parte dos envios que são Shorts (até 3 min)." },
+    { key: "tools", label: "Divulga", cls: "l", tip: "Plataformas e ferramentas mais citadas nas descrições dos vídeos (com link ou em 2+ vídeos). Abra o canal para ver tudo." },
     { key: "contact", label: "Contato", tip: "E-mail ou redes que o canal deixou públicos na descrição." },
     { key: "status", label: "Funil", tip: "Em que etapa da prospecção este canal está." }
   ];
@@ -598,6 +636,23 @@
       return '<rect class="' + (v ? "" : "z") + '" x="' + (i * 5.4).toFixed(1) + '" y="' + (20 - h).toFixed(1) + '" width="4" height="' + h.toFixed(1) + '" rx="1"/>';
     }).join("") + "</svg>";
   }
+  function divulgaCell(c) {
+    if (toolsOf(c) === null) return '<span class="muted" title="Varredura anterior ao rastreio de ferramentas">—</span>';
+    var p = promoted(c);
+    if (!p.length) return '<span class="muted">—</span>';
+    var full = p.map(function (t) { return t.n + " (" + t.v + (t.l ? ", " + t.l + " com link" : "") + ")"; }).join(" · ");
+    return '<span title="' + esc(full) + '">' + p.slice(0, 2).map(function (t) { return '<span class="mr-tool mini' + (FLOW_LIKE[t.c] ? " like" : "") + '">' + esc(t.n) + "</span>"; }).join("") +
+      (p.length > 2 ? ' <span class="muted">+' + (p.length - 2) + "</span>" : "") + "</span>";
+  }
+  // Opções do filtro "divulga a ferramenta…", com quantos canais divulgam cada uma.
+  function renderToolFilter() {
+    var sel = $("mr-f-tool"), market = toolMarket();
+    if (S.filter.tool && !market.some(function (t) { return t.n === S.filter.tool; })) S.filter.tool = "";
+    sel.innerHTML = '<option value="">Divulga qualquer coisa</option>' + market.map(function (t) {
+      return '<option value="' + esc(t.n) + '"' + (t.n === S.filter.tool ? " selected" : "") + ">Divulga " + esc(t.n) + " (" + t.ch + ")</option>";
+    }).join("");
+    sel.hidden = !market.length;
+  }
   function visibleRows() {
     var f = S.filter, txt = f.text.trim().toLowerCase();
     var rows = analyzed().filter(function (c) {
@@ -606,6 +661,7 @@
       if (f.hidePartners && isPartner(c)) return false;
       if (f.onlyContact && !(c.contacts && ((c.contacts.emails || []).length || (c.contacts.links || []).length))) return false;
       if (f.status && statusOf(c) !== f.status) return false;
+      if (f.tool && !promoted(c).some(function (t) { return t.n === f.tool; })) return false;
       return true;
     });
     var k = S.sort.key, d = S.sort.dir;
@@ -640,6 +696,7 @@
         '<td class="num">' + pct(m.affShare, 0) + "</td>" +
         '<td class="num">' + mom + "</td>" +
         '<td class="num">' + pct(m.shortsPct, 0) + "</td>" +
+        '<td class="l mr-divulga">' + divulgaCell(c) + "</td>" +
         '<td class="num">' + (hasMail ? '<span title="E-mail público na descrição" class="mr-up">✉</span> ' : "") + (hasLink ? '<span title="Redes/links na descrição" class="muted">⌁</span>' : "") + (!hasMail && !hasLink ? '<span class="muted">—</span>' : "") + "</td>" +
         '<td><select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil de ' + esc(c.title) + '">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select></td></tr>";
     }).join("") : '<tr><td colspan="' + COLS.length + '" class="empty">Nenhum canal com esses filtros.</td></tr>';
@@ -697,12 +754,45 @@
     items.push({ t: "<b>" + pct(m.topicShare, 0) + "</b> dos últimos " + m.videos + " vídeos falam das suas palavras-chave (" + m.topicCount + " vídeos" + (m.topicAvgViews != null ? ", média de " + fmtN(m.topicAvgViews) + " views neles" : "") + ")." });
     if (m.affShare > 0) items.push({ t: "<b>" + pct(m.affShare, 0) + "</b> das descrições têm links de plataformas de afiliado: já divulga produtos de terceiros." });
     if (m.adsShare > 0) items.push({ t: "<b>" + pct(m.adsShare, 0) + "</b> dos vídeos tratam de Google Ads / tráfego pago." });
+    var T = toolsOf(c);
+    if (T === null) items.push({ t: "Esta varredura é anterior ao rastreio de plataformas e ferramentas. Rode uma nova varredura para ver o que o canal divulga." });
+    else {
+      var prom = promoted(c);
+      var plat = prom.filter(function (t) { return PLATFORM_CATS.indexOf(t.c) >= 0; });
+      var sim = prom.filter(function (t) { return FLOW_LIKE[t.c]; });
+      var other = prom.filter(function (t) { return PLATFORM_CATS.indexOf(t.c) < 0 && !FLOW_LIKE[t.c]; });
+      if (plat.length) items.push({ t: "Divulga as plataformas " + toolList(plat, 4) + "." });
+      if (other.length) items.push({ t: "Também indica ferramentas como " + toolList(other, 4) + "." });
+      if (sim.length) items.push({ t: "Já divulga ferramentas parecidas com as da Flow: " + sim.slice(0, 4).map(function (t) { return "<b>" + esc(t.n) + "</b> (" + FLOW_LIKE[t.c] + ")"; }).join(", ") + ". Vale confirmar exclusividade antes de propor parceria.", warn: true });
+      if (!prom.length) items.push({ t: "Não encontrei links nem menções repetidas a plataformas de afiliados ou ferramentas nas descrições dos vídeos recentes." });
+    }
     if (m.momentum != null) items.push({ t: m.momentum >= 1.1 ? "Em alta: vídeos novos rendem <b>" + dec(m.momentum) + "×</b> mais views/dia que os anteriores." : m.momentum <= 0.9 ? "Em queda: vídeos novos rendem <b>" + dec(m.momentum) + "×</b> das views/dia dos anteriores." : "Desempenho estável nos vídeos recentes.", warn: m.momentum <= 0.9 });
     if (m.lastDays > 30) items.push({ t: "Atenção: o último vídeo saiu há <b>" + m.lastDays + " dias</b>.", warn: true });
     if (m.engagement != null && m.engagement < 0.01) items.push({ t: "Atenção: engajamento abaixo de 1%.", warn: true });
     if (c.hidden_subs) items.push({ t: "O canal oculta o número de inscritos.", warn: true });
     return items;
   }
+  // Chips das plataformas/ferramentas citadas, por categoria. Número = vídeos que citam; 🔗 = com link.
+  function toolsSection(c) {
+    var T = toolsOf(c);
+    if (T === null) return "";
+    var body = "";
+    TOOL_CATS.forEach(function (cat) {
+      var items = T.filter(function (t) { return t.c === cat[0]; });
+      if (!items.length) return;
+      body += '<div class="mr-tgrp"><span class="mr-tcat">' + esc(cat[1]) + (FLOW_LIKE[cat[0]] ? " · parecido com " + FLOW_LIKE[cat[0]] : "") + "</span>" +
+        items.map(function (t) {
+          return '<span class="mr-tool' + (FLOW_LIKE[t.c] ? " like" : "") + (t.c === "ads" ? " soft" : "") + '" title="' + esc(t.n) + ": citado em " + t.v + " de " + c.metrics.videos + " vídeos" + (t.l ? ", com link em " + t.l : ", sem link") + '">' +
+            esc(t.n) + " <small>" + t.v + (t.l ? " · " + t.l + " 🔗" : "") + "</small></span>";
+        }).join("") + "</div>";
+    });
+    var links = (c.metrics.links || []).map(function (l) { return '<span class="mr-tool soft" title="Domínio que aparece em ' + l.v + ' vídeos">' + esc(l.h) + " <small>" + l.v + "</small></span>"; }).join("");
+    if (links) body += '<div class="mr-tgrp"><span class="mr-tcat">Outros links frequentes</span>' + links + "</div>";
+    if (!body) body = '<span class="muted" style="font-size:12.5px;">Nenhuma plataforma ou ferramenta conhecida nas descrições dos últimos ' + c.metrics.videos + " vídeos.</span>";
+    return '<div class="mr-d-sec"><h4>Ferramentas e parceiros que divulga</h4>' + body +
+      '<p class="mr-hint" style="margin:8px 0 0;">Lido das descrições e títulos dos últimos ' + c.metrics.videos + " vídeos. Só aparece o que está na lista de plataformas conhecidas e nos links; menção falada no vídeo não é detectada.</p></div>";
+  }
+
   function openDrawer(id) {
     var c = S.channels.filter(function (x) { return x.channel_id === id; })[0];
     if (!c || !c.ok) return;
@@ -736,6 +826,7 @@
       '<div class="mr-d-stats">' + stat("Inscritos", c.hidden_subs ? "oculto" : fmtN(c.subscribers)) + stat("Views médias", fmtN(m.avgViews)) + stat("Engajamento", pct(m.engagement)) +
         stat("Posts/semana", dec(m.perWeek)) + stat("Vídeos em 30 d", m.in30) + stat("Shorts", pct(m.shortsPct, 0)) + "</div>" +
       '<div class="mr-d-sec"><h4>Leitura do radar</h4><ul class="mr-d-list">' + readout(c).map(function (i) { return "<li" + (i.warn ? ' class="warn"' : "") + ">" + i.t + "</li>"; }).join("") + "</ul></div>" +
+      toolsSection(c) +
       '<div class="mr-d-sec"><h4>Etapa do funil</h4><select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select> " +
         '<button class="btn" type="button" data-cmp-add="' + esc(c.channel_id) + '">' + (S.compare.indexOf(c.channel_id) >= 0 ? "Remover da comparação" : "Adicionar à comparação") + "</button> " +
         '<a class="btn" href="' + chUrl(c.channel_id) + '" target="_blank" rel="noopener noreferrer">Abrir canal ↗</a></div>' +
@@ -753,11 +844,11 @@
   }
   function exportCsv() {
     var rows = visibleRows();
-    var head = ["Canal", "Handle", "URL", "Score", "Inscritos", "Views médias", "Engajamento", "Posts por semana", "Semanas ativas", "% sobre o tema", "% links de afiliado", "Momentum", "% Shorts", "Último vídeo (dias)", "E-mail", "Etapa"];
+    var head = ["Canal", "Handle", "URL", "Score", "Inscritos", "Views médias", "Engajamento", "Posts por semana", "Semanas ativas", "% sobre o tema", "% links de afiliado", "Momentum", "% Shorts", "Último vídeo (dias)", "Divulga", "E-mail", "Etapa"];
     var out = [head.map(csvCell).join(",")];
     rows.forEach(function (c) {
       var m = c.metrics;
-      out.push([c.title, c.handle, chUrl(c.channel_id), c.score, c.subscribers, m.avgViews, m.engagement, m.perWeek, m.activeWeeks, m.topicShare, m.affShare, m.momentum, m.shortsPct, m.lastDays, ((c.contacts || {}).emails || []).join(" "), statusOf(c)].map(csvCell).join(","));
+      out.push([c.title, c.handle, chUrl(c.channel_id), c.score, c.subscribers, m.avgViews, m.engagement, m.perWeek, m.activeWeeks, m.topicShare, m.affShare, m.momentum, m.shortsPct, m.lastDays, promoted(c).map(function (t) { return t.n; }).join("; "), ((c.contacts || {}).emails || []).join(" "), statusOf(c)].map(csvCell).join(","));
     });
     var blob = new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
     var a = document.createElement("a");
@@ -810,6 +901,7 @@
     $("mr-f-text").addEventListener("input", function () { S.filter.text = this.value; renderTable(); });
     $("mr-f-subs").addEventListener("change", function () { S.filter.minSubs = Number(this.value); renderTable(); });
     $("mr-f-status").addEventListener("change", function () { S.filter.status = this.value; renderTable(); });
+    $("mr-f-tool").addEventListener("change", function () { S.filter.tool = this.value; renderTable(); });
     $("mr-f-partners").addEventListener("change", function () { S.filter.hidePartners = this.checked; renderTable(); });
     $("mr-f-contact").addEventListener("change", function () { S.filter.onlyContact = this.checked; renderTable(); });
 

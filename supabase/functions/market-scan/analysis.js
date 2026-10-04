@@ -13,6 +13,67 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{
 const URL_RE = /https?:\/\/[^\s)<>"']+/g;
 const SOCIAL_HOST = /(^|\.)(instagram\.com|t\.me|telegram\.me|wa\.me|api\.whatsapp\.com|chat\.whatsapp\.com|linktr\.ee|bio\.link|beacons\.ai|tiktok\.com|facebook\.com|x\.com|twitter\.com|linkedin\.com|kwai\.com)$/;
 
+/* Plataformas e ferramentas que o canal divulga. Cada item: [nome, categoria, regex]. O regex roda no texto
+   normalizado (título + descrição) e nos links da descrição; menção = aparece no texto, link = aparece num link.
+   Categorias: aff plataforma de afiliados · mkt marketplace · net rede de afiliados · ads anúncios ·
+   trk rastreamento (≈ FlowTracking) · pg páginas e funis (≈ FlowPages) · spy espionagem (≈ FlowSpy) ·
+   auto automação/e-mail · host hospedagem. */
+const CATALOG = [
+  ["Hotmart", "aff", /hotmart|hotm\.io/], ["Kiwify", "aff", /kiwify/], ["Eduzz", "aff", /eduzz|edz\.la/],
+  ["Monetizze", "aff", /monetizze/], ["Braip", "aff", /braip/], ["Ticto", "aff", /ticto\.(app|com)|\bticto\b/],
+  ["PerfectPay", "aff", /perfectpay/], ["Lastlink", "aff", /lastlink/], ["ClickBank", "aff", /clickbank/],
+  ["Digistore24", "aff", /digistore24/],
+  ["Amazon", "mkt", /amzn\.to|amazon\.com/], ["Shopee", "mkt", /shope\.ee|shopee\./],
+  ["Mercado Livre", "mkt", /mercadolivre|mercadolibre|meli\.la/], ["Magalu", "mkt", /magazinevoce|magalu/],
+  ["AliExpress", "mkt", /aliexpress/],
+  ["Awin", "net", /awin1|awin\.com/], ["Lomadee", "net", /lomadee/], ["Rakuten", "net", /rakuten/],
+  ["Google Ads", "ads", /google ads|adwords|ads\.google\.com/], ["Meta Ads", "ads", /meta ads|facebook ads|business\.facebook\.com/],
+  ["TikTok Ads", "ads", /tiktok ads|ads\.tiktok\.com/],
+  ["Utmify", "trk", /utmify/], ["RedTrack", "trk", /redtrack/], ["Voluum", "trk", /voluum/], ["Keitaro", "trk", /keitaro/],
+  ["ClickMagick", "trk", /clickmagick/], ["Hyros", "trk", /hyros/], ["Trackdesk", "trk", /trackdesk/],
+  ["Elementor", "pg", /elementor/], ["ClickFunnels", "pg", /clickfunnels/], ["Leadpages", "pg", /leadpages/],
+  ["Unbounce", "pg", /unbounce/], ["Instapage", "pg", /instapage/], ["Systeme.io", "pg", /systeme\.io/],
+  ["Builderall", "pg", /builderall/], ["Wix", "pg", /wixsite|\bwix\.com|\bwix\b/], ["WordPress", "pg", /wordpress/],
+  ["BigSpy", "spy", /bigspy/], ["AdSpy", "spy", /adspy/], ["PiPiAds", "spy", /pipiads/], ["Minea", "spy", /\bminea\b/],
+  ["Foreplay", "spy", /foreplay/], ["SpyFu", "spy", /spyfu/], ["Semrush", "spy", /semrush/],
+  ["Biblioteca de Anúncios", "spy", /ads\/library|biblioteca de anuncios/],
+  ["ManyChat", "auto", /manychat/], ["ActiveCampaign", "auto", /activecampaign/], ["RD Station", "auto", /rdstation|rd station/],
+  ["Mailchimp", "auto", /mailchimp/], ["Zapier", "auto", /zapier/],
+  ["Hostinger", "host", /hostinger/], ["HostGator", "host", /hostgator/], ["GoDaddy", "host", /godaddy/], ["Locaweb", "host", /locaweb/],
+];
+const SHORTENERS = /^(bit\.ly|tinyurl\.com|goo\.gl|t\.co|lnkd\.in|is\.gd|ow\.ly|buff\.ly|cutt\.ly|rb\.gy|encr\.pw)$/;
+const OWN_HOSTS = /(^|\.)(youtube\.com|youtu\.be|google\.com|googleusercontent\.com|goo\.gl)$/;
+
+/** Conta, nos vídeos, as plataformas/ferramentas citadas e os domínios mais repetidos nos links. */
+export function detectTools(vs) {
+  const counts = new Map(); // nome → { c, v, l }
+  const hosts = new Map();  // domínio → nº de vídeos
+  for (const v of vs) {
+    const text = norm(`${v.title} ${v.desc}`);
+    const urls = String(v.desc ?? "").match(URL_RE) ?? [];
+    const linkText = urls.join(" ").toLowerCase();
+    for (const [name, cat, re] of CATALOG) {
+      const mention = re.test(text), link = re.test(linkText);
+      if (!mention && !link) continue;
+      const e = counts.get(name) ?? { n: name, c: cat, v: 0, l: 0 };
+      e.v++; if (link) e.l++;
+      counts.set(name, e);
+    }
+    const seen = new Set();
+    for (const u of urls) {
+      let host = "";
+      try { host = new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch { continue; }
+      if (!host || seen.has(host) || SOCIAL_HOST.test(host) || OWN_HOSTS.test(host) || SHORTENERS.test(host)) continue;
+      if (CATALOG.some(([, , re]) => re.test(host))) continue;
+      seen.add(host);
+      hosts.set(host, (hosts.get(host) ?? 0) + 1);
+    }
+  }
+  const tools = [...counts.values()].sort((a, b) => b.l * 2 + b.v - (a.l * 2 + a.v)).slice(0, 14);
+  const links = [...hosts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([h, n]) => ({ h: h.slice(0, 60), v: n }));
+  return { tools, links };
+}
+
 export const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /** Devolve uma função texto → boolean: o texto fala de alguma das palavras-chave? */
@@ -102,8 +163,11 @@ export function analyzeVideos(videos, match, now = Date.now()) {
     if (w < 12) weekly[11 - w]++;
   }
 
+  const { tools, links } = detectTools(vs);
   const metrics = {
     videos: n,
+    tools,
+    links,
     perWeek: r1(perWeek),
     in30,
     lastDays: Math.floor(age(vs[0])),
