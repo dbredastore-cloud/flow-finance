@@ -265,6 +265,9 @@
   .split-opt { display: flex; align-items: center; gap: 6px; flex-basis: 100%; font-size: 12px; color: var(--text-dim); cursor: pointer; }
   .split-opt input { accent-color: var(--accent); }
   .split-hint { flex-basis: 100%; font-size: 11.5px; color: var(--text-muted); }
+  .split-tools { display: flex; flex-wrap: wrap; gap: 4px 14px; flex-basis: 100%; padding-left: 20px; }
+  .split-tools label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+  .split-tools input { accent-color: var(--accent); }
   .cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .cat-row input[type=text], .cat-row select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .cat-row input[type=text] { flex: 1; min-width: 160px; }
@@ -290,6 +293,8 @@
   .tool-btn.home-btn { margin-bottom: 6px; font-weight: 700; }
   .empty-note { padding: 28px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
   @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } .home-kpis { grid-template-columns: repeat(2, 1fr); } }
+  .exp-del { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 13px; line-height: 1; }
+  .exp-del:hover { color: var(--critical); background: rgba(var(--critical-rgb), .12); }
   .cat-rename { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 14px; line-height: 1; }
   .cat-rename:hover { color: var(--accent); background: var(--surface-2); }
 
@@ -1205,11 +1210,12 @@
       var catName = item.category_name || "?";
       return '<div class="expense-line">' +
         '<span class="cat-name">' + escHtml(catName) +
-          (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais (FlowPages, FlowTracking e FlowSpy) neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
+          (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
+        '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir esta despesa só deste mês (a categoria continua)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button>' +
         '</div>';
     }).join("");
 
@@ -1226,7 +1232,11 @@
             '<select id="new-cat-select-' + m + '"><option value="">+ nova categoria</option>' + catOptions + "</select>" +
             '<input type="number" step="0.01" placeholder="R$" class="amount" id="new-cat-amount-' + m + '">' +
             '<button class="btn" id="add-exp-btn-' + m + '">Adicionar</button>' +
-            '<label class="split-opt"><input type="checkbox" id="split-chk-' + m + '"> Ratear o valor cheio entre FlowPages, FlowTracking e FlowSpy</label>' +
+            '<label class="split-opt"><input type="checkbox" id="split-chk-' + m + '"> Ratear o valor cheio entre ferramentas</label>' +
+            '<div class="split-tools" id="split-tools-' + m + '" hidden>' + state.tools.map(function (t) {
+              var on = ["flowpages", "flowtracking", "flowspy"].indexOf(t.slug) !== -1;
+              return '<label><input type="checkbox" class="split-tool" value="' + escHtml(t.id) + '"' + (on ? " checked" : "") + "> " + escHtml(t.name) + "</label>";
+            }).join("") + "</div>" +
             '<span class="split-hint" id="split-hint-' + m + '" hidden></span>' +
           "</div>" +
           '<div class="new-cat-fields" id="new-cat-fields-' + m + '">' +
@@ -1258,6 +1268,12 @@
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
     });
+    wrap.querySelectorAll(".exp-del").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var item = items.find(function (i) { return String(i.id) === btn.dataset.itemId; });
+        if (item) deleteExpense(item, m);
+      });
+    });
     wrap.querySelectorAll(".cat-group").forEach(function (sel) {
       sel.addEventListener("change", function () {
         var cur = state.categories.find(function (c) { return c.id === sel.dataset.catId; });
@@ -1283,19 +1299,36 @@
     var splitChk = document.getElementById("split-chk-" + m);
     var splitAmount = document.getElementById("new-cat-amount-" + m);
     var splitHint = document.getElementById("split-hint-" + m);
+    var splitTools = document.getElementById("split-tools-" + m);
     function updateSplitHint() {
       splitAmount.placeholder = splitChk.checked ? "Valor cheio R$" : "R$";
-      var total = parseFloat(splitAmount.value);
+      splitTools.hidden = !splitChk.checked;
       if (!splitChk.checked) { splitHint.hidden = true; return; }
       splitHint.hidden = false;
-      if (isNaN(total) || total <= 0) { splitHint.textContent = "Digite o valor cheio — ele será dividido em 3 partes iguais."; return; }
-      var shares = splitShares(total, 3);
-      splitHint.textContent = "Cada ferramenta recebe " + shares.map(fmtBRL).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(" / ") + " (total " + fmtBRL(total) + "). Se a categoria não existir nas outras ferramentas, ela é criada.";
+      var total = parseFloat(splitAmount.value), n = selectedSplitTools(m).length;
+      if (n < 2) { splitHint.textContent = "Marque pelo menos 2 ferramentas para dividir o valor."; return; }
+      if (isNaN(total) || total <= 0) { splitHint.textContent = "Digite o valor cheio — ele será dividido em " + n + " partes iguais."; return; }
+      var shares = splitShares(total, n);
+      splitHint.textContent = "Cada ferramenta marcada recebe " + shares.map(fmtBRL).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(" / ") + " (total " + fmtBRL(total) + "). Se a categoria não existir nas outras ferramentas, ela é criada.";
     }
     splitChk.addEventListener("change", updateSplitHint);
     splitAmount.addEventListener("input", updateSplitHint);
+    splitTools.addEventListener("change", updateSplitHint);
     var saveRevBtn = document.getElementById("save-rev-btn-" + m);
     if (saveRevBtn) saveRevBtn.addEventListener("click", function () { saveRevenue(m); });
+  }
+
+  // Apaga só o lançamento daquele mês; a categoria e os outros meses ficam como estão.
+  async function deleteExpense(item, m) {
+    var msg = 'Excluir "' + (item.category_name || "esta despesa") + '" (' + fmtBRL(Number(item.amount)) + ") de " + ymFull(m) + "? Só este mês é apagado; a categoria continua."
+      + (item.split_total ? "\n\nEsta despesa foi rateada: as partes das outras ferramentas não são apagadas." : "");
+    if (!window.confirm(msg)) return;
+    var res = await sb.from("monthly_expenses").delete().eq("id", item.id).select();
+    if (res.error) { toast("Erro ao excluir: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para excluir esta despesa.", true); return; }
+    invalidateSummaryCache([state.activeToolId]);
+    toast('Despesa "' + (item.category_name || "") + '" de ' + ymFull(m) + " excluída.");
+    await refreshMonth(m);
   }
 
   async function saveExpenseAmount(itemId, value, m) {
@@ -1318,12 +1351,14 @@
     if (!categoryId) { toast("Selecione ou crie uma categoria.", true); return; }
     var split = document.getElementById("split-chk-" + m).checked;
     if (split && amount <= 0) { toast("Informe o valor cheio a ratear.", true); return; }
+    var splitIds = split ? selectedSplitTools(m) : [];
+    if (split && splitIds.length < 2) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
 
     if (categoryId === "__new__") {
       var name = document.getElementById("new-cat-name-" + m).value.trim();
       var group = document.getElementById("new-cat-group-" + m).value;
       if (!name) { toast("Digite o nome da nova categoria.", true); return; }
-      if (split) { await addSplitExpense(m, name, group, amount); return; }
+      if (split) { await addSplitExpense(m, name, group, amount, splitIds); return; }
       var dup = state.categories.find(function (c) { return c.name.toLowerCase() === name.toLowerCase(); });
       if (dup) {
         categoryId = dup.id;
@@ -1336,7 +1371,7 @@
     } else if (split) {
       var chosen = state.categories.find(function (c) { return c.id === categoryId; });
       if (!chosen) { toast("Categoria não encontrada.", true); return; }
-      await addSplitExpense(m, chosen.name, chosen.group_name, amount);
+      await addSplitExpense(m, chosen.name, chosen.group_name, amount, splitIds);
       return;
     }
 
@@ -1363,12 +1398,16 @@
     saveFinCache();
   }
 
-  // Valor cheio (ex.: Biancode) dividido igualmente entre FlowPages, FlowTracking e FlowSpy.
-  async function addSplitExpense(m, catName, catGroup, total) {
-    var targets = ["flowpages", "flowtracking", "flowspy"].map(function (slug) {
-      return state.tools.find(function (t) { return t.slug === slug; });
-    });
-    if (targets.some(function (t) { return !t; })) { toast("Não encontrei as três ferramentas para ratear.", true); return; }
+  // Ferramentas marcadas para o rateio daquele mês (na ordem do menu).
+  function selectedSplitTools(m) {
+    var ids = Array.prototype.map.call(document.querySelectorAll("#split-tools-" + m + " .split-tool:checked"), function (c) { return c.value; });
+    return state.tools.filter(function (t) { return ids.indexOf(t.id) !== -1; }).map(function (t) { return t.id; });
+  }
+
+  // Valor cheio (ex.: Biancode) dividido igualmente entre as ferramentas escolhidas.
+  async function addSplitExpense(m, catName, catGroup, total, pickedIds) {
+    var targets = (pickedIds || []).map(function (id) { return state.tools.find(function (t) { return t.id === id; }); });
+    if (targets.length < 2 || targets.some(function (t) { return !t; })) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
     var shares = splitShares(total, targets.length);
     var toolIds = targets.map(function (t) { return t.id; });
 
@@ -1391,7 +1430,7 @@
     var exRes = await sb.from("monthly_expenses").select("tool_id, amount").eq("year", ymY(m)).eq("month", ymM(m)).in("category_id", catIds);
     if (exRes.error) { toast("Erro ao conferir lançamentos: " + exRes.error.message, true); return; }
     var already = (exRes.data || []).filter(function (e) { return toolIds.indexOf(e.tool_id) !== -1; });
-    if (already.length && !window.confirm('Já existe lançamento de "' + catName + '" em ' + already.length + ' das 3 ferramentas neste mês. O ratear vai SUBSTITUIR esses valores. Continuar?')) return;
+    if (already.length && !window.confirm('Já existe lançamento de "' + catName + '" em ' + already.length + ' das ' + targets.length + ' ferramentas marcadas neste mês. O ratear vai SUBSTITUIR esses valores. Continuar?')) return;
 
     var rows = targets.map(function (t, idx) {
       return { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
@@ -1399,7 +1438,7 @@
     var up = await sb.from("monthly_expenses").upsert(rows, { onConflict: "tool_id,category_id,year,month" });
     if (up.error) { toast("Erro ao ratear: " + up.error.message, true); return; }
     invalidateSummaryCache(toolIds);
-    toast("Valor de " + fmtBRL(total) + " rateado em 3 ferramentas.");
+    toast("Valor de " + fmtBRL(total) + " rateado entre " + targets.map(function (t) { return t.name; }).join(", ") + ".");
     await refreshMonth(m);
   }
 
