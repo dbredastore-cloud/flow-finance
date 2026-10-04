@@ -69,6 +69,8 @@
   --chart-cap: #b6ffd6;
   --star: #f5c542;
   --star-text: #f5c542;
+  /* uma cor por ferramenta (gráficos empilhados da Home) */
+  --c-pages: #38b2f8; --c-tracking: #a78bfa; --c-spy: #22e37a; --c-subs: #f7c948;
 }
 
 /* ---------- Modo claro ---------- */
@@ -129,6 +131,7 @@
   --chart-cap: #08733f;
   --star: #946000;
   --star-text: #855400;
+  --c-pages: #0369a1; --c-tracking: #6d28d9; --c-spy: #047857; --c-subs: #92400e;
 }
 
 html { background: var(--bg); }
@@ -291,6 +294,11 @@ input:disabled { opacity: .6; }
 .kpi:nth-child(4) { animation-delay: .12s; } .kpi:nth-child(5) { animation-delay: .16s; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Telas estreitas: um cartão por linha, para o valor em R$ não ser cortado. */
+@media (max-width: 480px) {
+  .kpi-row, .home-kpis, .health-kpis { grid-template-columns: 1fr; }
 }
 
 /* ---------- Gráficos (classes usadas pelo SVG) ---------- */
