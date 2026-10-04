@@ -276,10 +276,12 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/market-radar.css">
 <script src="../assets/flow-theme.js"></script>
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
+<script src="../assets/market-radar.js"></script>
 </head>
 <body>
 
@@ -319,6 +321,7 @@
       <button class="nav-btn nav-flow" data-view="flowinf">★ Influencers Flow</button>
       <button class="nav-btn" data-view="products">Produtos</button>
       <button class="nav-btn" data-view="youtube">YouTube</button>
+      <button class="nav-btn" data-view="mercado">◎ Rastrear Mercado</button>
       <div class="nav-sep"></div>
       <a class="nav-btn" href="../financeiro/">Financeiro</a>
     </nav>
@@ -470,6 +473,9 @@
         </table></div>
       </section>
     </section>
+
+    <!-- Rastrear Mercado (assets/market-radar.js) -->
+    <section id="view-mercado" hidden style="position:relative;"></section>
   </main>
 </div>
 
@@ -897,6 +903,7 @@
     else if (v === "products") renderProducts(sales);
     else if (v === "youtube") renderYoutube();
     else if (v === "flowinf") renderFlowInf();
+    else if (v === "mercado") window.MarketRadar.show();
   }
 
   function kpi(label, value, sub, tip) {
@@ -1745,18 +1752,30 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado" };
   function setView(v) {
     state.view = v;
     safeSet("flow_aff_view", v);
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
-    $("filters").hidden = v === "flowinf"; // contratos usam o próprio período
+    $("filters").hidden = v === "flowinf" || v === "mercado"; // contratos e radar não usam o período/produtos do topo
+    window.MarketRadar.hide();
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
     if (state.filtered) renderView(v);
   }
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
     b.addEventListener("click", function () { setView(b.dataset.view); });
+  });
+  window.MarketRadar.init({
+    root: $("view-mercado"),
+    sb: sb,
+    toast: toast,
+    userId: function () { return state.userId; },
+    partnerIds: function () {
+      var ids = new Set();
+      (state.yt.channels || []).forEach(function (x) { if (x.c && x.c.channel_id) ids.add(x.c.channel_id); });
+      return ids;
+    }
   });
 
   async function refreshSales() {

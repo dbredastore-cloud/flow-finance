@@ -1,0 +1,919 @@
+/* Rastrear Mercado (menu do painel de afiliados).
+   Varre o YouTube por palavras-chave (Edge Function market-scan), analisa os canais encontrados e mostra
+   ranking, comparação e leitura automática de quem tem mais potencial de parceria com as ferramentas Flow.
+   Uso: MarketRadar.init({ root, sb, userId, toast, partnerIds }); MarketRadar.show(); */
+(function () {
+  "use strict";
+
+  var DAILY_CAP = 6000;
+  var PRESETS = ["afiliado google ads", "tráfego pago afiliado", "como ser afiliado", "hotmart afiliado", "kiwify afiliado",
+    "gestor de tráfego", "renda extra afiliado", "dropshipping google ads"];
+  var DEPTH = {
+    quick: { pages: 1, maxChannels: 25, label: "Rápida · 1 página por termo · até 25 canais" },
+    deep: { pages: 2, maxChannels: 40, label: "Profunda · 2 páginas por termo · até 40 canais" },
+    max: { pages: 3, maxChannels: 60, label: "Máxima · 3 páginas por termo · até 60 canais" }
+  };
+  var AXES = [
+    { key: "reach", label: "Alcance", tip: "Views médias dos últimos 10 vídeos, em escala logarítmica: 1 mil = 0, 1 milhão = 100." },
+    { key: "eng", label: "Engajamento", short: "Engajam.", tip: "(Curtidas + comentários) ÷ views dos últimos 10 vídeos. 0% = 0, 6% ou mais = 100." },
+    { key: "freq", label: "Recorrência", tip: "60% pela média de posts por semana (3 por semana = 100) + 40% por quantas das últimas 12 semanas tiveram vídeo novo." },
+    { key: "topic", label: "Aderência ao tema", short: "Tema", tip: "Parte dos últimos 50 envios (título ou descrição) que fala das suas palavras-chave. 60% ou mais = 100." },
+    { key: "aff", label: "Afinidade c/ afiliados", short: "Afiliados", tip: "Mistura de: descrições com links de plataformas de afiliado (Hotmart, Kiwify, Eduzz…) e vídeos sobre Google Ads/tráfego pago. 50% = 100." },
+    { key: "mom", label: "Momentum", tip: "Views/dia dos 5 vídeos mais novos ÷ os 5 anteriores. 0,5× = 0, 1× = 50, 2× ou mais = 100. Sem dados suficientes = 50." }
+  ];
+  var DEFAULT_W = { reach: 20, eng: 20, freq: 15, topic: 25, aff: 15, mom: 5 };
+  var STATUS = [["novo", "Novo"], ["prospectar", "Prospectar"], ["contatado", "Contatado"], ["parceiro", "Parceiro"], ["descartado", "Descartado"]];
+  var COLORS = ["var(--accent)", "var(--accent-3)", "var(--warning)", "var(--accent-2)"];
+  var WEIGHTS_KEY = "market_weights";
+
+  var A = null; // dependências do painel
+  var S = {
+    ready: false, loading: false, running: false,
+    scans: [], scan: null, channels: [], targets: {}, weights: Object.assign({}, DEFAULT_W),
+    quotaUsed: 0, sort: { key: "score", dir: -1 }, compare: [],
+    filter: { text: "", minSubs: 0, hidePartners: false, onlyContact: false, status: "" }
+  };
+  var logCount = 0, weightsTimer = null, resizeTimer = null;
+
+  /* ---------------- utilidades ---------------- */
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+  function median(arr) {
+    var v = arr.filter(function (x) { return x != null && isFinite(x); }).sort(function (a, b) { return a - b; });
+    if (!v.length) return null;
+    var m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+  function fmtN(n) {
+    if (n == null || !isFinite(n)) return "—";
+    n = Number(n);
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(".", ",") + " mi";
+    if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(".", ",") + " mil";
+    return String(Math.round(n));
+  }
+  function fmtInt(n) { return n == null ? "—" : Number(n).toLocaleString("pt-BR"); }
+  function pct(x, d) { return x == null ? "—" : (x * 100).toFixed(d == null ? 1 : d).replace(".", ",") + "%"; }
+  function dec(x, d) { return x == null ? "—" : Number(x).toFixed(d == null ? 1 : d).replace(".", ","); }
+  function fmtDate(ms) { return new Date(ms).toLocaleDateString("pt-BR"); }
+  function fmtDateTime(iso) { var d = new Date(iso); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+  function chUrl(id) { return "https://www.youtube.com/channel/" + encodeURIComponent(id); }
+  function vidUrl(id) { return "https://www.youtube.com/watch?v=" + encodeURIComponent(id); }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function ptMidnight() {
+    var now = new Date();
+    var parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(now);
+    var g = function (t) { var p = parts.filter(function (x) { return x.type === t; })[0]; return p ? Number(p.value) : 0; };
+    return new Date(now.getTime() - ((g("hour") % 24) * 3600 + g("minute") * 60 + g("second")) * 1000);
+  }
+  function parseKeywords(raw) {
+    var seen = {}, out = [];
+    String(raw || "").split(/[,;\n]+/).forEach(function (k) {
+      k = k.trim().replace(/\s+/g, " ").slice(0, 80);
+      var key = k.toLowerCase();
+      if (k && !seen[key]) { seen[key] = 1; out.push(k); }
+    });
+    return out.slice(0, 5);
+  }
+  function estimate(nKw, o) { return nKw * o.pages * 100 + Math.ceil(o.maxChannels / 50) + o.maxChannels * 2; }
+
+  /* ---------------- pontuação ---------------- */
+  function axisValues(ch) {
+    var m = ch.metrics;
+    if (!m || !m.videos) return null;
+    var momentum = m.momentum;
+    return {
+      reach: clamp(((Math.log(Math.max(m.avgViews || 1, 1)) / Math.LN10) - 3) / 3 * 100, 0, 100),
+      eng: clamp((m.engagement || 0) / 0.06 * 100, 0, 100),
+      freq: clamp((0.6 * Math.min((m.perWeek || 0) / 3, 1) + 0.4 * ((m.activeWeeks || 0) / 12)) * 100, 0, 100),
+      topic: clamp((m.topicShare || 0) / 0.6 * 100, 0, 100),
+      aff: clamp((((m.affShare || 0) * 0.6 + (m.adsShare || 0) * 0.4) / 0.5) * 100, 0, 100),
+      mom: momentum == null ? 50 : clamp(50 + 50 * (Math.log(Math.max(momentum, 0.01)) / Math.LN2), 0, 100)
+    };
+  }
+  function scoreOf(ax, w) {
+    var tot = 0, sum = 0;
+    AXES.forEach(function (a) { tot += w[a.key]; sum += w[a.key] * ax[a.key]; });
+    return tot ? sum / tot : 0;
+  }
+  function prepare() {
+    S.channels.forEach(function (c) {
+      c.ax = axisValues(c);
+      c.ok = !!c.ax;
+    });
+    rescore();
+  }
+  function rescore() {
+    S.channels.forEach(function (c) { c.score = c.ok ? Math.round(scoreOf(c.ax, S.weights)) : null; });
+  }
+  function analyzed() { return S.channels.filter(function (c) { return c.ok; }); }
+  function isPartner(c) { return !!(A.partnerIds && A.partnerIds().has(c.channel_id)); }
+  function statusOf(c) { return (S.targets[c.channel_id] || {}).status || "novo"; }
+
+  /* ---------------- chamadas ---------------- */
+  async function call(body) {
+    var res = await A.sb.functions.invoke("market-scan", { body: body });
+    var data = res.data;
+    if (res.error && !(data && data.error)) {
+      try { data = await res.error.context.json(); } catch (e) { data = { ok: false, error: res.error.message || "falha na chamada" }; }
+    }
+    return data || { ok: false, error: "sem resposta" };
+  }
+  async function loadScans() {
+    var r = await A.sb.from("market_scans").select("id, created_at, keywords, options, status, candidates, analyzed, quota_units, error").order("created_at", { ascending: false }).limit(30);
+    if (r.error) throw r.error;
+    S.scans = r.data || [];
+    var since = ptMidnight().getTime();
+    S.quotaUsed = S.scans.reduce(function (s, x) { return s + (Date.parse(x.created_at) >= since ? (x.quota_units || 0) : 0); }, 0);
+  }
+  async function loadTargets() {
+    var r = await A.sb.from("market_targets").select("channel_id, status");
+    if (r.error) throw r.error;
+    S.targets = {};
+    (r.data || []).forEach(function (t) { S.targets[t.channel_id] = t; });
+  }
+  async function loadWeights() {
+    var local = null;
+    try { local = JSON.parse(safeGet("mr_weights")); } catch (e) {}
+    if (local) S.weights = cleanWeights(local);
+    var r = await A.sb.from("ui_prefs").select("value").eq("key", WEIGHTS_KEY).maybeSingle();
+    if (!r.error && r.data && !weightsTimer) { S.weights = cleanWeights(r.data.value); safeSet("mr_weights", JSON.stringify(S.weights)); }
+  }
+  function cleanWeights(raw) {
+    var w = {};
+    AXES.forEach(function (a) { var n = Number(raw && raw[a.key]); w[a.key] = isFinite(n) ? clamp(Math.round(n), 0, 40) : DEFAULT_W[a.key]; });
+    if (!AXES.some(function (a) { return w[a.key] > 0; })) return Object.assign({}, DEFAULT_W);
+    return w;
+  }
+  function saveWeights() {
+    safeSet("mr_weights", JSON.stringify(S.weights));
+    clearTimeout(weightsTimer);
+    weightsTimer = setTimeout(async function () {
+      weightsTimer = null;
+      var r = await A.sb.from("ui_prefs").upsert({ user_id: A.userId(), key: WEIGHTS_KEY, value: S.weights, updated_at: new Date().toISOString() }, { onConflict: "user_id,key" });
+      if (r.error) console.warn("market_weights:", r.error);
+    }, 700);
+  }
+  async function openScan(id) {
+    var r = await A.sb.from("market_channels").select("*").eq("scan_id", id);
+    if (r.error) throw r.error;
+    S.scan = S.scans.filter(function (s) { return s.id === id; })[0] || null;
+    S.channels = r.data || [];
+    S.compare = [];
+    safeSet("mr_last_scan", id);
+    prepare();
+    renderResults();
+  }
+
+  /* ---------------- esqueleto ---------------- */
+  function build(root) {
+    root.innerHTML =
+      '<section class="mr-hero" aria-label="Painel de comando do radar">' +
+        '<div class="mr-scanlines"></div>' +
+        '<div class="mr-radar" id="mr-radar" aria-hidden="true"><i></i><i></i><i></i></div>' +
+        '<div class="mr-hero-main">' +
+          '<div class="mr-kicker"><span>Radar de mercado · YouTube</span><span class="mr-online">Sistema online</span></div>' +
+          '<div class="mr-title">Rastrear Mercado<small>espionagem de concorrência e parceiros</small></div>' +
+          '<form class="mr-cmd" id="mr-form" autocomplete="off">' +
+            '<label class="mr-input"><span class="mr-prompt">&gt;_</span>' +
+              '<input id="mr-q" type="text" maxlength="400" placeholder="palavras-chave separadas por vírgula · ex: afiliado google ads, tráfego pago" aria-label="Palavras-chave para rastrear"></label>' +
+            '<button class="btn btn-primary mr-go" id="mr-go" type="submit">Iniciar varredura</button>' +
+          '</form>' +
+          '<div class="mr-chips" id="mr-chips" aria-label="Sugestões de busca"></div>' +
+          '<div class="mr-opts">' +
+            '<label>Profundidade <select id="mr-depth">' + Object.keys(DEPTH).map(function (k) { return '<option value="' + k + '">' + esc(DEPTH[k].label) + "</option>"; }).join("") + "</select></label>" +
+            '<label>Idioma <select id="mr-lang"><option value="pt">Português (Brasil)</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="any">Qualquer</option></select></label>' +
+            '<label>Vídeos publicados <select id="mr-since"><option value="90d">nos últimos 90 dias</option><option value="1y" selected>no último ano</option><option value="any">em qualquer época</option></select></label>' +
+            '<span class="mr-est" id="mr-est"></span>' +
+          "</div>" +
+        "</div>" +
+        '<div class="mr-gauge" id="mr-gauge"></div>' +
+      "</section>" +
+      '<section class="mr-console" id="mr-console" hidden>' +
+        '<div class="mr-console-head"><span>Terminal de varredura</span><span class="mr-pct" id="mr-pct">0%</span></div>' +
+        '<div class="mr-progress"><i id="mr-prog"></i></div>' +
+        '<div class="mr-log" id="mr-log" role="log" aria-live="polite"></div>' +
+      "</section>" +
+      '<div id="mr-empty" class="mr-empty"><b>Aguardando alvo</b>Digite palavras-chave (ou clique numa sugestão) e inicie a varredura.<br>O radar encontra canais que falam do assunto, mede alcance, engajamento, recorrência e afinidade com afiliados, e ranqueia quem tem mais potencial de parceria.</div>' +
+      '<div id="mr-results" hidden>' +
+        '<div class="mr-bar-top"><select id="mr-scan-sel" class="grow" aria-label="Varredura"></select>' +
+          '<button class="btn" id="mr-csv" type="button">Exportar CSV</button><button class="btn" id="mr-del" type="button">Apagar varredura</button></div>' +
+        '<div class="mr-kpis" id="mr-kpis"></div>' +
+        '<section class="panel"><div class="panel-head"><h3>Veredito do radar</h3><span class="muted" style="font-size:12px;">Análise automática dos dados coletados</span></div>' +
+          '<p class="mr-read" id="mr-read"></p><div class="mr-cards" id="mr-cards"></div></section>' +
+        '<div class="mr-grid">' +
+          '<section class="panel"><div class="panel-head"><h3>Mapa do mercado</h3></div>' +
+            '<p class="mr-hint">Cada bolha é um canal: quanto mais à direita, mais inscritos; quanto mais acima, mais engajamento; o tamanho é a média de views. Passe o mouse para detalhes, clique para abrir a análise.</p>' +
+            '<div class="mr-chart" id="mr-bubbles"></div>' +
+            '<div class="mr-legend"><span><i style="background:var(--accent)"></i>Canal do mercado</span><span><i style="background:var(--accent-3)"></i>Já é parceiro</span><span><i style="background:var(--warning)"></i>Selecionado p/ comparar</span></div></section>' +
+          '<section class="panel"><div class="panel-head"><h3>Radar de comparação</h3></div>' +
+            '<p class="mr-hint" id="mr-radar-hint"></p><div class="mr-chart" id="mr-radar-cmp"></div><div class="mr-legend" id="mr-radar-leg"></div></section>' +
+        "</div>" +
+        '<details class="mr-cal" id="mr-cal"><summary>Calibrar critérios do score<span>Mude os pesos e o ranking se recalcula na hora</span></summary><div class="mr-cal-body" id="mr-cal-body"></div></details>' +
+        '<section class="panel" id="mr-cmp-panel" hidden><div class="panel-head"><h3>Comparação direta</h3><button class="btn" id="mr-cmp-clear" type="button">Limpar seleção</button></div><div class="mr-cmp-grid"><div id="mr-cmp-radar" class="mr-chart"></div><div class="table-scroll" id="mr-cmp-table"></div></div></section>' +
+        '<section class="panel"><div class="panel-head"><h3>Ranking de parceiros em potencial</h3><span class="muted" style="font-size:12px;" id="mr-count"></span></div>' +
+          '<div class="mr-tools">' +
+            '<input type="search" id="mr-f-text" placeholder="Filtrar por nome…" aria-label="Filtrar por nome">' +
+            '<select id="mr-f-subs" aria-label="Inscritos mínimos"><option value="0">Qualquer tamanho</option><option value="1000">1 mil+ inscritos</option><option value="10000">10 mil+</option><option value="50000">50 mil+</option><option value="100000">100 mil+</option><option value="500000">500 mil+</option></select>' +
+            '<select id="mr-f-status" aria-label="Etapa do funil"><option value="">Todas as etapas</option>' + STATUS.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + "</option>"; }).join("") + "</select>" +
+            '<label class="ck"><input type="checkbox" id="mr-f-partners"> Ocultar quem já é parceiro</label>' +
+            '<label class="ck"><input type="checkbox" id="mr-f-contact"> Só com contato público</label>' +
+          "</div>" +
+          '<div class="mr-dock" id="mr-dock"></div>' +
+          '<div class="table-scroll"><table class="mr-table"><thead id="mr-head"></thead><tbody id="mr-body"></tbody></table></div></section>' +
+      "</div>";
+
+    var tip = document.createElement("div");
+    tip.className = "mr-tip"; tip.id = "mr-tip";
+    root.appendChild(tip);
+
+    if (!$("mr-drawer")) {
+      var scrim = document.createElement("div"); scrim.id = "mr-scrim";
+      var dr = document.createElement("aside"); dr.id = "mr-drawer"; dr.setAttribute("role", "dialog"); dr.setAttribute("aria-label", "Análise do canal"); dr.setAttribute("aria-hidden", "true");
+      document.body.appendChild(scrim); document.body.appendChild(dr);
+      scrim.addEventListener("click", closeDrawer);
+    }
+    $("mr-chips").innerHTML = PRESETS.map(function (p) { return '<button type="button" class="mr-chip" data-kw="' + esc(p) + '">' + esc(p) + "</button>"; }).join("");
+    $("mr-depth").value = "quick";
+    bind();
+    renderGauge();
+    renderEstimate();
+  }
+
+  /* ---------------- topo: sugestões, custo, cota ---------------- */
+  function readOpts() {
+    var d = DEPTH[$("mr-depth").value] || DEPTH.quick;
+    return { pages: d.pages, maxChannels: d.maxChannels, language: $("mr-lang").value, since: $("mr-since").value };
+  }
+  function renderEstimate() {
+    var kws = parseKeywords($("mr-q").value), o = readOpts(), n = Math.max(kws.length, 1), est = estimate(n, o);
+    var over = S.quotaUsed + est > DAILY_CAP;
+    var el = $("mr-est");
+    el.className = "mr-est" + (over ? " warn" : "");
+    el.innerHTML = "Custo estimado: <b>~" + fmtInt(est) + "</b> unidades da cota" + (over ? " · passa do teto diário" : "");
+    document.querySelectorAll("#mr-chips .mr-chip").forEach(function (b) {
+      b.classList.toggle("on", kws.some(function (k) { return k.toLowerCase() === b.dataset.kw.toLowerCase(); }));
+    });
+  }
+  function renderGauge() {
+    var p = clamp(S.quotaUsed / DAILY_CAP * 100, 0, 100);
+    $("mr-gauge").innerHTML =
+      '<div class="mr-ring ' + (p >= 90 ? "crit" : p >= 65 ? "warn" : "") + '" style="--p:' + p.toFixed(1) + '"><div><b>' + Math.round(p) + '%</b><span>COTA HOJE</span></div></div>' +
+      "<small>" + fmtInt(S.quotaUsed) + " de " + fmtInt(DAILY_CAP) + " unidades usadas por varreduras de mercado hoje. O resto da cota diária do YouTube (10 mil) fica para o sync dos influencers.</small>";
+  }
+
+  /* ---------------- terminal ---------------- */
+  function logLine(text, cls) {
+    var box = $("mr-log");
+    box.querySelectorAll(".cur").forEach(function (e) { e.classList.remove("cur"); });
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    var t = document.createElement("span"); t.className = "t"; t.textContent = new Date().toLocaleTimeString("pt-BR");
+    d.appendChild(t); d.appendChild(document.createTextNode(text));
+    box.appendChild(d);
+    if (++logCount > 200) { box.removeChild(box.firstChild); logCount--; }
+    box.scrollTop = box.scrollHeight;
+  }
+  function setProgress(p) { $("mr-prog").style.width = p + "%"; $("mr-pct").textContent = Math.round(p) + "%"; }
+  function setBusy(b) {
+    S.running = b;
+    $("mr-go").disabled = b; $("mr-go").textContent = b ? "Varrendo…" : "Iniciar varredura";
+    $("mr-radar").classList.toggle("busy", b);
+  }
+
+  async function runScan() {
+    if (S.running) return;
+    var kws = parseKeywords($("mr-q").value);
+    if (!kws.length) { A.toast("Digite ao menos uma palavra-chave.", true); $("mr-q").focus(); return; }
+    var o = readOpts(), est = estimate(kws.length, o);
+    if (S.quotaUsed + est > DAILY_CAP) { A.toast("Essa busca passaria do teto diário de varreduras. Reduza a profundidade ou os termos.", true); return; }
+
+    setBusy(true);
+    $("mr-console").hidden = false; $("mr-log").innerHTML = ""; logCount = 0; setProgress(2);
+    logLine("Iniciando varredura · " + kws.length + " termo(s): " + kws.join(" | "));
+    logLine("Consultando o YouTube (" + o.pages + " página(s) por termo)…", "cur");
+    var d = await call({ action: "discover", keywords: kws, pages: o.pages, maxChannels: o.maxChannels, language: o.language, since: o.since });
+    if (!d.ok) return endScan(d.error || "falha na busca", true);
+    var ids = d.channelIds || [];
+    logLine(ids.length + " canais mapeados · " + d.spent + " unidades de cota", "ok");
+    setProgress(15);
+    var stopped = null;
+    for (var i = 0; i < ids.length; i += 8) {
+      var batch = ids.slice(i, i + 8);
+      logLine("Analisando canais " + (i + 1) + "–" + (i + batch.length) + " de " + ids.length + "…", "cur");
+      var r = await call({ action: "analyze", scanId: d.scanId, channelIds: batch });
+      if (!r.ok) { logLine("Falha: " + r.error, "bad"); if (r.code === "quota") { stopped = r.error; break; } }
+      else {
+        var failed = Object.keys(r.failed || {}).length;
+        logLine(r.done + " canais analisados" + (failed ? " · " + failed + " com erro" : ""), failed ? "bad" : "ok");
+      }
+      setProgress(15 + 80 * Math.min(i + batch.length, ids.length) / ids.length);
+    }
+    await call({ action: "finish", scanId: d.scanId });
+    setProgress(100);
+    try { await loadScans(); renderGauge(); renderEstimate(); await openScan(d.scanId); }
+    catch (e) { return endScan("Varredura salva, mas não foi possível carregar o resultado: " + (e.message || e), true); }
+    endScan(stopped ? "Varredura parcial: " + stopped : (ids.length ? "Varredura concluída." : "Nenhum canal encontrado para esses termos."), !!stopped);
+  }
+  function endScan(msg, bad) {
+    logLine(msg, bad ? "bad" : "ok");
+    setBusy(false);
+    if (bad) A.toast(msg, true);
+    else if ($("mr-results") && !$("mr-results").hidden) $("mr-results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* ---------------- resultados ---------------- */
+  function renderResults() {
+    var has = !!S.scan;
+    $("mr-empty").hidden = has && S.channels.length > 0;
+    $("mr-results").hidden = !has || !S.channels.length;
+    $("mr-scan-sel").innerHTML = S.scans.map(function (s) {
+      return '<option value="' + esc(s.id) + '"' + (S.scan && s.id === S.scan.id ? " selected" : "") + ">" + esc(fmtDateTime(s.created_at) + " · " + (s.keywords || []).join(", ") + " · " + (s.analyzed || 0) + " canais") + "</option>";
+    }).join("");
+    if (!has) return;
+    if (!S.channels.length) {
+      $("mr-empty").innerHTML = "<b>Nada encontrado</b>Nenhum canal apareceu para " + esc((S.scan.keywords || []).join(", ")) + ". Tente outras palavras, amplie o período ou escolha \"Qualquer\" idioma.";
+      return;
+    }
+    $("mr-empty").hidden = true;
+    renderCalibration();
+    renderAnalysis();
+  }
+  // Tudo que depende dos pesos/filtros/seleção.
+  function renderAnalysis() {
+    renderKpis(); renderInsights(); renderCharts(); renderCompare(); renderHead(); renderTable();
+  }
+
+  function renderKpis() {
+    var L = analyzed();
+    var subs = L.reduce(function (s, c) { return s + (c.subscribers || 0); }, 0);
+    var best = L.slice().sort(function (a, b) { return (b.score || 0) - (a.score || 0); })[0];
+    var engMed = median(L.map(function (c) { return c.metrics.engagement; }));
+    var weekly = L.filter(function (c) { return c.metrics.perWeek >= 1; }).length;
+    var partners = S.channels.filter(isPartner).length;
+    var failed = S.channels.length - L.length;
+    var k = function (label, value, sub, tip) {
+      return '<div class="kpi"><div class="label"' + (tip ? ' title="' + esc(tip) + '"' : "") + ">" + label + '</div><div class="value num">' + value + "</div>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
+    };
+    $("mr-kpis").innerHTML =
+      k("Canais mapeados", fmtInt(L.length), failed ? failed + " sem dados" : "todos analisados") +
+      k("Alcance somado", fmtN(subs), "inscritos nos canais", "Soma dos inscritos de todos os canais analisados.") +
+      k("Melhor score", best ? best.score : "—", best ? esc(best.title) : "", "Maior nota de potencial de parceria, com os pesos atuais.") +
+      k("Engajamento mediano", pct(engMed), "últimos 10 vídeos de cada canal", "Mediana de (curtidas + comentários) ÷ views.") +
+      k("Postam toda semana", fmtInt(weekly), "de " + fmtInt(L.length) + " canais", "Média de pelo menos 1 vídeo por semana nos últimos 90 dias.") +
+      k("Já são parceiros", fmtInt(partners), "canais já cadastrados no painel");
+  }
+
+  /* ---- insights automáticos ---- */
+  function pick(pool, fn, used) {
+    var best = null, bv = -Infinity;
+    pool.forEach(function (c) {
+      var v = fn(c);
+      if (v == null || !isFinite(v)) return;
+      var penal = used[c.channel_id] ? -1e6 : 0;
+      if (v + penal > bv) { bv = v + penal; best = c; }
+    });
+    return best;
+  }
+  function buildInsights() {
+    var L = analyzed();
+    var pool = L.filter(function (c) { return !isPartner(c) && statusOf(c) !== "descartado"; });
+    if (!pool.length) pool = L;
+    var used = {}, out = [];
+    var subsMed = median(pool.map(function (c) { return c.subscribers; }));
+    var engMed = median(L.map(function (c) { return c.metrics.engagement; })) || 0;
+    function add(tag, ch, text) { if (ch) { used[ch.channel_id] = 1; out.push({ tag: tag, ch: ch, text: text }); } }
+    var top = pick(pool, function (c) { return c.score; }, used);
+    if (top) { var m = top.metrics; add("Melhor aposta", top, "Nota " + top.score + "/100. " + fmtN(m.avgViews) + " views por vídeo, " + pct(m.engagement) + " de engajamento, " + dec(m.perWeek) + " posts/semana e " + pct(m.topicShare, 0) + " do conteúdo sobre o tema."); }
+    var gem = pick(pool.filter(function (c) { return c.subscribers != null && c.subscribers < (subsMed || 0) && c.ax.topic >= 30; }), function (c) { return c.ax.eng; }, used);
+    if (gem) add("Gema escondida", gem, "Só " + fmtN(gem.subscribers) + " inscritos, mas " + pct(gem.metrics.engagement) + " de engajamento" + (engMed ? " (" + dec(gem.metrics.engagement / engMed) + "× a mediana)" : "") + ": audiência pequena e muito ativa, tende a sair mais barata.");
+    var mach = pick(pool.filter(function (c) { return c.metrics.activeWeeks >= 8; }), function (c) { return c.metrics.perWeek + c.ax.topic / 100; }, used);
+    if (mach) add("Máquina de postar", mach, dec(mach.metrics.perWeek) + " posts por semana e vídeo novo em " + mach.metrics.activeWeeks + " das últimas 12 semanas. Quem posta sempre mantém a ferramenta em evidência.");
+    var rise = pick(pool.filter(function (c) { return c.metrics.momentum != null && c.metrics.momentum >= 1.25; }), function (c) { return c.metrics.momentum; }, used);
+    if (rise) add("Em ascensão", rise, "Os vídeos mais novos rendem " + dec(rise.metrics.momentum) + "× mais views por dia que os anteriores. Entrar agora é pegar o canal em alta.");
+    var spec = pick(pool.filter(function (c) { return c.metrics.topicCount >= 4; }), function (c) { return c.metrics.topicShare; }, used);
+    if (spec) add("Especialista no tema", spec, pct(spec.metrics.topicShare, 0) + " dos últimos " + spec.metrics.videos + " vídeos tratam das suas palavras-chave (" + spec.metrics.topicCount + " vídeos, " + fmtN(spec.metrics.topicAvgViews) + " views em média).");
+    var aff = pick(pool.filter(function (c) { return c.metrics.affShare >= 0.25; }), function (c) { return c.metrics.affShare; }, used);
+    if (aff) add("Já divulga afiliado", aff, pct(aff.metrics.affShare, 0) + " das descrições têm links de plataformas de afiliado: já tem o hábito de divulgar produto de terceiros.");
+    return out;
+  }
+  function avHtml(c, cls) {
+    return c.thumbnail_url
+      ? '<img class="mr-av ' + (cls || "") + '" src="' + esc(c.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">'
+      : '<span class="mr-av ' + (cls || "") + '">YT</span>';
+  }
+  function renderInsights() {
+    var L = analyzed();
+    var subsMed = median(L.map(function (c) { return c.subscribers; }));
+    var engMed = median(L.map(function (c) { return c.metrics.engagement; }));
+    var views = median(L.map(function (c) { return c.metrics.avgViews; }));
+    var weekly = L.filter(function (c) { return c.metrics.perWeek >= 1; }).length;
+    var affN = L.filter(function (c) { return c.metrics.affShare >= 0.2; }).length;
+    var kws = S.scan ? (S.scan.keywords || []).map(function (k) { return "<b>" + esc(k) + "</b>"; }).join(", ") : "";
+    $("mr-read").innerHTML = "Para " + kws + ", o radar analisou <b>" + L.length + " canais</b>. Mediana de <b>" + fmtN(subsMed) + "</b> inscritos, <b>" + fmtN(views) + "</b> views por vídeo e <b>" + pct(engMed) + "</b> de engajamento. " +
+      "<b>" + weekly + "</b> postam toda semana e <b>" + affN + "</b> já colocam links de afiliado em pelo menos 20% dos vídeos.";
+    var cards = buildInsights();
+    $("mr-cards").innerHTML = cards.map(function (x) {
+      return '<div class="mr-card"><div class="tag">' + x.tag + '</div><div class="who">' + avHtml(x.ch) + "<b>" + esc(x.ch.title) + "</b></div><p>" + x.text + '</p><div class="acts">' +
+        '<button class="btn" type="button" data-open="' + esc(x.ch.channel_id) + '">Ver análise</button>' +
+        '<button class="btn" type="button" data-cmp-add="' + esc(x.ch.channel_id) + '">Comparar</button></div></div>';
+    }).join("") || '<span class="muted">Dados insuficientes para gerar conclusões.</span>';
+  }
+
+  /* ---- calibragem ---- */
+  function renderCalibration() {
+    var tot = AXES.reduce(function (s, a) { return s + S.weights[a.key]; }, 0) || 1;
+    $("mr-cal-body").innerHTML = AXES.map(function (a) {
+      return '<div class="mr-sl"><label for="mr-w-' + a.key + '"><span>' + a.label + '</span><b id="mr-wv-' + a.key + '">' + Math.round(S.weights[a.key] / tot * 100) + '%</b></label>' +
+        '<input type="range" id="mr-w-' + a.key + '" data-w="' + a.key + '" min="0" max="40" step="1" value="' + S.weights[a.key] + '"><small>' + esc(a.tip) + "</small></div>";
+    }).join("") + '<div class="mr-cal-foot"><button class="btn" id="mr-w-reset" type="button">Voltar ao padrão</button><span>Os pesos ficam salvos na sua conta.</span></div>';
+  }
+  function refreshWeightLabels() {
+    var tot = AXES.reduce(function (s, a) { return s + S.weights[a.key]; }, 0) || 1;
+    AXES.forEach(function (a) { var e = $("mr-wv-" + a.key); if (e) e.textContent = Math.round(S.weights[a.key] / tot * 100) + "%"; });
+  }
+
+  /* ---- gráficos ---- */
+  function drawBubbles() {
+    var el = $("mr-bubbles");
+    var L = analyzed().filter(function (c) { return c.subscribers > 0 && c.metrics.engagement != null; });
+    if (!L.length) { el.innerHTML = '<p class="muted">Sem canais com inscritos públicos para desenhar.</p>'; return; }
+    var W = Math.max(el.clientWidth || 640, 300), H = W < 480 ? 300 : 360;
+    var m = { l: 50, r: 16, t: 16, b: 42 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var xs = L.map(function (c) { return Math.log(c.subscribers) / Math.LN10; });
+    var xMin = Math.min.apply(null, xs) - 0.15, xMax = Math.max.apply(null, xs) + 0.15;
+    if (xMax - xMin < 0.8) { var mid = (xMax + xMin) / 2; xMin = mid - 0.4; xMax = mid + 0.4; }
+    var yMax = Math.max(0.04, Math.max.apply(null, L.map(function (c) { return c.metrics.engagement; })) * 1.15);
+    var maxV = Math.max.apply(null, L.map(function (c) { return c.metrics.avgViews || 1; }));
+    var X = function (v) { return m.l + (v - xMin) / (xMax - xMin) * iw; };
+    var Y = function (v) { return m.t + ih - v / yMax * ih; };
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Mapa de canais: inscritos contra engajamento">';
+    for (var t = 0; t <= 4; t++) {
+      var yv = yMax * t / 4;
+      s += '<line class="gridl" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(yv) + '" y2="' + Y(yv) + '"/><text x="' + (m.l - 8) + '" y="' + (Y(yv) + 3) + '" text-anchor="end">' + pct(yv, yv < 0.1 ? 1 : 0) + "</text>";
+    }
+    for (var e = Math.ceil(xMin); e <= Math.floor(xMax); e++) {
+      s += '<line class="gridl" y1="' + m.t + '" y2="' + (H - m.b) + '" x1="' + X(e) + '" x2="' + X(e) + '"/><text x="' + X(e) + '" y="' + (H - m.b + 16) + '" text-anchor="middle">' + fmtN(Math.pow(10, e)) + "</text>";
+    }
+    s += '<line class="ax" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + (H - m.b) + '" y2="' + (H - m.b) + '"/><line class="ax" x1="' + m.l + '" x2="' + m.l + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/>';
+    s += '<text x="' + (m.l + iw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">INSCRITOS →</text>';
+    s += '<text transform="translate(12 ' + (m.t + ih / 2) + ') rotate(-90)" text-anchor="middle">ENGAJAMENTO →</text>';
+    var xm = median(xs), ym = median(L.map(function (c) { return c.metrics.engagement; }));
+    s += '<line class="med" x1="' + X(xm) + '" x2="' + X(xm) + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/><line class="med" y1="' + Y(ym) + '" y2="' + Y(ym) + '" x1="' + m.l + '" x2="' + (W - m.r) + '"/>';
+    s += '<text class="quad" x="' + (m.l + 8) + '" y="' + (m.t + 12) + '">gemas</text><text class="quad" x="' + (W - m.r - 8) + '" y="' + (m.t + 12) + '" text-anchor="end">estrelas</text>';
+    var sorted = L.slice().sort(function (a, b) { return b.metrics.avgViews - a.metrics.avgViews; }); // grandes atrás
+    sorted.forEach(function (c) {
+      var r = 5 + 17 * Math.sqrt((c.metrics.avgViews || 0) / maxV);
+      var cls = "mr-bub" + (isPartner(c) ? " partner" : "") + (S.compare.indexOf(c.channel_id) >= 0 ? " sel" : "");
+      s += '<circle class="' + cls + '" data-id="' + esc(c.channel_id) + '" cx="' + X(Math.log(c.subscribers) / Math.LN10).toFixed(1) + '" cy="' + Y(c.metrics.engagement).toFixed(1) + '" r="' + r.toFixed(1) + '" style="--o:' + (0.12 + (c.score || 0) / 100 * 0.6).toFixed(2) + '"/>';
+    });
+    L.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 5).forEach(function (c) {
+      var x = X(Math.log(c.subscribers) / Math.LN10), y = Y(c.metrics.engagement), left = x > W * 0.72;
+      s += '<text x="' + (left ? x - 12 : x + 12) + '" y="' + (y - 10) + '" text-anchor="' + (left ? "end" : "start") + '" style="fill:var(--text);font-size:11px;pointer-events:none">' + esc(String(c.title).slice(0, 18)) + "</text>";
+    });
+    el.innerHTML = s + "</svg>";
+  }
+
+  function radarSvg(list, size) {
+    var W = size, H = size, cx = W / 2, cy = H / 2 + 4, R = size / 2 - 52, n = AXES.length;
+    var P = function (i, v) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * v / 100, cy + Math.sin(a) * R * v / 100]; };
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Comparação por critério">';
+    [25, 50, 75, 100].forEach(function (lv) {
+      s += '<polygon points="' + AXES.map(function (a, i) { return P(i, lv).map(function (v) { return v.toFixed(1); }).join(","); }).join(" ") + '" style="fill:none;stroke:var(--border-strong);stroke-width:1;' + (lv < 100 ? "stroke-dasharray:2 4;" : "") + '"/>';
+    });
+    AXES.forEach(function (a, i) {
+      var p = P(i, 100), q = P(i, 118), anchor = q[0] < cx - 6 ? "end" : q[0] > cx + 6 ? "start" : "middle";
+      s += '<line x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" class="ax"/><text x="' + q[0].toFixed(1) + '" y="' + (q[1] + 3).toFixed(1) + '" text-anchor="' + anchor + '" style="font-size:10px">' + esc(a.short || a.label) + "</text>";
+    });
+    list.forEach(function (c, k) {
+      var pts = AXES.map(function (a, i) { return P(i, c.ax[a.key]).map(function (v) { return v.toFixed(1); }).join(","); }).join(" ");
+      s += '<polygon points="' + pts + '" style="fill:' + COLORS[k % 4] + ";fill-opacity:.16;stroke:" + COLORS[k % 4] + ';stroke-width:2;stroke-linejoin:round"/>';
+      AXES.forEach(function (a, i) { var p = P(i, c.ax[a.key]); s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" style="fill:' + COLORS[k % 4] + '"/>'; });
+    });
+    return s + "</svg>";
+  }
+  function radarTargets() {
+    var sel = S.compare.map(function (id) { return S.channels.filter(function (c) { return c.channel_id === id; })[0]; }).filter(function (c) { return c && c.ok; });
+    if (sel.length) return { list: sel, auto: false };
+    var top = analyzed().slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 3);
+    return { list: top, auto: true };
+  }
+  function drawRadar() {
+    var t = radarTargets(), el = $("mr-radar-cmp");
+    var size = clamp(($("mr-radar-cmp").clientWidth || 380), 300, 420);
+    el.innerHTML = radarSvg(t.list, size);
+    $("mr-radar-hint").textContent = t.auto ? "Mostrando os 3 melhores do ranking. Marque canais na tabela (até 4) para comparar quem você escolher." : "Comparação dos canais selecionados na tabela.";
+    $("mr-radar-leg").innerHTML = t.list.map(function (c, k) { return '<span><i style="background:' + COLORS[k % 4] + '"></i>' + esc(String(c.title).slice(0, 26)) + " · " + c.score + "</span>"; }).join("");
+  }
+  function renderCharts() { drawBubbles(); drawRadar(); }
+
+  /* ---- comparação direta ---- */
+  var CMP_ROWS = [
+    { label: "Score", get: function (c) { return c.score; }, fmt: function (v) { return v; }, hi: true },
+    { label: "Inscritos", get: function (c) { return c.subscribers; }, fmt: fmtN, hi: true },
+    { label: "Views médias (10 últimos)", get: function (c) { return c.metrics.avgViews; }, fmt: fmtN, hi: true },
+    { label: "Mediana de views", get: function (c) { return c.metrics.medianViews; }, fmt: fmtN, hi: true },
+    { label: "Engajamento", get: function (c) { return c.metrics.engagement; }, fmt: function (v) { return pct(v); }, hi: true },
+    { label: "Posts por semana", get: function (c) { return c.metrics.perWeek; }, fmt: function (v) { return dec(v); }, hi: true },
+    { label: "Semanas ativas (de 12)", get: function (c) { return c.metrics.activeWeeks; }, fmt: function (v) { return v; }, hi: true },
+    { label: "Vídeos em 30 dias", get: function (c) { return c.metrics.in30; }, fmt: function (v) { return v; }, hi: true },
+    { label: "Último vídeo (dias)", get: function (c) { return c.metrics.lastDays; }, fmt: function (v) { return v === 0 ? "hoje" : v; }, hi: false },
+    { label: "Conteúdo sobre o tema", get: function (c) { return c.metrics.topicShare; }, fmt: function (v) { return pct(v, 0); }, hi: true },
+    { label: "Views nos vídeos do tema", get: function (c) { return c.metrics.topicAvgViews; }, fmt: fmtN, hi: true },
+    { label: "Links de afiliado nos vídeos", get: function (c) { return c.metrics.affShare; }, fmt: function (v) { return pct(v, 0); }, hi: true },
+    { label: "Momentum", get: function (c) { return c.metrics.momentum; }, fmt: function (v) { return v == null ? "—" : dec(v) + "×"; }, hi: true },
+    { label: "Shorts", get: function (c) { return c.metrics.shortsPct; }, fmt: function (v) { return pct(v, 0); }, hi: null },
+    { label: "Duração média (vídeos longos)", get: function (c) { return c.metrics.avgDurMin; }, fmt: function (v) { return v == null ? "—" : dec(v) + " min"; }, hi: null }
+  ];
+  function renderCompare() {
+    var sel = S.compare.map(function (id) { return S.channels.filter(function (c) { return c.channel_id === id; })[0]; }).filter(function (c) { return c && c.ok; });
+    var panel = $("mr-cmp-panel");
+    panel.hidden = sel.length < 2;
+    if (sel.length < 2) return;
+    $("mr-cmp-radar").innerHTML = radarSvg(sel, 340);
+    var th = '<tr><th class="l">Métrica</th>' + sel.map(function (c, k) {
+      return '<th class="l" style="color:' + COLORS[k % 4] + '">' + esc(String(c.title).slice(0, 28)) + "</th>";
+    }).join("") + "</tr>";
+    var body = CMP_ROWS.map(function (r) {
+      var vals = sel.map(r.get), best = null;
+      if (r.hi !== null) {
+        var nums = vals.filter(function (v) { return v != null && isFinite(v); });
+        if (nums.length > 1) best = r.hi ? Math.max.apply(null, nums) : Math.min.apply(null, nums);
+        if (nums.length > 1 && nums.every(function (v) { return v === nums[0]; })) best = null;
+      }
+      return '<tr><td class="l muted">' + r.label + "</td>" + vals.map(function (v) {
+        return '<td class="num' + (best != null && v === best ? " best" : "") + '">' + (v == null ? "—" : r.fmt(v)) + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    $("mr-cmp-table").innerHTML = '<table class="mr-cmp"><thead>' + th + "</thead><tbody>" + body + "</tbody></table>";
+  }
+
+  /* ---- tabela ---- */
+  var COLS = [
+    { key: "cmp", label: "", cls: "mr-chk" },
+    { key: "rank", label: "#", cls: "" },
+    { key: "title", label: "Canal", cls: "l", sort: true },
+    { key: "score", label: "Score", sort: true, tip: "Nota de 0 a 100 do potencial de parceria: média ponderada dos 6 critérios (ajuste os pesos em \"Calibrar critérios\")." },
+    { key: "subs", label: "Inscritos", sort: true, tip: "Inscritos do canal." },
+    { key: "avgViews", label: "Views médias", sort: true, tip: "Média de views dos últimos 10 vídeos." },
+    { key: "eng", label: "Engaj.", sort: true, tip: "(Curtidas + comentários) ÷ views dos últimos 10 vídeos." },
+    { key: "perWeek", label: "Posts/sem", sort: true, tip: "Posts por semana nos últimos 90 dias." },
+    { key: "weeks", label: "12 semanas", sort: true, tip: "Uma barra por semana (da mais antiga à atual): altura = vídeos postados. Ordena por semanas com vídeo novo." },
+    { key: "topic", label: "Tema", sort: true, tip: "Parte dos últimos 50 envios que fala das suas palavras-chave." },
+    { key: "aff", label: "Afiliado", sort: true, tip: "Parte dos vídeos com links de plataformas de afiliado na descrição." },
+    { key: "mom", label: "Momentum", sort: true, tip: "Views/dia dos 5 vídeos mais novos ÷ os 5 anteriores." },
+    { key: "shorts", label: "Shorts", sort: true, tip: "Parte dos envios que são Shorts (até 3 min)." },
+    { key: "contact", label: "Contato", tip: "E-mail ou redes que o canal deixou públicos na descrição." },
+    { key: "status", label: "Funil", tip: "Em que etapa da prospecção este canal está." }
+  ];
+  function sortVal(c, key) {
+    var m = c.metrics || {};
+    switch (key) {
+      case "title": return String(c.title || "").toLowerCase();
+      case "score": return c.score;
+      case "subs": return c.subscribers;
+      case "avgViews": return m.avgViews;
+      case "eng": return m.engagement;
+      case "perWeek": return m.perWeek;
+      case "weeks": return m.activeWeeks;
+      case "topic": return m.topicShare;
+      case "aff": return m.affShare;
+      case "mom": return m.momentum;
+      case "shorts": return m.shortsPct;
+    }
+    return null;
+  }
+  function renderHead() {
+    $("mr-head").innerHTML = "<tr>" + COLS.map(function (c) {
+      var arrow = S.sort.key === c.key ? ' <span class="arrow">' + (S.sort.dir < 0 ? "↓" : "↑") + "</span>" : "";
+      return '<th class="' + (c.sort ? "sortable " : "") + (c.cls || "") + '"' + (c.sort ? ' data-key="' + c.key + '"' : "") + (c.tip ? ' title="' + esc(c.tip) + '"' : "") + ">" + c.label + arrow + "</th>";
+    }).join("") + "</tr>";
+  }
+  function spark(weekly) {
+    var max = Math.max.apply(null, weekly.concat([1]));
+    return '<svg class="mr-spark" width="64" height="20" viewBox="0 0 64 20" aria-hidden="true">' + weekly.map(function (v, i) {
+      var h = v ? Math.max(3, v / max * 18) : 2;
+      return '<rect class="' + (v ? "" : "z") + '" x="' + (i * 5.4).toFixed(1) + '" y="' + (20 - h).toFixed(1) + '" width="4" height="' + h.toFixed(1) + '" rx="1"/>';
+    }).join("") + "</svg>";
+  }
+  function visibleRows() {
+    var f = S.filter, txt = f.text.trim().toLowerCase();
+    var rows = analyzed().filter(function (c) {
+      if (txt && String(c.title || "").toLowerCase().indexOf(txt) < 0 && String(c.handle || "").toLowerCase().indexOf(txt) < 0) return false;
+      if (f.minSubs && !(c.subscribers >= f.minSubs)) return false;
+      if (f.hidePartners && isPartner(c)) return false;
+      if (f.onlyContact && !(c.contacts && ((c.contacts.emails || []).length || (c.contacts.links || []).length))) return false;
+      if (f.status && statusOf(c) !== f.status) return false;
+      return true;
+    });
+    var k = S.sort.key, d = S.sort.dir;
+    rows.sort(function (a, b) {
+      var x = sortVal(a, k), y = sortVal(b, k);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return x < y ? -d : x > y ? d : 0;
+    });
+    return rows;
+  }
+  function renderTable() {
+    var rows = visibleRows(), total = analyzed().length;
+    $("mr-count").textContent = rows.length === total ? total + " canais" : rows.length + " de " + total + " canais";
+    var failed = S.channels.length - total;
+    $("mr-body").innerHTML = rows.length ? rows.map(function (c, i) {
+      var m = c.metrics, st = statusOf(c), hasMail = c.contacts && (c.contacts.emails || []).length, hasLink = c.contacts && (c.contacts.links || []).length;
+      var cls = c.score >= 65 ? "" : c.score >= 45 ? " mid" : " low";
+      var mom = m.momentum == null ? '<span class="mr-flat">—</span>' : m.momentum >= 1.1 ? '<span class="mr-up">▲ ' + dec(m.momentum) + "×</span>" : m.momentum <= 0.9 ? '<span class="mr-down">▼ ' + dec(m.momentum) + "×</span>" : '<span class="mr-flat">● ' + dec(m.momentum) + "×</span>";
+      return '<tr class="mr-row' + (S.compare.indexOf(c.channel_id) >= 0 ? " sel" : "") + (st === "descartado" ? " dim" : "") + '" data-id="' + esc(c.channel_id) + '">' +
+        '<td class="mr-chk"><input type="checkbox" data-cmp="' + esc(c.channel_id) + '"' + (S.compare.indexOf(c.channel_id) >= 0 ? " checked" : "") + ' aria-label="Comparar ' + esc(c.title) + '"></td>' +
+        '<td class="num muted">' + (i + 1) + "</td>" +
+        '<td class="l"><div class="mr-ch">' + avHtml(c) + '<div><div class="nm">' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</div><div class="hd">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + "</div></div></div></td>" +
+        '<td><div class="mr-score' + cls + '"><b>' + c.score + '</b><span class="mr-bar"><i style="width:' + c.score + '%"></i></span></div></td>' +
+        '<td class="num">' + (c.hidden_subs ? '<span class="muted" title="O canal oculta os inscritos">oculto</span>' : fmtN(c.subscribers)) + "</td>" +
+        '<td class="num">' + fmtN(m.avgViews) + "</td>" +
+        '<td class="num">' + pct(m.engagement) + "</td>" +
+        '<td class="num">' + dec(m.perWeek) + "</td>" +
+        "<td>" + spark(m.weekly || []) + "</td>" +
+        '<td class="num">' + pct(m.topicShare, 0) + "</td>" +
+        '<td class="num">' + pct(m.affShare, 0) + "</td>" +
+        '<td class="num">' + mom + "</td>" +
+        '<td class="num">' + pct(m.shortsPct, 0) + "</td>" +
+        '<td class="num">' + (hasMail ? '<span title="E-mail público na descrição" class="mr-up">✉</span> ' : "") + (hasLink ? '<span title="Redes/links na descrição" class="muted">⌁</span>' : "") + (!hasMail && !hasLink ? '<span class="muted">—</span>' : "") + "</td>" +
+        '<td><select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil de ' + esc(c.title) + '">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select></td></tr>";
+    }).join("") : '<tr><td colspan="' + COLS.length + '" class="empty">Nenhum canal com esses filtros.</td></tr>';
+    if (failed) $("mr-count").textContent += " · " + failed + " sem dados (erro na leitura)";
+    renderDock();
+  }
+  function renderDock() {
+    var sel = S.compare.map(function (id) { return S.channels.filter(function (c) { return c.channel_id === id; })[0]; }).filter(Boolean);
+    $("mr-dock").innerHTML = sel.length
+      ? "Comparando: " + sel.map(function (c, k) { return '<span class="mr-pill"><i style="background:' + COLORS[k % 4] + '"></i>' + esc(String(c.title).slice(0, 24)) + '<button type="button" data-cmp-del="' + esc(c.channel_id) + '" aria-label="Remover da comparação">×</button></span>'; }).join("") + (sel.length < 2 ? ' <span class="muted">(marque mais um para abrir a comparação direta)</span>' : "")
+      : '<span class="muted">Marque até 4 canais na primeira coluna para compará-los lado a lado.</span>';
+  }
+
+  /* ---------------- seleção / funil ---------------- */
+  function toggleCompare(id, on) {
+    var i = S.compare.indexOf(id);
+    if (on === undefined) on = i < 0;
+    if (on && i < 0) {
+      if (S.compare.length >= 4) { A.toast("Compare no máximo 4 canais por vez.", true); return false; }
+      S.compare.push(id);
+    } else if (!on && i >= 0) S.compare.splice(i, 1);
+    renderCharts(); renderCompare(); renderDock();
+    // Só marca a linha (redesenhar a tabela tiraria o foco do checkbox).
+    document.querySelectorAll("#mr-body tr[data-id]").forEach(function (tr) {
+      var on = S.compare.indexOf(tr.dataset.id) >= 0;
+      tr.classList.toggle("sel", on);
+      var cb = tr.querySelector("input[data-cmp]");
+      if (cb) cb.checked = on;
+    });
+    return true;
+  }
+  async function setStatus(id, status) {
+    var ch = S.channels.filter(function (c) { return c.channel_id === id; })[0];
+    var prev = S.targets[id];
+    var r;
+    if (status === "novo") { delete S.targets[id]; r = await A.sb.from("market_targets").delete().eq("channel_id", id); }
+    else { S.targets[id] = { channel_id: id, status: status }; r = await A.sb.from("market_targets").upsert({ channel_id: id, title: ch ? String(ch.title).slice(0, 200) : null, status: status, updated_at: new Date().toISOString() }, { onConflict: "channel_id" }); }
+    if (r.error) {
+      if (prev) S.targets[id] = prev; else delete S.targets[id];
+      A.toast("Não foi possível salvar a etapa: " + r.error.message, true);
+    }
+    renderInsights(); renderTable();
+    if (S.openId === id) renderDrawer(id);
+  }
+
+  /* ---------------- gaveta de detalhes ---------------- */
+  function readout(c) {
+    var m = c.metrics, L = analyzed(), items = [];
+    var engMed = median(L.map(function (x) { return x.metrics.engagement; }));
+    var tier = c.score >= 70 ? "Prioridade alta: bom em quase todos os critérios." : c.score >= 50 ? "Vale prospectar: pontos fortes claros, com algumas lacunas." : "Aderência baixa para parceria neste momento.";
+    items.push({ t: tier });
+    items.push({ t: "Média de <b>" + fmtInt(m.avgViews) + "</b> views nos últimos 10 vídeos" + (c.subscribers ? " (" + dec(m.avgViews / c.subscribers * 100, 1) + "% da base inscrita assiste)" : "") + "." });
+    items.push({ t: "Engajamento de <b>" + pct(m.engagement) + "</b>" + (engMed ? ", " + dec(m.engagement / engMed) + "× a mediana desta varredura" : "") + "." });
+    items.push({ t: "Posta <b>" + dec(m.perWeek) + "×</b> por semana e teve vídeo novo em <b>" + m.activeWeeks + " das últimas 12 semanas</b>." });
+    items.push({ t: "<b>" + pct(m.topicShare, 0) + "</b> dos últimos " + m.videos + " vídeos falam das suas palavras-chave (" + m.topicCount + " vídeos" + (m.topicAvgViews != null ? ", média de " + fmtN(m.topicAvgViews) + " views neles" : "") + ")." });
+    if (m.affShare > 0) items.push({ t: "<b>" + pct(m.affShare, 0) + "</b> das descrições têm links de plataformas de afiliado: já divulga produtos de terceiros." });
+    if (m.adsShare > 0) items.push({ t: "<b>" + pct(m.adsShare, 0) + "</b> dos vídeos tratam de Google Ads / tráfego pago." });
+    if (m.momentum != null) items.push({ t: m.momentum >= 1.1 ? "Em alta: vídeos novos rendem <b>" + dec(m.momentum) + "×</b> mais views/dia que os anteriores." : m.momentum <= 0.9 ? "Em queda: vídeos novos rendem <b>" + dec(m.momentum) + "×</b> das views/dia dos anteriores." : "Desempenho estável nos vídeos recentes.", warn: m.momentum <= 0.9 });
+    if (m.lastDays > 30) items.push({ t: "Atenção: o último vídeo saiu há <b>" + m.lastDays + " dias</b>.", warn: true });
+    if (m.engagement != null && m.engagement < 0.01) items.push({ t: "Atenção: engajamento abaixo de 1%.", warn: true });
+    if (c.hidden_subs) items.push({ t: "O canal oculta o número de inscritos.", warn: true });
+    return items;
+  }
+  function openDrawer(id) {
+    var c = S.channels.filter(function (x) { return x.channel_id === id; })[0];
+    if (!c || !c.ok) return;
+    S.openId = id;
+    renderDrawer(id);
+    $("mr-drawer").classList.add("on"); $("mr-scrim").classList.add("on"); $("mr-drawer").setAttribute("aria-hidden", "false");
+  }
+  function closeDrawer() {
+    S.openId = null;
+    if ($("mr-drawer")) { $("mr-drawer").classList.remove("on"); $("mr-drawer").setAttribute("aria-hidden", "true"); }
+    if ($("mr-scrim")) $("mr-scrim").classList.remove("on");
+  }
+  function renderDrawer(id) {
+    var c = S.channels.filter(function (x) { return x.channel_id === id; })[0];
+    if (!c) return;
+    var m = c.metrics, st = statusOf(c), ct = c.contacts || {};
+    var cls = c.score >= 65 ? "" : c.score >= 45 ? "warn" : "crit";
+    var stat = function (label, v) { return "<div><small>" + label + "</small><b>" + v + "</b></div>"; };
+    var vids = (c.top_videos || []).map(function (v) {
+      return '<div class="mr-vid"><a href="' + vidUrl(v.id) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + "</a><span>" + fmtN(v.views) + " · " + fmtDate(v.ms) + "</span></div>";
+    }).join("");
+    var found = (c.sample_videos || []).map(function (v) {
+      return '<div class="mr-vid"><a href="' + vidUrl(v.id) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + "</a></div>";
+    }).join("");
+    var links = (ct.links || []).filter(function (u) { return /^https:\/\//i.test(u); }).map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(u.replace(/^https:\/\/(www\.)?/, "")) + "</a>"; }).join("");
+    var mails = (ct.emails || []).map(function (e) { return '<a href="mailto:' + esc(e) + '">' + esc(e) + "</a>"; }).join("");
+    $("mr-drawer").innerHTML =
+      '<div class="mr-d-head">' + avHtml(c) + '<div><h3>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</h3><div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · desde " + new Date(c.channel_created).getFullYear() : "") + '</div></div><button class="btn btn-ghost mr-d-close" id="mr-d-close" type="button" aria-label="Fechar">✕</button></div>' +
+      '<div class="mr-d-score"><div class="mr-ring ' + cls + '" style="--p:' + c.score + '"><div><b>' + c.score + "</b><span>SCORE</span></div></div><div class=\"mr-d-axes\">" +
+        AXES.map(function (a) { return '<div title="' + esc(a.tip) + '"><span>' + a.label + '</span><span class="mr-bar"><i style="width:' + Math.round(c.ax[a.key]) + '%"></i></span><b>' + Math.round(c.ax[a.key]) + "</b></div>"; }).join("") + "</div></div>" +
+      '<div class="mr-d-stats">' + stat("Inscritos", c.hidden_subs ? "oculto" : fmtN(c.subscribers)) + stat("Views médias", fmtN(m.avgViews)) + stat("Engajamento", pct(m.engagement)) +
+        stat("Posts/semana", dec(m.perWeek)) + stat("Vídeos em 30 d", m.in30) + stat("Shorts", pct(m.shortsPct, 0)) + "</div>" +
+      '<div class="mr-d-sec"><h4>Leitura do radar</h4><ul class="mr-d-list">' + readout(c).map(function (i) { return "<li" + (i.warn ? ' class="warn"' : "") + ">" + i.t + "</li>"; }).join("") + "</ul></div>" +
+      '<div class="mr-d-sec"><h4>Etapa do funil</h4><select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select> " +
+        '<button class="btn" type="button" data-cmp-add="' + esc(c.channel_id) + '">' + (S.compare.indexOf(c.channel_id) >= 0 ? "Remover da comparação" : "Adicionar à comparação") + "</button> " +
+        '<a class="btn" href="' + chUrl(c.channel_id) + '" target="_blank" rel="noopener noreferrer">Abrir canal ↗</a></div>' +
+      (mails || links ? '<div class="mr-d-sec"><h4>Contato público</h4><div class="mr-links">' + mails + links + "</div></div>" : "") +
+      (vids ? '<div class="mr-d-sec"><h4>' + (c.top_videos[0] && c.top_videos[0].topic ? "Vídeos de destaque sobre o tema" : "Vídeos mais vistos") + "</h4>" + vids + "</div>" : "") +
+      (found ? '<div class="mr-d-sec"><h4>Apareceu na busca por: ' + esc((c.hit_keywords || []).join(", ")) + "</h4>" + found + "</div>" : "") +
+      (c.description ? '<div class="mr-d-sec"><h4>Descrição do canal</h4><div class="mr-desc">' + esc(c.description.slice(0, 500)) + "</div></div>" : "");
+  }
+
+  /* ---------------- CSV ---------------- */
+  function csvCell(v) {
+    var s = v == null ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  function exportCsv() {
+    var rows = visibleRows();
+    var head = ["Canal", "Handle", "URL", "Score", "Inscritos", "Views médias", "Engajamento", "Posts por semana", "Semanas ativas", "% sobre o tema", "% links de afiliado", "Momentum", "% Shorts", "Último vídeo (dias)", "E-mail", "Etapa"];
+    var out = [head.map(csvCell).join(",")];
+    rows.forEach(function (c) {
+      var m = c.metrics;
+      out.push([c.title, c.handle, chUrl(c.channel_id), c.score, c.subscribers, m.avgViews, m.engagement, m.perWeek, m.activeWeeks, m.topicShare, m.affShare, m.momentum, m.shortsPct, m.lastDays, ((c.contacts || {}).emails || []).join(" "), statusOf(c)].map(csvCell).join(","));
+    });
+    var blob = new Blob(["﻿" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "radar-de-mercado.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+
+  /* ---------------- eventos ---------------- */
+  function bind() {
+    $("mr-form").addEventListener("submit", function (e) { e.preventDefault(); runScan(); });
+    $("mr-q").addEventListener("input", renderEstimate);
+    ["mr-depth", "mr-lang", "mr-since"].forEach(function (id) { $(id).addEventListener("change", renderEstimate); });
+    $("mr-chips").addEventListener("click", function (e) {
+      var b = e.target.closest(".mr-chip");
+      if (!b) return;
+      var kws = parseKeywords($("mr-q").value), key = b.dataset.kw.toLowerCase();
+      var has = kws.some(function (k) { return k.toLowerCase() === key; });
+      kws = has ? kws.filter(function (k) { return k.toLowerCase() !== key; }) : kws.concat([b.dataset.kw]).slice(0, 5);
+      $("mr-q").value = kws.join(", ");
+      renderEstimate();
+    });
+    $("mr-scan-sel").addEventListener("change", function () {
+      openScan(this.value).catch(function (e) { A.toast("Erro ao abrir varredura: " + (e.message || e), true); });
+    });
+    $("mr-csv").addEventListener("click", exportCsv);
+    $("mr-del").addEventListener("click", async function () {
+      if (!S.scan || !confirm("Apagar esta varredura e seus resultados? A etapa do funil de cada canal é mantida.")) return;
+      var r = await A.sb.from("market_scans").delete().eq("id", S.scan.id);
+      if (r.error) { A.toast("Não foi possível apagar: " + r.error.message, true); return; }
+      await loadScans(); renderGauge(); renderEstimate();
+      S.scan = null; S.channels = []; S.compare = [];
+      if (S.scans.length) await openScan(S.scans[0].id);
+      else { $("mr-empty").hidden = false; $("mr-results").hidden = true; renderResults(); }
+    });
+    $("mr-cmp-clear").addEventListener("click", function () { S.compare = []; renderCharts(); renderCompare(); renderTable(); });
+
+    $("mr-cal-body").addEventListener("input", function (e) {
+      var k = e.target.dataset.w;
+      if (!k) return;
+      S.weights[k] = Number(e.target.value);
+      if (!AXES.some(function (a) { return S.weights[a.key] > 0; })) { S.weights[k] = 1; e.target.value = 1; }
+      rescore(); refreshWeightLabels(); saveWeights(); renderAnalysis();
+    });
+    $("mr-cal-body").addEventListener("click", function (e) {
+      if (e.target.id !== "mr-w-reset") return;
+      S.weights = Object.assign({}, DEFAULT_W); saveWeights(); rescore(); renderCalibration(); renderAnalysis();
+    });
+
+    $("mr-f-text").addEventListener("input", function () { S.filter.text = this.value; renderTable(); });
+    $("mr-f-subs").addEventListener("change", function () { S.filter.minSubs = Number(this.value); renderTable(); });
+    $("mr-f-status").addEventListener("change", function () { S.filter.status = this.value; renderTable(); });
+    $("mr-f-partners").addEventListener("change", function () { S.filter.hidePartners = this.checked; renderTable(); });
+    $("mr-f-contact").addEventListener("change", function () { S.filter.onlyContact = this.checked; renderTable(); });
+
+    $("mr-head").addEventListener("click", function (e) {
+      var th = e.target.closest("th.sortable");
+      if (!th) return;
+      var k = th.dataset.key;
+      S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === "title" ? 1 : -1) };
+      renderHead(); renderTable();
+    });
+    $("mr-body").addEventListener("click", function (e) {
+      if (e.target.closest("select")) return;
+      var cb = e.target.closest("input[data-cmp]");
+      if (cb) { if (!toggleCompare(cb.dataset.cmp, cb.checked)) cb.checked = false; return; }
+      var tr = e.target.closest("tr[data-id]");
+      if (tr) openDrawer(tr.dataset.id);
+    });
+    $("mr-body").addEventListener("change", function (e) {
+      var sel = e.target.closest("select[data-status]");
+      if (sel) setStatus(sel.dataset.status, sel.value);
+    });
+    $("mr-body").addEventListener("mouseover", function (e) {
+      var tr = e.target.closest("tr[data-id]");
+      document.querySelectorAll(".mr-bub.hl").forEach(function (b) { b.classList.remove("hl"); });
+      if (!tr) return;
+      var b = document.querySelector('.mr-bub[data-id="' + tr.dataset.id + '"]');
+      if (b) b.classList.add("hl");
+    });
+
+    $("mr-cards").addEventListener("click", function (e) {
+      var o = e.target.closest("[data-open]");
+      if (o) return openDrawer(o.dataset.open);
+      var c = e.target.closest("[data-cmp-add]");
+      if (c) toggleCompare(c.dataset.cmpAdd, true);
+    });
+    var drawer = $("mr-drawer");
+    drawer.addEventListener("click", function (e) {
+      if (e.target.closest("#mr-d-close")) return closeDrawer();
+      var c = e.target.closest("[data-cmp-add]");
+      if (c) { toggleCompare(c.dataset.cmpAdd); renderDrawer(c.dataset.cmpAdd); }
+    });
+    drawer.addEventListener("change", function (e) {
+      var sel = e.target.closest("select[data-status]");
+      if (sel) setStatus(sel.dataset.status, sel.value);
+    });
+    $("mr-dock").addEventListener("click", function (e) {
+      var d = e.target.closest("[data-cmp-del]");
+      if (d) toggleCompare(d.dataset.cmpDel, false);
+    });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.openId) closeDrawer(); });
+
+    var tip = $("mr-tip"), bub = $("mr-bubbles");
+    bub.addEventListener("mousemove", function (e) {
+      var circ = e.target.closest("circle[data-id]");
+      if (!circ) { tip.style.display = "none"; return; }
+      var c = S.channels.filter(function (x) { return x.channel_id === circ.dataset.id; })[0];
+      if (!c) return;
+      var m = c.metrics, box = $("view-mercado").getBoundingClientRect();
+      tip.innerHTML = "<b>" + esc(c.title) + "</b><div><span>Score</span>" + c.score + "</div><div><span>Inscritos</span>" + fmtN(c.subscribers) + "</div><div><span>Views médias</span>" + fmtN(m.avgViews) + "</div><div><span>Engajamento</span>" + pct(m.engagement) + "</div><div><span>Posts/semana</span>" + dec(m.perWeek) + "</div>";
+      tip.style.display = "block";
+      var x = e.clientX - box.left + 14, y = e.clientY - box.top + 14;
+      if (x + 270 > box.width) x = e.clientX - box.left - 270;
+      tip.style.left = Math.max(x, 4) + "px"; tip.style.top = y + "px";
+    });
+    bub.addEventListener("mouseleave", function () { tip.style.display = "none"; });
+    bub.addEventListener("click", function (e) {
+      var circ = e.target.closest("circle[data-id]");
+      if (circ) openDrawer(circ.dataset.id);
+    });
+
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (visible() && S.channels.length) renderCharts(); }, 150);
+    });
+    window.addEventListener("flow-theme-change", function () { if (visible() && S.channels.length) { renderCharts(); renderCompare(); } });
+  }
+  function visible() { return A && A.root && !A.root.hidden; }
+
+  /* ---------------- API pública ---------------- */
+  async function show() {
+    if (!A) return;
+    if (S.ready) { if (S.channels.length) renderCharts(); return; }
+    if (S.loading) return;
+    S.loading = true;
+    try {
+      await Promise.all([
+        loadScans().catch(function (e) { console.warn("market_scans:", e); }),
+        loadTargets().catch(function (e) { console.warn("market_targets:", e); }),
+        loadWeights().catch(function (e) { console.warn("pesos:", e); })
+      ]);
+      renderGauge(); renderEstimate();
+      var last = safeGet("mr_last_scan");
+      var target = S.scans.filter(function (s) { return s.id === last; })[0] || S.scans.filter(function (s) { return s.status === "done"; })[0];
+      if (target) await openScan(target.id);
+      S.ready = true;
+    } catch (e) {
+      console.warn("Rastrear Mercado:", e);
+      A.toast("Não foi possível carregar o histórico do radar: " + (e.message || e), true);
+    } finally { S.loading = false; }
+  }
+  window.MarketRadar = {
+    init: function (opts) { A = opts; build(opts.root); },
+    show: show,
+    hide: closeDrawer,
+    refresh: function () { if (S.channels.length) renderAnalysis(); }
+  };
+})();
