@@ -244,6 +244,9 @@
   .detail-col h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 10px; }
   .expense-line { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .expense-line .cat-name { flex: 1; font-size: 12.5px; color: var(--text-dim); }
+  .expense-line { flex-wrap: wrap; }
+  .expense-line .cat-name { min-width: 160px; }
+  .cat-group { padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 12px; }
   .expense-line input[type=number] {
     width: 120px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong);
     background: var(--bg); color: var(--text); font-family: inherit; text-align: right; font-size: 12.5px;
@@ -1179,6 +1182,15 @@
     renderDetail(m, items);
   }
 
+  var GROUP_LIST = ["Infraestrutura", "Desenvolvimento", "Marketing", "Suporte", "Outros"];
+  function groupOf(categoryId) {
+    var c = state.categories.find(function (x) { return x.id === categoryId; });
+    return c ? c.group_name : "Outros";
+  }
+  function groupOptions(selected) {
+    return GROUP_LIST.map(function (g) { return '<option value="' + g + '"' + (g === selected ? " selected" : "") + ">" + g + "</option>"; }).join("");
+  }
+
   function renderDetail(m, items) {
     var wrap = document.getElementById("detail-" + m);
     if (!wrap) return;
@@ -1196,6 +1208,7 @@
           (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais (FlowPages, FlowTracking e FlowSpy) neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
+        '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
         '</div>';
     }).join("");
@@ -1244,6 +1257,12 @@
 
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".cat-group").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var cur = state.categories.find(function (c) { return c.id === sel.dataset.catId; });
+        if (cur) updateCategory(cur.id, cur.name, sel.value);
+      });
     });
     wrap.querySelectorAll(".cat-rename").forEach(function (btn) {
       btn.addEventListener("click", function () { renameCategoryPrompt(this.dataset.catId); });
@@ -1436,26 +1455,30 @@
     var res = await sb.from("expense_categories").update({ name: name, group_name: group }).eq("id", id).select();
     if (res.error) { toast("Erro ao salvar categoria: " + res.error.message, true); return; }
     if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta categoria.", true); return; }
-    var alsoIn = 0;
-    if (name !== cur.name) {
-      // Despesa rateada cria a mesma categoria nas outras ferramentas: oferece renomear lá também.
-      var oth = await sb.from("expense_categories").select("id, tool_id, name").neq("tool_id", state.activeToolId);
-      if (!oth.error) {
-        var all = oth.data || [];
-        var same = all.filter(function (c) { return c.name.toLowerCase() === cur.name.toLowerCase(); }).filter(function (c) {
-          return !all.some(function (d) { return d.tool_id === c.tool_id && d.name.toLowerCase() === name.toLowerCase(); });
-        });
-        if (same.length) {
-          var names = same.map(function (c) { var t = state.tools.find(function (x) { return x.id === c.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
-          if (window.confirm('A categoria "' + cur.name + '" também existe em ' + names + '. Renomear lá também para "' + name + '"?')) {
-            var up = await sb.from("expense_categories").update({ name: name }).in("id", same.map(function (c) { return c.id; })).select();
-            if (up.error) toast("Renomeou aqui, mas falhou nas outras ferramentas: " + up.error.message, true);
-            else alsoIn = (up.data || []).length;
-          }
+    var nameChanged = name !== cur.name, groupChanged = group !== cur.group_name, alsoIn = 0;
+    // Despesa rateada cria a mesma categoria em outras ferramentas: oferece repetir a mudança lá.
+    var oth = await sb.from("expense_categories").select("id, tool_id, name, group_name").neq("tool_id", state.activeToolId);
+    if (!oth.error) {
+      var all = oth.data || [];
+      var same = all.filter(function (c) { return c.name.toLowerCase() === cur.name.toLowerCase(); }).filter(function (c) {
+        if (nameChanged && all.some(function (d) { return d.tool_id === c.tool_id && d.name.toLowerCase() === name.toLowerCase(); })) return false;
+        return (nameChanged && c.name !== name) || (groupChanged && c.group_name !== group);
+      });
+      if (same.length) {
+        var names = same.map(function (c) { var t = state.tools.find(function (x) { return x.id === c.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
+        var what = nameChanged && groupChanged ? 'Renomear para "' + name + '" e mudar o grupo para "' + group + '"' : nameChanged ? 'Renomear para "' + name + '"' : 'Mudar o grupo para "' + group + '"';
+        if (window.confirm('A categoria "' + cur.name + '" também existe em ' + names + ". " + what + " lá também?")) {
+          var patch = {};
+          if (nameChanged) patch.name = name;
+          if (groupChanged) patch.group_name = group;
+          var up = await sb.from("expense_categories").update(patch).in("id", same.map(function (c) { return c.id; })).select();
+          if (up.error) toast("Mudou aqui, mas falhou nas outras ferramentas: " + up.error.message, true);
+          else alsoIn = (up.data || []).length;
         }
       }
     }
-    toast(name !== cur.name ? 'Categoria renomeada para "' + name + '" em todos os meses' + (alsoIn ? " e em mais " + alsoIn + " ferramenta" + (alsoIn > 1 ? "s" : "") : "") + "." : "Categoria atualizada.");
+    var tail = " em todos os meses" + (alsoIn ? " e em mais " + alsoIn + " ferramenta" + (alsoIn > 1 ? "s" : "") : "") + ".";
+    toast(nameChanged ? 'Categoria renomeada para "' + name + '"' + tail : 'Grupo de "' + name + '" mudou para ' + group + tail);
     await afterCategoryChange();
   }
 
