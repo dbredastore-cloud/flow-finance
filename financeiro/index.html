@@ -321,6 +321,26 @@
   .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
   .pay-chip.on b { color: var(--accent-ink); }
   .expense-line.pay-hidden { display: none; }
+
+  /* Comentário da despesa: 💬 apagado = sem comentário; aceso = tem, e o texto vira tooltip. */
+  .exp-note { position: relative; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; font-size: 13px; line-height: 1; opacity: .4; filter: grayscale(1); }
+  .exp-note:hover, .exp-note:focus-visible { opacity: 1; background: var(--surface-2); }
+  .exp-note.has { opacity: 1; filter: none; background: rgba(var(--warning-rgb), .16); box-shadow: 0 0 0 1px rgba(var(--warning-rgb), .55); }
+  .exp-note::after {
+    content: attr(data-tip); position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 20; width: max-content; max-width: min(300px, 70vw);
+    padding: 8px 10px; border-radius: 9px; font-size: 12px; font-weight: 500; line-height: 1.45; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere;
+    color: var(--text); background: var(--surface-solid, var(--bg)); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px -8px rgba(0, 0, 0, .45);
+    opacity: 0; transform: translateY(3px); pointer-events: none; transition: opacity .12s, transform .12s;
+  }
+  .exp-note:hover::after, .exp-note:focus-visible::after { opacity: 1; transform: none; }
+  @media (max-width: 640px) { .exp-note::after { left: auto; right: 0; } }
+  .note-edit { grid-column: 1 / -1; margin-top: 4px; }
+  .note-edit[hidden] { display: none; }
+  .note-edit textarea { width: 100%; min-height: 56px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; line-height: 1.5; }
+  .note-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .note-actions .btn { padding: 5px 12px; font-size: 12px; width: auto; }
+  .note-count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+  .note-dot { margin-left: 6px; font-size: 11px; cursor: help; }
   .pay-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -4px 0 18px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 12.5px; color: var(--text-muted); }
   .pay-strip[hidden] { display: none; }
   .pay-strip-title { margin-right: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
@@ -1063,7 +1083,7 @@
     var fy = ymY(range.from), ty = ymY(range.to);
     // Despesas, receita e categorias saem em paralelo.
     var res = await Promise.all([
-      pageAll(function () { return sb.from("monthly_expenses").select("category_id, year, month, amount, paid_via").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
+      pageAll(function () { return sb.from("monthly_expenses").select("category_id, year, month, amount, paid_via, note").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
       pageAll(function () { return sb.from("monthly_revenue").select("year, month, faturamento, reembolsos, novos_usuarios, usuarios_totais, source, synced_at").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
       state.categoriesReady || Promise.resolve()
     ]);
@@ -1072,7 +1092,7 @@
     state.categories.forEach(function (c) { catById[c.id] = c; });
 
     var acc = {};
-    function ensure(m) { if (!acc[m]) acc[m] = { total_despesas: 0, custo_infra: 0, pay_cartao: 0, pay_biancode: 0, pay_none: 0 }; return acc[m]; }
+    function ensure(m) { if (!acc[m]) acc[m] = { total_despesas: 0, custo_infra: 0, pay_cartao: 0, pay_biancode: 0, pay_none: 0, notes: 0 }; return acc[m]; }
 
     if (expRes.error) throw expRes.error;
     (expRes.data || []).forEach(function (e) {
@@ -1082,6 +1102,7 @@
       var amt = Number(e.amount) || 0;
       mm.total_despesas += amt;
       mm["pay_" + (e.paid_via === "cartao" || e.paid_via === "biancode" ? e.paid_via : "none")] += amt;
+      if (e.note) mm.notes++;
       var cat = catById[e.category_id];
       if (cat && cat.group_name === "Infraestrutura") mm.custo_infra += amt;
     });
@@ -1109,7 +1130,7 @@
         faturamento: fat,
         total_despesas: mm.total_despesas,
         custo_infra: mm.custo_infra,
-        pay_cartao: mm.pay_cartao, pay_biancode: mm.pay_biancode, pay_none: mm.pay_none,
+        pay_cartao: mm.pay_cartao, pay_biancode: mm.pay_biancode, pay_none: mm.pay_none, notes: mm.notes,
         reembolsos: mm.reembolsos || 0,
         novos_usuarios: mm.novos_usuarios || 0,
         usuarios_totais: mm.usuarios_totais || 0,
@@ -1145,12 +1166,50 @@
   }
 
   async function loadExpenseDetail(toolId, year, month) {
-    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on, paid_via").eq("tool_id", toolId).eq("year", year).eq("month", month);
+    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on, paid_via, note").eq("tool_id", toolId).eq("year", year).eq("month", month);
     if (res.error) { toast("Erro ao carregar despesas: " + res.error.message, true); return []; }
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
-      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on, paid_via: e.paid_via || null };
+      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on, paid_via: e.paid_via || null, note: e.note || null };
     });
+  }
+
+  /* Comentário da despesa no mês: botão 💬 com tooltip e editor embaixo da linha. */
+  function noteBtn(item) {
+    var has = !!item.note;
+    return '<button type="button" class="exp-note' + (has ? " has" : "") + '" data-item-id="' + escHtml(item.id) + '" data-tip="' + escHtml(has ? item.note : "Adicionar comentário") + '" aria-label="' + escHtml(has ? "Comentário: " + item.note : "Adicionar comentário") + '">💬</button>';
+  }
+  function noteEditor(item) {
+    return '<div class="note-edit" hidden><textarea maxlength="500" rows="2" placeholder="Comentário desta despesa neste mês (ex.: reajuste, cobrança em duplicidade, motivo)" aria-label="Comentário da despesa">' + escHtml(item.note || "") + '</textarea>' +
+      '<div class="note-actions"><button type="button" class="btn note-save">Salvar comentário</button><button type="button" class="btn btn-ghost note-cancel">Cancelar</button>' +
+      '<button type="button" class="btn btn-ghost note-remove"' + (item.note ? "" : " hidden") + '>Remover</button><span class="note-count"></span></div></div>';
+  }
+  function updateNoteMark(m, n) {
+    if (state.summaryByMonth[m]) state.summaryByMonth[m].notes = n;
+    var cell = document.querySelector('tr.month-row[data-month="' + m + '"] td');
+    if (!cell) return;
+    var old = cell.querySelector(".note-dot");
+    if (old) old.remove();
+    if (n > 0) cell.insertAdjacentHTML("beforeend", noteMark(n));
+  }
+  function noteMark(n) {
+    return '<span class="note-dot" title="' + n + (n === 1 ? " despesa com comentário" : " despesas com comentário") + ' neste mês">💬</span>';
+  }
+  async function saveNote(item, text, m, items, line) {
+    var val = text.trim().slice(0, 500) || null;
+    var res = await sb.from("monthly_expenses").update({ note: val }).eq("id", item.id).select("id");
+    if (res.error) { toast("Erro ao salvar o comentário: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
+    item.note = val;
+    var btn = line.querySelector(".exp-note");
+    btn.classList.toggle("has", !!val);
+    btn.dataset.tip = val || "Adicionar comentário";
+    btn.setAttribute("aria-label", val ? "Comentário: " + val : "Adicionar comentário");
+    line.querySelector(".note-edit").hidden = true;
+    line.querySelector(".note-remove").hidden = !val;
+    updateNoteMark(m, items.filter(function (i) { return i.note; }).length);
+    invalidateSummaryCache([state.activeToolId]);
+    toast(val ? "Comentário salvo." : "Comentário removido.");
   }
 
   /* Forma de pagamento: Cartão Flow (cartão da empresa) ou Biancode (cobrado por eles). */
@@ -1324,7 +1383,7 @@
       tr.dataset.month = m;
       var liqClass = r ? (Number(r.liquido) >= 0 ? "liq-pos" : "liq-neg") : "";
       tr.innerHTML =
-        '<td><span class="caret">▸</span>' + MONTHS[ymM(m) - 1] + (multiYear ? "/" + String(ymY(m)).slice(2) : "") + monthAlertMark(m) + "</td>" +
+        '<td><span class="caret">▸</span>' + MONTHS[ymM(m) - 1] + (multiYear ? "/" + String(ymY(m)).slice(2) : "") + monthAlertMark(m) + (r && r.notes ? noteMark(r.notes) : "") + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.faturamento) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.total_despesas) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtInt(r.novos_usuarios) : "—") + "</td>" +
@@ -1387,12 +1446,13 @@
           '</span>' +
           '<span class="charge-row"><span class="pay-toggle" role="group" aria-label="Forma de pagamento de ' + escHtml(catName) + '">' + payBtn(item, "cartao") + payBtn(item, "biancode") + '</span><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
             '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"><span class="charge-ok" aria-live="polite">✓ salvo</span></label>' +
-          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button></span>' +
+          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button>' + noteBtn(item) + '</span>' +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
         '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir esta despesa só deste mês (a categoria continua)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button>' +
+        noteEditor(item) +
         '</div>';
     }).join("");
 
@@ -1448,6 +1508,23 @@
 
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".expense-line").forEach(function (line) {
+      var item = items.find(function (i) { return String(i.id) === line.dataset.itemId; });
+      var editor = line.querySelector(".note-edit"), ta = editor.querySelector("textarea"), count = editor.querySelector(".note-count");
+      var tick = function () { count.textContent = ta.value.length + "/500"; };
+      ta.addEventListener("input", tick);
+      line.querySelector(".exp-note").addEventListener("click", function () {
+        editor.hidden = !editor.hidden;
+        if (!editor.hidden) { ta.value = item.note || ""; tick(); ta.focus(); }
+      });
+      editor.querySelector(".note-save").addEventListener("click", function () { saveNote(item, ta.value, m, items, line); });
+      editor.querySelector(".note-cancel").addEventListener("click", function () { editor.hidden = true; });
+      editor.querySelector(".note-remove").addEventListener("click", function () { saveNote(item, "", m, items, line); });
+      ta.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") editor.hidden = true;
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveNote(item, ta.value, m, items, line); }
+      });
     });
     wrap.querySelectorAll(".expense-line .pay-opt").forEach(function (btn) {
       btn.addEventListener("click", function () {
