@@ -158,6 +158,21 @@
   .rank { color: var(--text-muted); width: 28px; }
   th.yt-group { text-align: center; color: var(--text); border-left: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); padding-bottom: 6px; }
   th.yt-group-empty { border-bottom: none; }
+  /* Colunas redimensionáveis: largura vem do <colgroup>; texto que não cabe é cortado (o título tem tooltip). */
+  table.yt-fixed { table-layout: fixed; min-width: 100%; width: auto; }
+  table.yt-fixed thead th { position: relative; padding: 10px 6px; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; vertical-align: bottom; }
+  table.yt-fixed thead th.l { padding-left: 10px; }
+  table.yt-fixed tbody td { padding: 9px 6px; overflow: hidden; text-overflow: ellipsis; }
+  table.yt-fixed tbody td.l:first-child { padding-left: 10px; }
+  table.yt-fixed tr.yt-detail > td { overflow: visible; }
+  .yt-fixed .who { min-width: 0; }
+  .yt-fixed .who .n, .yt-fixed .who .e { overflow: hidden; text-overflow: ellipsis; }
+  .col-grip { position: absolute; top: 0; right: -4px; bottom: 0; width: 9px; cursor: col-resize; z-index: 2; touch-action: none; }
+  thead th:last-child .col-grip { right: 0; }
+  .col-grip::after { content: ""; position: absolute; top: 22%; bottom: 22%; left: 4px; width: 2px; border-radius: 2px; background: var(--border-strong); transition: background .12s; }
+  .col-grip:hover::after, .col-grip:focus-visible::after, .col-grip.dragging::after { background: var(--accent); }
+  .col-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  body.col-resizing { cursor: col-resize; user-select: none; }
   tr.clickable-yt { cursor: pointer; }
   tr.clickable-yt:hover, tr.clickable-yt.open { background: var(--surface-2); }
   tr.yt-detail > td { padding: 0; background: var(--surface-2); }
@@ -442,11 +457,14 @@
           <h3 id="yt-title">Canais dos influencers</h3>
           <div class="tools">
             <span class="muted" style="font-size:12px;" id="yt-info"></span>
+            <button class="btn" id="yt-fit" title="Reduz as colunas na mesma proporção até a tabela caber na largura da tela.">Ajustar à tela</button>
+            <button class="btn" id="yt-reset-cols" title="Volta as colunas à largura original.">Restaurar colunas</button>
             <button class="btn" id="yt-sync">Atualizar YouTube</button>
           </div>
         </div>
-        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Só aparecem influencers com o link do canal cadastrado na ficha. Métricas de postagem e views usam os últimos 100 envios de cada canal, separados em <strong>Vídeos</strong> e <strong>Shorts</strong>; vendas e comissão seguem o período e os filtros do topo. Clique num canal para ver a lista de vídeos.</p>
-        <div class="table-scroll"><table>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Só aparecem influencers com o link do canal cadastrado na ficha. Métricas de postagem e views usam os últimos 100 envios de cada canal, separados em <strong>Vídeos</strong> e <strong>Shorts</strong>; vendas e comissão seguem o período e os filtros do topo. Clique num canal para ver a lista de vídeos. <strong>Arraste a borda direita do título de uma coluna</strong> para aumentar ou diminuir (duplo clique volta ao tamanho original); a largura fica salva na sua conta. <span id="yt-cols-status" aria-live="polite"></span></p>
+        <div class="table-scroll" id="yt-scroll"><table id="yt-table" class="yt-fixed">
+          <colgroup id="yt-colgroup"></colgroup>
           <thead><tr id="yt-head-group"></tr><tr id="yt-head"></tr></thead>
           <tbody id="yt-body"></tbody>
         </table></div>
@@ -483,7 +501,8 @@
     sort: { key: "commission", dir: -1 },
     baseSort: { key: "count", dir: -1 },
     selProducts: null,
-    yt: { channels: [], sort: { key: "subscribers", dir: -1 }, open: null, lastRun: null, detailType: "all" },
+    yt: { channels: [], sort: { key: "subscribers", dir: -1 }, open: null, lastRun: null, detailType: "all", widths: {} },
+    userId: null,
     openEmail: null
   };
 
@@ -1329,6 +1348,96 @@
   ]);
   var YT_GROUPS = { long: "Vídeos", shorts: "Shorts" };
 
+  /* Largura das colunas: padrão no código, ajuste do usuário em ui_prefs (e cópia em localStorage
+     para a tabela já aparecer do jeito certo antes do banco responder). */
+  var YT_PREF_KEY = "youtube_col_widths";
+  var YT_MIN_W = 44, YT_MAX_W = 520;
+  var YT_DEFAULT_W = { title: 230, subscribers: 92, total_views: 104, video_count: 72, viewsPerSub: 96, shortsPct: 82, sales: 74, commission: 104 };
+  var YT_TYPE_W = { lastDays: 104, perWeek: 82, in30: 82, avgViews: 94, medianViews: 104, engagement: 74 };
+  function ytDefaultW(key) {
+    var dot = key.indexOf(".");
+    return dot > 0 ? YT_TYPE_W[key.slice(dot + 1)] : YT_DEFAULT_W[key];
+  }
+  function ytClampW(n) { return Math.max(YT_MIN_W, Math.min(YT_MAX_W, Math.round(n))); }
+  function ytCleanWidths(raw) {
+    var out = {};
+    if (!raw || typeof raw !== "object") return out;
+    YT_COLS.forEach(function (c) {
+      var n = Number(raw[c.key]);
+      if (isFinite(n) && n > 0) out[c.key] = ytClampW(n);
+    });
+    return out;
+  }
+  function ytWidth(key) { return state.yt.widths[key] || ytDefaultW(key); }
+
+  // Aplica as larguras sem refazer a tabela (usado durante o arrasto).
+  function ytApplyWidths() {
+    var cg = $("yt-colgroup"), total = 0;
+    if (cg.children.length !== YT_COLS.length) {
+      cg.innerHTML = YT_COLS.map(function () { return "<col>"; }).join("");
+    }
+    YT_COLS.forEach(function (c, i) {
+      var w = ytWidth(c.key);
+      cg.children[i].style.width = w + "px";
+      total += w;
+    });
+    $("yt-table").style.width = total + "px";
+  }
+
+  var ytSaveTimer = null;
+  function ytSetColsStatus(txt, bad) {
+    var el = $("yt-cols-status");
+    el.textContent = txt || "";
+    el.style.color = bad ? "var(--critical)" : "var(--good)";
+  }
+  function ytSaveWidths() {
+    safeSet("flow_aff_ytw", JSON.stringify(state.yt.widths));
+    clearTimeout(ytSaveTimer);
+    ytSetColsStatus("");
+    ytSaveTimer = setTimeout(async function () {
+      ytSaveTimer = null;
+      var hasAny = Object.keys(state.yt.widths).length > 0;
+      var res = hasAny
+        ? await sb.from("ui_prefs").upsert({ user_id: state.userId, key: YT_PREF_KEY, value: state.yt.widths, updated_at: new Date().toISOString() }, { onConflict: "user_id,key" })
+        : await sb.from("ui_prefs").delete().eq("key", YT_PREF_KEY);
+      if (res.error) { console.warn("ui_prefs:", res.error); ytSetColsStatus("Não foi possível salvar no banco (fica só neste navegador).", true); }
+      else ytSetColsStatus("✓ Largura salva");
+    }, 600);
+  }
+  async function loadYtPrefs() {
+    var res = await sb.from("ui_prefs").select("value").eq("key", YT_PREF_KEY).maybeSingle();
+    if (res.error) throw res.error;
+    if (!res.data || ytSaveTimer) return false; // ajuste feito enquanto carregava vale mais que o salvo
+    var w = ytCleanWidths(res.data.value);
+    state.yt.widths = w;
+    safeSet("flow_aff_ytw", JSON.stringify(w));
+    return true;
+  }
+  function ytFitToScreen() {
+    var avail = Math.floor($("yt-scroll").clientWidth) - 2;
+    if (avail <= 0) return;
+    var w = {}, i;
+    YT_COLS.forEach(function (c) { w[c.key] = ytWidth(c.key); });
+    // Escala proporcional; colunas que bateram no mínimo saem da conta e o resto é reescalado.
+    var fixed = {};
+    for (i = 0; i < 6; i++) {
+      var sumFree = 0, sumFixed = 0;
+      YT_COLS.forEach(function (c) { if (fixed[c.key]) sumFixed += YT_MIN_W; else sumFree += w[c.key]; });
+      var k = sumFree ? (avail - sumFixed) / sumFree : 1, again = false;
+      YT_COLS.forEach(function (c) {
+        if (fixed[c.key]) { w[c.key] = YT_MIN_W; return; }
+        var n = w[c.key] * k;
+        if (n < YT_MIN_W) { fixed[c.key] = true; again = true; w[c.key] = YT_MIN_W; } else w[c.key] = n;
+      });
+      if (!again) break;
+    }
+    var res = {};
+    YT_COLS.forEach(function (c) { res[c.key] = ytClampW(w[c.key]); });
+    state.yt.widths = res;
+    ytApplyWidths();
+    ytSaveWidths();
+  }
+
   function ytValue(x, key) {
     var st = state.stats[x.c.affiliate_email];
     if (key === "sales") return st ? st.count : 0;
@@ -1398,8 +1507,10 @@
       var arrow = s.key === c.key ? ' <span class="arrow">' + (s.dir < 0 ? "↓" : "↑") + "</span>" : "";
       var startsGroup = c.group && (idx === 0 || YT_COLS[idx - 1].group !== c.group);
       return '<th class="sortable ' + (c.cls || "") + '" data-key="' + c.key + '"' + (c.tip ? ' title="' + esc(c.tip) + '"' : "") +
-        (startsGroup ? ' style="border-left:1px solid var(--border-strong)"' : "") + ">" + c.label + arrow + "</th>";
+        (startsGroup ? ' style="border-left:1px solid var(--border-strong)"' : "") + ">" + c.label + arrow +
+        '<span class="col-grip" data-grip="' + idx + '" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Largura da coluna ' + esc(c.label) + '" title="Arraste para ajustar a largura (duplo clique restaura)"></span></th>';
     }).join("");
+    ytApplyWidths();
 
     var cols = YT_COLS.length;
     $("yt-body").innerHTML = list.length ? list.map(function (x) {
@@ -1461,7 +1572,58 @@
       "</tbody></table></div>";
   }
 
+  /* Redimensionar coluna: arrastar a borda do título (mouse, toque ou caneta); setas do teclado ajustam de 8 em 8 px. */
+  (function () {
+    var drag = null;
+    function setW(key, w) {
+      state.yt.widths[key] = ytClampW(w);
+      ytApplyWidths();
+    }
+    $("yt-head").addEventListener("pointerdown", function (e) {
+      var grip = e.target.closest(".col-grip");
+      if (!grip || (e.button !== undefined && e.button > 0)) return;
+      e.preventDefault(); e.stopPropagation();
+      var key = YT_COLS[+grip.dataset.grip].key;
+      drag = { grip: grip, key: key, x: e.clientX, w: ytWidth(key), id: e.pointerId };
+      try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+      grip.classList.add("dragging"); document.body.classList.add("col-resizing");
+    });
+    $("yt-head").addEventListener("pointermove", function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      setW(drag.key, drag.w + (e.clientX - drag.x));
+    });
+    function end(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag.grip.classList.remove("dragging"); document.body.classList.remove("col-resizing");
+      var moved = ytWidth(drag.key) !== drag.w;
+      drag = null;
+      if (moved) ytSaveWidths();
+    }
+    $("yt-head").addEventListener("pointerup", end);
+    $("yt-head").addEventListener("pointercancel", end);
+    $("yt-head").addEventListener("dblclick", function (e) {
+      var grip = e.target.closest(".col-grip");
+      if (!grip) return;
+      delete state.yt.widths[YT_COLS[+grip.dataset.grip].key];
+      ytApplyWidths(); ytSaveWidths();
+    });
+    $("yt-head").addEventListener("keydown", function (e) {
+      var grip = e.target.closest(".col-grip");
+      if (!grip || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+      e.preventDefault();
+      var key = YT_COLS[+grip.dataset.grip].key;
+      setW(key, ytWidth(key) + (e.key === "ArrowRight" ? 8 : -8));
+      ytSaveWidths();
+    });
+    $("yt-fit").addEventListener("click", ytFitToScreen);
+    $("yt-reset-cols").addEventListener("click", function () {
+      state.yt.widths = {};
+      ytApplyWidths(); ytSaveWidths();
+    });
+  })();
+
   $("yt-head").addEventListener("click", function (e) {
+    if (e.target.closest(".col-grip")) return; // soltar o arrasto não conta como clique de ordenar
     var th = e.target.closest("th.sortable");
     if (!th) return;
     var k = th.dataset.key;
@@ -1688,6 +1850,8 @@
     var session = s.data && s.data.session;
     if (!session) { showOnly("login-screen"); return; }
     $("user-email").textContent = session.user.email;
+    state.userId = session.user.id;
+    try { state.yt.widths = ytCleanWidths(JSON.parse(safeGet("flow_aff_ytw"))); } catch (e) { state.yt.widths = {}; }
     var savedPeriod = safeGet("flow_aff_period");
     if (savedPeriod && savedPeriod !== "custom" && $("f-period").querySelector('option[value="' + savedPeriod + '"]')) $("f-period").value = savedPeriod;
 
@@ -1725,6 +1889,9 @@
       if (state.view === "flowinf") renderFlowInf();
       if (state.view === "base") renderBase();
     }).catch(function (e) { console.warn("Influencers Flow:", e); });
+    loadYtPrefs().then(function (found) {
+      if (found && state.view === "youtube") { ytApplyWidths(); }
+    }).catch(function (e) { console.warn("Larguras salvas:", e); });
     loadYoutube().then(function () {
       if (state.view === "youtube") renderYoutube();
       if (state.view === "flowinf") renderFlowInf(); // YouTube detectado nos contratos
