@@ -265,6 +265,8 @@
   .cat-row input[type=text], .cat-row select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .cat-row input[type=text] { flex: 1; min-width: 160px; }
   .btn-danger { color: var(--critical, #d03b3b); }
+  .cat-rename { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 14px; line-height: 1; }
+  .cat-rename:hover { color: var(--accent); background: var(--surface-2); }
 
   .hint-text { font-size: 12.5px; color: var(--text-muted); margin: -8px 0 16px; }
 
@@ -565,7 +567,7 @@
         <h3>Categorias de despesa</h3>
         <button class="btn" id="cat-toggle" type="button">Gerenciar</button>
       </div>
-      <p class="hint-text">Renomeie, mude o grupo ou exclua as categorias desta ferramenta.</p>
+      <p class="hint-text">Renomeie, mude o grupo ou exclua as categorias desta ferramenta. Renomear vale para todos os meses. Dica: dentro de um mês, o botão ✎ ao lado da categoria também renomeia.</p>
       <div id="cat-manager" hidden></div>
     </section>
     </div>
@@ -946,6 +948,7 @@
       var catName = item.category_name || "?";
       return '<div class="expense-line">' +
         '<span class="cat-name">' + escHtml(catName) + '</span>' +
+        '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
         '</div>';
     }).join("");
@@ -994,6 +997,9 @@
 
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".cat-rename").forEach(function (btn) {
+      btn.addEventListener("click", function () { renameCategoryPrompt(this.dataset.catId); });
     });
 
     var newCatSelect = document.getElementById("new-cat-select-" + m);
@@ -1159,11 +1165,22 @@
     renderKpis(); renderTable(); renderChart();
   }
 
-  async function saveCategory(id, row) {
+  function saveCategory(id, row) {
+    return updateCategory(id, row.querySelector(".cat-edit-name").value.trim(), row.querySelector(".cat-edit-group").value);
+  }
+
+  // Renomear direto da linha do mês: o nome fica na categoria, então vale para todos os meses.
+  async function renameCategoryPrompt(id) {
+    var cur = state.categories.find(function (c) { return c.id === id; });
+    if (!cur) { toast("Categoria não encontrada.", true); return; }
+    var name = window.prompt('Novo nome para "' + cur.name + '" (a mudança vale para todos os meses desta ferramenta):', cur.name);
+    if (name === null) return;
+    await updateCategory(id, name.trim(), cur.group_name);
+  }
+
+  async function updateCategory(id, name, group) {
     var cur = state.categories.find(function (c) { return c.id === id; });
     if (!cur) return;
-    var name = row.querySelector(".cat-edit-name").value.trim();
-    var group = row.querySelector(".cat-edit-group").value;
     if (!name) { toast("O nome da categoria não pode ficar vazio.", true); return; }
     if (name === cur.name && group === cur.group_name) { toast("Nada para salvar."); return; }
     var dup = state.categories.find(function (c) { return c.id !== id && c.name.toLowerCase() === name.toLowerCase(); });
@@ -1171,7 +1188,7 @@
     var res = await sb.from("expense_categories").update({ name: name, group_name: group }).eq("id", id).select();
     if (res.error) { toast("Erro ao salvar categoria: " + res.error.message, true); return; }
     if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta categoria.", true); return; }
-    toast("Categoria atualizada.");
+    toast(name !== cur.name ? 'Categoria renomeada para "' + name + '" em todos os meses.' : "Categoria atualizada.");
     await afterCategoryChange();
   }
 
