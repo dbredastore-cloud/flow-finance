@@ -236,38 +236,49 @@
   td.liq-pos { color: var(--good); }
   td.liq-neg { color: var(--critical); }
   .table-scroll { overflow-x: auto; }
+  /* A tabela de meses pode ser mais larga que a tela e rolar para o lado; o detalhe do mês fica
+     preso à largura visível (100cqw) para não esticar junto. */
+  .months-scroll { container-type: inline-size; }
 
   tr.detail-row td { padding: 0; border-bottom: 1px solid var(--border); }
-  .detail-wrap { display: none; padding: 14px 10px 18px; }
+  .detail-wrap { display: none; padding: 16px 14px 20px; box-sizing: border-box; max-width: 100%; white-space: normal; text-align: left; }
+  @supports (width: 1cqw) { .detail-wrap { position: sticky; left: 0; width: 100cqw; } }
   tr.detail-row.open .detail-wrap { display: block; }
-  .detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; align-items: start; }
+  .detail-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 32px; align-items: start; }
+  .detail-col { min-width: 0; }
   .detail-col h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 10px; }
-  .expense-line { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .expense-line .cat-name { flex: 1; font-size: 12.5px; color: var(--text-dim); }
-  .expense-line { flex-wrap: wrap; }
-  .expense-line .cat-name { min-width: 160px; }
-  .cat-group { padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 12px; }
+
+  /* Uma despesa = uma linha de grade: nome | ✎ | grupo | valor | ✕. Rateio e cobrança ficam sob o nome. */
+  .expense-line { display: grid; grid-template-columns: minmax(0, 1fr) auto 132px 112px auto; align-items: center; gap: 4px 8px; padding: 9px 0; margin: 0; border-bottom: 1px solid var(--row-line); }
+  .expense-line:first-child { padding-top: 2px; }
+  .expense-line .cat-name { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; font-size: 13px; color: var(--text); }
+  .expense-line .cat-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; line-height: 1.35; overflow-wrap: anywhere; }
+  .expense-line .split-tag { margin-left: 0; }
+  .cat-group { width: 100%; padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 12px; }
   .expense-line input[type=number] {
-    width: 120px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong);
+    width: 100%; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong);
     background: var(--bg); color: var(--text); font-family: inherit; text-align: right; font-size: 12.5px;
   }
-  .add-cat-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .add-cat-row select, .add-cat-row input { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 12.5px; font-family: inherit; }
-  .add-cat-row select { flex: 1; min-width: 120px; }
-  .add-cat-row input.amount { width: 100px; text-align: right; }
-  .new-cat-fields { display: none; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .new-cat-fields input { flex: 1; min-width: 110px; }
-  .rev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Adicionar despesa: categoria | valor | cobrança | botão; o rateio ocupa a linha inteira embaixo. */
+  .add-cat-row { display: grid; grid-template-columns: minmax(0, 1fr) 112px auto auto; gap: 8px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border-strong); }
+  .add-cat-row select, .add-cat-row input:not([type=checkbox]) { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 12.5px; font-family: inherit; }
+  .add-cat-row select { width: 100%; min-width: 0; }
+  .add-cat-row input.amount { width: 100%; text-align: right; }
+  .new-cat-fields { display: none; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .new-cat-fields input { flex: 1; min-width: 160px; }
+  .rev-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
   .rev-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
   .rev-field input { width: 100%; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .detail-actions { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
   .save-hint { font-size: 11.5px; color: var(--text-muted); }
-  .split-opt { display: flex; align-items: center; gap: 6px; flex-basis: 100%; font-size: 12px; color: var(--text-dim); cursor: pointer; }
-  .split-opt input { accent-color: var(--accent); }
-  .split-hint { flex-basis: 100%; font-size: 11.5px; color: var(--text-muted); }
-  .split-tools { display: flex; flex-wrap: wrap; gap: 4px 14px; flex-basis: 100%; padding-left: 20px; }
-  .split-tools label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
-  .split-tools input { accent-color: var(--accent); }
+  .split-opt, .split-tools, .split-hint { grid-column: 1 / -1; }
+  .split-opt { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
+  .split-opt input, .split-tools input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; flex-shrink: 0; }
+  .split-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+  .split-tools { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+  .split-tools[hidden] { display: none; }
+  .split-tools label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
   .cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .cat-row input[type=text], .cat-row select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .cat-row input[type=text] { flex: 1; min-width: 160px; }
@@ -293,8 +304,10 @@
   .tool-btn.home-btn { margin-bottom: 6px; font-weight: 700; }
   .empty-note { padding: 28px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
   @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } .home-kpis { grid-template-columns: repeat(2, 1fr); } }
-  .charge-row { display: flex; align-items: center; gap: 4px; margin-top: 5px; }
-  .charge-wrap { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+  .charge-row { display: flex; align-items: center; gap: 4px; }
+  .charge-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  .charge-ok { display: none; font-size: 11px; color: var(--good); font-weight: 600; }
+  .charge-ok.on { display: inline; }
   .charge-wrap input[type=date] { padding: 5px 6px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12px; }
   .charge-wrap.is-fixed input[type=date] { border-style: dashed; color: var(--text-dim); }
   .exp-pin { background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; font-size: 12px; line-height: 1; opacity: .55; }
@@ -390,6 +403,18 @@
     .main { padding: 16px 16px 48px; }
     .kpi-row { grid-template-columns: repeat(2, 1fr); }
     .detail-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1100px) { .detail-grid { grid-template-columns: 1fr; gap: 24px; } }
+  @media (max-width: 640px) {
+    .expense-line { grid-template-columns: minmax(0, 1fr) 112px auto; }
+    .expense-line .cat-name { grid-column: 1 / 3; grid-row: 1; }
+    .expense-line .cat-rename { grid-column: 3; grid-row: 1; justify-self: end; }
+    .expense-line .cat-group { grid-column: 1; grid-row: 2; }
+    .expense-line input[type=number] { grid-column: 2; grid-row: 2; }
+    .expense-line .exp-del { grid-column: 3; grid-row: 2; }
+    .add-cat-row { grid-template-columns: minmax(0, 1fr) 112px; }
+    .add-cat-row .charge-wrap { grid-column: 1 / -1; }
+    .rev-grid { grid-template-columns: 1fr; }
   }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -635,7 +660,7 @@
     <section class="panel">
       <div class="panel-head"><h3>Detalhamento mensal</h3></div>
       <p class="hint-text">Clique em um mês para lançar ou editar despesas e receita. A receita de FlowPages, FlowTracking e FlowSpy vem automaticamente da Kiwify.</p>
-      <div class="table-scroll">
+      <div class="table-scroll months-scroll">
         <table>
           <thead>
             <tr>
@@ -1112,6 +1137,12 @@
     if (cat && cat.billing_day) return { value: chargeDateFor(ymY(m), ymM(m), cat.billing_day), fixedDay: cat.billing_day };
     return { value: "", fixedDay: null };
   }
+  // Texto do campo: "cobrado em" (data gravada neste mês), "dia fixo" (vem da categoria) ou "cobrança" (vazio).
+  function chargeLabel(chg) { return chg.fixedDay ? "dia fixo" : chg.value ? "cobrado em" : "cobrança"; }
+  function chargeTitle(chg) {
+    return chg.fixedDay ? "Dia fixo da categoria (dia " + chg.fixedDay + "). Escolha outra data para registrar uma cobrança diferente só neste mês."
+      : chg.value ? "Data da cobrança no cartão, salva para este mês." : "Dia em que esta despesa foi cobrada no cartão";
+  }
 
   /* ---------------- Rendering ---------------- */
   function renderSidebar() {
@@ -1229,12 +1260,12 @@
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
       var chg = chargeInfo(item, m);
-      var chgTitle = chg.fixedDay ? "Dia fixo da categoria (dia " + chg.fixedDay + "). Edite para registrar outra data neste mês." : "Dia em que esta despesa foi cobrada no cartão";
       return '<div class="expense-line">' +
-        '<span class="cat-name">' + escHtml(catName) +
-          (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
-          '<span class="charge-row"><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chgTitle) + '"><span>cobrança</span>' +
-            '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"></label>' +
+        '<span class="cat-name"><span class="cat-title">' + escHtml(catName) +
+          (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
+          '</span>' +
+          '<span class="charge-row"><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
+            '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"><span class="charge-ok" aria-live="polite">✓ salvo</span></label>' +
           '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button></span>' +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
@@ -1384,12 +1415,30 @@
     renderDetail(m, items);
   }
 
+  // Salva a data da cobrança sem redesenhar a linha: redesenhar enquanto a pessoa ainda digita o ano
+  // apagava o campo. Só atualiza o rótulo e mostra "✓ salvo".
   async function saveChargeDate(itemId, value, m) {
+    var input = document.querySelector('#detail-' + m + ' .exp-date[data-item-id="' + itemId + '"]');
+    if (value) {
+      var y = parseInt(value.slice(0, 4), 10);
+      if (!(y >= 2000 && y <= 2100)) return; // ano ainda incompleto (ex.: 0002) — espera terminar de digitar
+    }
     var res = await sb.from("monthly_expenses").update({ charged_on: value || null }).eq("id", itemId).select("id");
     if (res.error) { toast("Erro ao salvar a data: " + res.error.message, true); return; }
     if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
-    toast(value ? "Data da cobrança salva." : "Data removida (volta ao dia fixo da categoria, se houver).");
-    await reloadDetail(m);
+    if (!input) return;
+    var line = input.closest(".expense-line"), box = input.closest(".charge-wrap");
+    var cat = state.categories.find(function (c) { return c.id === (line.querySelector(".exp-pin") || {}).dataset.catId; });
+    var chg = value ? { value: value, fixedDay: null }
+      : cat && cat.billing_day ? { value: chargeDateFor(ymY(m), ymM(m), cat.billing_day), fixedDay: cat.billing_day }
+      : { value: "", fixedDay: null };
+    if (!value) input.value = chg.value; // apagou: volta a mostrar o dia fixo da categoria
+    box.classList.toggle("is-fixed", !!chg.fixedDay);
+    box.title = chargeTitle(chg);
+    box.querySelector(".charge-lbl").textContent = chargeLabel(chg);
+    var ok = box.querySelector(".charge-ok");
+    ok.classList.add("on");
+    setTimeout(function () { ok.classList.remove("on"); }, 2200);
   }
 
   // Dia fixo de cobrança da categoria: aparece em todos os meses que não têm data própria.
