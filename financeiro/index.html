@@ -712,7 +712,7 @@
     var now = todayYm(), y = ymY(now);
     if (id === "month") return { from: now, to: now };
     if (id === "lastmonth") { var p = ymAdd(now, -1); return { from: p, to: p }; }
-    if (id === "last3") return { from: ymAdd(now, -2), to: now };
+    if (id === "last3") return { from: ymAdd(now, -3), to: ymAdd(now, -1) };   // 3 meses fechados, sem o mês atual
     if (id === "lastyear") return { from: ym(y - 1, 1), to: ym(y - 1, 12) };
     if (id === "all") return { from: 200001, to: ym(y + 5, 12) };   // limites só para a consulta; a tela usa do 1º ao último mês com dado
     return { from: ym(y, 1), to: ym(y, 12) };                        // "year"
