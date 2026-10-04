@@ -304,7 +304,32 @@
   .tool-btn.home-btn { margin-bottom: 6px; font-weight: 700; }
   .empty-note { padding: 28px 8px; text-align: center; color: var(--text-muted); font-size: 13px; }
   @media (max-width: 1100px) { .home-grid { grid-template-columns: 1fr; } .home-kpis { grid-template-columns: repeat(2, 1fr); } }
-  .charge-row { display: flex; align-items: center; gap: 4px; }
+  .charge-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+
+  /* Forma de pagamento: Cartão Flow | Biancode */
+  .pay-toggle { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; flex-shrink: 0; }
+  .pay-opt { padding: 3px 11px; font-size: 11.5px; font-family: inherit; line-height: 1.5; background: transparent; border: none; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+  .pay-opt + .pay-opt { border-left: 1px solid var(--border-strong); }
+  .pay-opt:hover { background: var(--surface-2); color: var(--text); }
+  .pay-opt.on, .pay-opt.on:hover { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .pay-opt.on[data-v="biancode"], .pay-opt.on[data-v="biancode"]:hover { background: var(--accent-3); }
+  .add-pay { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+  .pay-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .pay-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px; border-radius: 999px; font-family: inherit; font-size: 12px; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); cursor: pointer; }
+  .pay-chip b { font-family: var(--font-mono, ui-monospace, monospace); font-weight: 600; color: var(--text); font-size: 12px; }
+  .pay-chip:hover { border-color: var(--accent); }
+  .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
+  .pay-chip.on b { color: var(--accent-ink); }
+  .expense-line.pay-hidden { display: none; }
+  .pay-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -4px 0 18px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 12.5px; color: var(--text-muted); }
+  .pay-strip[hidden] { display: none; }
+  .pay-strip-title { margin-right: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .pay-sum { display: inline-flex; align-items: baseline; gap: 7px; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-dim); }
+  .pay-sum b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; color: var(--text); }
+  .pay-sum small { font-size: 11px; color: var(--text-muted); }
+  .pay-sum.cartao { border-color: var(--accent); }
+  .pay-sum.biancode { border-color: var(--accent-3); }
+  .pay-sum.none { border-style: dashed; }
   .charge-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
   .charge-ok { display: none; font-size: 11px; color: var(--good); font-weight: 600; }
   .charge-ok.on { display: inline; }
@@ -641,6 +666,7 @@
 
     <div id="tool-view">
     <div class="kpi-row" id="kpi-row"></div>
+    <div class="pay-strip" id="pay-strip" hidden></div>
 
     <section class="panel">
       <div class="panel-head">
@@ -1037,7 +1063,7 @@
     var fy = ymY(range.from), ty = ymY(range.to);
     // Despesas, receita e categorias saem em paralelo.
     var res = await Promise.all([
-      pageAll(function () { return sb.from("monthly_expenses").select("category_id, year, month, amount").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
+      pageAll(function () { return sb.from("monthly_expenses").select("category_id, year, month, amount, paid_via").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
       pageAll(function () { return sb.from("monthly_revenue").select("year, month, faturamento, reembolsos, novos_usuarios, usuarios_totais, source, synced_at").eq("tool_id", toolId).gte("year", fy).lte("year", ty); }),
       state.categoriesReady || Promise.resolve()
     ]);
@@ -1046,7 +1072,7 @@
     state.categories.forEach(function (c) { catById[c.id] = c; });
 
     var acc = {};
-    function ensure(m) { if (!acc[m]) acc[m] = { total_despesas: 0, custo_infra: 0 }; return acc[m]; }
+    function ensure(m) { if (!acc[m]) acc[m] = { total_despesas: 0, custo_infra: 0, pay_cartao: 0, pay_biancode: 0, pay_none: 0 }; return acc[m]; }
 
     if (expRes.error) throw expRes.error;
     (expRes.data || []).forEach(function (e) {
@@ -1055,6 +1081,7 @@
       var mm = ensure(k);
       var amt = Number(e.amount) || 0;
       mm.total_despesas += amt;
+      mm["pay_" + (e.paid_via === "cartao" || e.paid_via === "biancode" ? e.paid_via : "none")] += amt;
       var cat = catById[e.category_id];
       if (cat && cat.group_name === "Infraestrutura") mm.custo_infra += amt;
     });
@@ -1082,6 +1109,7 @@
         faturamento: fat,
         total_despesas: mm.total_despesas,
         custo_infra: mm.custo_infra,
+        pay_cartao: mm.pay_cartao, pay_biancode: mm.pay_biancode, pay_none: mm.pay_none,
         reembolsos: mm.reembolsos || 0,
         novos_usuarios: mm.novos_usuarios || 0,
         usuarios_totais: mm.usuarios_totais || 0,
@@ -1117,12 +1145,104 @@
   }
 
   async function loadExpenseDetail(toolId, year, month) {
-    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on").eq("tool_id", toolId).eq("year", year).eq("month", month);
+    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on, paid_via").eq("tool_id", toolId).eq("year", year).eq("month", month);
     if (res.error) { toast("Erro ao carregar despesas: " + res.error.message, true); return []; }
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
-      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on };
+      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on, paid_via: e.paid_via || null };
     });
+  }
+
+  /* Forma de pagamento: Cartão Flow (cartão da empresa) ou Biancode (cobrado por eles). */
+  var PAY_LABEL = { cartao: "Cartão Flow", biancode: "Biancode" };
+  // Nova despesa começa com a última forma escolhida (padrão: Cartão Flow).
+  function newPayDefault() { var v = safeGet("flow_fin_paid_default"); return v === "biancode" ? "biancode" : "cartao"; }
+  state.payFilter = "all";
+  function payBtn(item, v) {
+    var on = item.paid_via === v;
+    return '<button type="button" class="pay-opt' + (on ? " on" : "") + '" data-v="' + v + '" data-item-id="' + escHtml(item.id) + '" aria-pressed="' + on + '" title="' + (on ? "Clique de novo para tirar a classificação" : "Pago com " + PAY_LABEL[v]) + '">' + PAY_LABEL[v] + "</button>";
+  }
+  function payTotals(items) {
+    var t = { all: 0, cartao: 0, biancode: 0, none: 0 };
+    items.forEach(function (i) { var a = Number(i.amount) || 0; t.all += a; t[i.paid_via || "none"] += a; });
+    return t;
+  }
+  // Chips do mês: mostram quanto foi em cada forma de pagamento e filtram as linhas.
+  function renderPayChips(m, items) {
+    var box = document.getElementById("pay-chips-" + m);
+    if (!box) return;
+    var t = payTotals(items), f = state.payFilter;
+    var defs = [["all", "Todas", t.all], ["cartao", PAY_LABEL.cartao, t.cartao], ["biancode", PAY_LABEL.biancode, t.biancode]];
+    if (t.none > 0 || f === "none") defs.push(["none", "Sem classificar", t.none]);
+    box.innerHTML = defs.map(function (d) {
+      return '<button type="button" class="pay-chip' + (f === d[0] ? " on" : "") + '" data-pf="' + d[0] + '" aria-pressed="' + (f === d[0]) + '"><span>' + d[1] + "</span><b>" + escHtml(fmtBRL(d[2])) + "</b></button>";
+    }).join("");
+  }
+  function applyPayFilter(m) {
+    var wrap = document.getElementById("detail-" + m);
+    if (!wrap) return;
+    var f = state.payFilter, shown = 0;
+    wrap.querySelectorAll(".expense-line").forEach(function (line) {
+      var hide = f !== "all" && line.dataset.pay !== f;
+      line.classList.toggle("pay-hidden", hide);
+      if (!hide) shown++;
+    });
+    var empty = wrap.querySelector(".pay-empty");
+    if (empty) empty.hidden = shown > 0 || !wrap.querySelector(".expense-line");
+  }
+  // Total do período por forma de pagamento (faixa acima da tabela de meses).
+  function renderPayStrip() {
+    var el = document.getElementById("pay-strip");
+    if (!el) return;
+    var t = { cartao: 0, biancode: 0, none: 0 };
+    (state.rows || []).forEach(function (m) {
+      var s = state.summaryByMonth[m];
+      if (s) { t.cartao += s.pay_cartao || 0; t.biancode += s.pay_biancode || 0; t.none += s.pay_none || 0; }
+    });
+    var all = t.cartao + t.biancode + t.none;
+    if (!all) { el.hidden = true; return; }
+    el.hidden = false;
+    var part = function (cls, label, v) {
+      return '<span class="pay-sum ' + cls + '"><span>' + label + "</span><b>" + escHtml(fmtBRL(v)) + "</b><small>" + Math.round(v / all * 100) + "%</small></span>";
+    };
+    el.innerHTML = '<span class="pay-strip-title">Despesas por forma de pagamento no período</span>' +
+      part("cartao", PAY_LABEL.cartao, t.cartao) + part("biancode", PAY_LABEL.biancode, t.biancode) + (t.none ? part("none", "Sem classificar", t.none) : "");
+  }
+
+  async function setPaidVia(item, value, m, items) {
+    var next = item.paid_via === value ? null : value;
+    var res = await sb.from("monthly_expenses").update({ paid_via: next }).eq("id", item.id).select("id");
+    if (res.error) { toast("Erro ao salvar a forma de pagamento: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
+    item.paid_via = next;
+    var line = document.querySelector('#detail-' + m + ' .expense-line[data-item-id="' + item.id + '"]');
+    if (line) {
+      line.dataset.pay = next || "none";
+      line.querySelectorAll(".pay-opt").forEach(function (b) { var on = b.dataset.v === next; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+    }
+    renderPayChips(m, items); applyPayFilter(m);
+    toast(next ? '"' + item.category_name + '" marcada como ' + PAY_LABEL[next] + "." : "Classificação removida.");
+    invalidateSummaryCache([state.activeToolId]);
+    if (item.split_total && next) await offerSplitPay(item, next, m);
+    loadSummary(state.activeToolId, state.range).then(renderPayStrip).catch(function () {});
+  }
+  // Despesa rateada (ex.: Biancode) existe nas outras ferramentas: oferece usar a mesma forma de pagamento lá.
+  async function offerSplitPay(item, next, m) {
+    var cur = state.categories.find(function (c) { return c.id === item.category_id; });
+    if (!cur) return;
+    var oc = await sb.from("expense_categories").select("id, tool_id, name").neq("tool_id", state.activeToolId);
+    if (oc.error) return;
+    var ids = (oc.data || []).filter(function (c) { return c.name.toLowerCase() === cur.name.toLowerCase(); }).map(function (c) { return c.id; });
+    if (!ids.length) return;
+    var ex = await sb.from("monthly_expenses").select("id, tool_id, paid_via, split_total").eq("year", ymY(m)).eq("month", ymM(m)).in("category_id", ids);
+    if (ex.error) return;
+    var diff = (ex.data || []).filter(function (e) { return e.split_total != null && e.paid_via !== next; });
+    if (!diff.length) return;
+    var names = diff.map(function (e) { var t = state.tools.find(function (x) { return x.id === e.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
+    if (!window.confirm('"' + cur.name + '" foi rateada com ' + names + " neste mês. Marcar como " + PAY_LABEL[next] + " lá também?")) return;
+    var up = await sb.from("monthly_expenses").update({ paid_via: next }).in("id", diff.map(function (e) { return e.id; })).select("id");
+    if (up.error) toast("Mudou aqui, mas falhou nas outras ferramentas: " + up.error.message, true);
+    else { invalidateSummaryCache(diff.map(function (e) { return e.tool_id; })); toast("Forma de pagamento aplicada também em " + (up.data || []).length + " ferramenta(s)."); }
   }
 
   /* Data da cobrança no cartão: a data gravada na linha do mês, ou o dia fixo da categoria. */
@@ -1178,6 +1298,7 @@
       kpiTile("Líquido (período)", fmtBRL(totalLiq), totalLiq >= 0 ? "good" : "bad", "Faturamento do período − Despesas do período.") +
       kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido do período ÷ Faturamento do período, em percentual.") +
       (lastUsers !== null ? kpiTile("Usuários totais (" + ymShort(lastKey) + ")", fmtInt(lastUsers), null, "Quantidade total acumulada de usuários até o fim do último mês do período que tem dado.") : "");
+    renderPayStrip();
   }
   function kpiTile(label, value, cls, tip) {
     return '<div class="kpi"><div class="label"' + (tip ? ' title="' + tip + '"' : "") + '>' + label + '</div><div class="value ' + (cls || "") + ' num">' + value + "</div></div>";
@@ -1260,11 +1381,11 @@
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
       var chg = chargeInfo(item, m);
-      return '<div class="expense-line">' +
+      return '<div class="expense-line" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '">' +
         '<span class="cat-name"><span class="cat-title">' + escHtml(catName) +
           (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
           '</span>' +
-          '<span class="charge-row"><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
+          '<span class="charge-row"><span class="pay-toggle" role="group" aria-label="Forma de pagamento de ' + escHtml(catName) + '">' + payBtn(item, "cartao") + payBtn(item, "biancode") + '</span><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
             '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"><span class="charge-ok" aria-live="polite">✓ salvo</span></label>' +
           '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button></span>' +
         '</span>' +
@@ -1283,12 +1404,15 @@
       '<div class="detail-grid">' +
         '<div class="detail-col">' +
           "<h4>Despesas — " + ymFull(m) + "</h4>" +
-          '<div id="exp-lines-' + m + '">' + (expLines || '<p class="save-hint">Nenhuma despesa lançada.</p>') + "</div>" +
+          '<div class="pay-filter" id="pay-chips-' + m + '" role="group" aria-label="Filtrar por forma de pagamento"></div>' +
+          '<div id="exp-lines-' + m + '">' + (expLines || '<p class="save-hint">Nenhuma despesa lançada.</p>') + '<p class="save-hint pay-empty" hidden>Nenhuma despesa nesta forma de pagamento neste mês.</p></div>' +
           '<div class="add-cat-row">' +
             '<select id="new-cat-select-' + m + '"><option value="">+ nova categoria</option>' + catOptions + "</select>" +
             '<input type="number" step="0.01" placeholder="R$" class="amount" id="new-cat-amount-' + m + '">' +
             '<label class="charge-wrap" title="Data da cobrança no cartão (opcional)"><span>cobrança</span><input type="date" id="new-cat-date-' + m + '" aria-label="Data da cobrança (opcional)"></label>' +
             '<button class="btn" id="add-exp-btn-' + m + '">Adicionar</button>' +
+            '<div class="add-pay"><span>Pago com</span><span class="pay-toggle" id="new-pay-' + m + '" role="group" aria-label="Forma de pagamento da nova despesa" data-pay="' + newPayDefault() + '">' +
+              payBtn({ id: "", paid_via: newPayDefault() }, "cartao") + payBtn({ id: "", paid_via: newPayDefault() }, "biancode") + "</span></div>" +
             '<label class="split-opt"><input type="checkbox" id="split-chk-' + m + '"> Ratear o valor cheio entre ferramentas</label>' +
             '<div class="split-tools" id="split-tools-' + m + '" hidden>' + state.tools.map(function (t) {
               var on = ["flowpages", "flowtracking", "flowspy"].indexOf(t.slug) !== -1;
@@ -1325,6 +1449,27 @@
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
     });
+    wrap.querySelectorAll(".expense-line .pay-opt").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var item = items.find(function (i) { return String(i.id) === btn.dataset.itemId; });
+        if (item) setPaidVia(item, btn.dataset.v, m, items);
+      });
+    });
+    wrap.querySelectorAll("#new-pay-" + m + " .pay-opt").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var box = btn.parentElement;
+        box.dataset.pay = btn.dataset.v;
+        box.querySelectorAll(".pay-opt").forEach(function (b) { var on = b === btn; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+        safeSet("flow_fin_paid_default", btn.dataset.v);
+      });
+    });
+    document.getElementById("pay-chips-" + m).addEventListener("click", function (e) {
+      var chip = e.target.closest(".pay-chip");
+      if (!chip) return;
+      state.payFilter = chip.dataset.pf;
+      renderPayChips(m, items); applyPayFilter(m);
+    });
+    renderPayChips(m, items); applyPayFilter(m);
     wrap.querySelectorAll(".exp-date").forEach(function (input) {
       input.addEventListener("change", function () { saveChargeDate(this.dataset.itemId, this.value, m); });
     });
@@ -1484,12 +1629,13 @@
     var splitIds = split ? selectedSplitTools(m) : [];
     if (split && splitIds.length < 2) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
     var chargedOn = document.getElementById("new-cat-date-" + m).value || null;
+    var paidVia = document.getElementById("new-pay-" + m).dataset.pay === "biancode" ? "biancode" : "cartao";
 
     if (categoryId === "__new__") {
       var name = document.getElementById("new-cat-name-" + m).value.trim();
       var group = document.getElementById("new-cat-group-" + m).value;
       if (!name) { toast("Digite o nome da nova categoria.", true); return; }
-      if (split) { await addSplitExpense(m, name, group, amount, splitIds, chargedOn, null); return; }
+      if (split) { await addSplitExpense(m, name, group, amount, splitIds, chargedOn, null, paidVia); return; }
       var dup = state.categories.find(function (c) { return c.name.toLowerCase() === name.toLowerCase(); });
       if (dup) {
         categoryId = dup.id;
@@ -1502,12 +1648,12 @@
     } else if (split) {
       var chosen = state.categories.find(function (c) { return c.id === categoryId; });
       if (!chosen) { toast("Categoria não encontrada.", true); return; }
-      await addSplitExpense(m, chosen.name, chosen.group_name, amount, splitIds, chargedOn, chosen.billing_day);
+      await addSplitExpense(m, chosen.name, chosen.group_name, amount, splitIds, chargedOn, chosen.billing_day, paidVia);
       return;
     }
 
     // A data só entra no upsert quando preenchida, para não apagar a de um lançamento que já existe.
-    var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount };
+    var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount, paid_via: paidVia };
     if (chargedOn) row.charged_on = chargedOn;
     var res = await sb.from("monthly_expenses").upsert(row, { onConflict: "tool_id,category_id,year,month" });
     if (res.error) { toast("Erro ao salvar despesa: " + res.error.message, true); return; }
@@ -1536,7 +1682,7 @@
   }
 
   // Valor cheio (ex.: Biancode) dividido igualmente entre as ferramentas escolhidas.
-  async function addSplitExpense(m, catName, catGroup, total, pickedIds, chargedOn, billingDay) {
+  async function addSplitExpense(m, catName, catGroup, total, pickedIds, chargedOn, billingDay, paidVia) {
     var targets = (pickedIds || []).map(function (id) { return state.tools.find(function (t) { return t.id === id; }); });
     if (targets.length < 2 || targets.some(function (t) { return !t; })) { toast("Marque pelo menos 2 ferramentas para ratear.", true); return; }
     var shares = splitShares(total, targets.length);
@@ -1566,6 +1712,7 @@
     var rows = targets.map(function (t, idx) {
       var row = { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
       if (chargedOn) row.charged_on = chargedOn; // a cobrança é uma só no cartão: mesma data em todas as partes
+      if (paidVia) row.paid_via = paidVia;
       return row;
     });
     var up = await sb.from("monthly_expenses").upsert(rows, { onConflict: "tool_id,category_id,year,month" });
