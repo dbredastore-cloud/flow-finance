@@ -321,6 +321,10 @@
   .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
   .pay-chip.on b { color: var(--accent-ink); }
   .expense-line.pay-hidden { display: none; }
+  .multi-tag { padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-dim); border: 1px solid var(--border-strong); cursor: help; }
+  .expense-line.is-repeat { border-top: 0; }
+  .exp-add { background: none; border: 1px dashed var(--border-strong); border-radius: 999px; padding: 1px 9px; font-family: inherit; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+  .exp-add:hover { color: var(--accent); border-color: var(--accent); }
 
   /* Comentário da despesa: 💬 apagado = sem comentário; aceso = tem, e o texto vira tooltip. */
   .exp-note { position: relative; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; font-size: 13px; line-height: 1; opacity: .4; filter: grayscale(1); }
@@ -1171,6 +1175,14 @@
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
       return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on, paid_via: e.paid_via || null, note: e.note || null };
+    }).sort(function (a, b) {
+      // Categorias na ordem do menu; dentro de cada uma, por data de cobrança (sem data por último).
+      var ia = state.categories.findIndex(function (c) { return c.id === a.category_id; });
+      var ib = state.categories.findIndex(function (c) { return c.id === b.category_id; });
+      if (ia !== ib) return ia - ib;
+      var da = a.charged_on || "9999-99-99", db = b.charged_on || "9999-99-99";
+      if (da !== db) return da < db ? -1 : 1;
+      return String(a.id) < String(b.id) ? -1 : 1;
     });
   }
 
@@ -1295,7 +1307,8 @@
     if (!ids.length) return;
     var ex = await sb.from("monthly_expenses").select("id, tool_id, paid_via, split_total").eq("year", ymY(m)).eq("month", ymM(m)).in("category_id", ids);
     if (ex.error) return;
-    var diff = (ex.data || []).filter(function (e) { return e.split_total != null && e.paid_via !== next; });
+    // Só o lançamento do mesmo rateio (mesmo valor cheio); a categoria pode ter outros lançamentos no mês.
+    var diff = (ex.data || []).filter(function (e) { return e.split_total != null && Number(e.split_total) === Number(item.split_total) && e.paid_via !== next; });
     if (!diff.length) return;
     var names = diff.map(function (e) { var t = state.tools.find(function (x) { return x.id === e.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
     if (!window.confirm('"' + cur.name + '" foi rateada com ' + names + " neste mês. Marcar como " + PAY_LABEL[next] + " lá também?")) return;
@@ -1435,29 +1448,34 @@
     var auto = r.source === "kiwify";
     var lock = auto ? " disabled" : "";
     var usedCatIds = items.map(function (i) { return i.category_id; });
-    var availableCats = state.categories.filter(function (c) { return usedCatIds.indexOf(c.id) === -1; });
+    var availableCats = state.categories; // a mesma categoria pode ter vários lançamentos no mês
+    var perCat = {}, seenCat = {};
+    items.forEach(function (i) { perCat[i.category_id] = (perCat[i.category_id] || 0) + 1; });
 
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
       var chg = chargeInfo(item, m);
-      return '<div class="expense-line" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '">' +
+      var nth = (seenCat[item.category_id] = (seenCat[item.category_id] || 0) + 1);
+      return '<div class="expense-line' + (nth > 1 ? " is-repeat" : "") + '" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '">' +
         '<span class="cat-name"><span class="cat-title">' + escHtml(catName) +
+          (perCat[item.category_id] > 1 ? '<span class="multi-tag" title="Esta categoria tem ' + perCat[item.category_id] + ' lançamentos neste mês, cada um com valor, data e forma de pagamento próprios.">' + nth + " de " + perCat[item.category_id] + "</span>" : "") +
           (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
           '</span>' +
           '<span class="charge-row"><span class="pay-toggle" role="group" aria-label="Forma de pagamento de ' + escHtml(catName) + '">' + payBtn(item, "cartao") + payBtn(item, "biancode") + '</span><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
             '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"><span class="charge-ok" aria-live="polite">✓ salvo</span></label>' +
-          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button>' + noteBtn(item) + '</span>' +
+          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button>' + noteBtn(item) +
+            '<button type="button" class="exp-add" data-cat-id="' + escHtml(item.category_id) + '" title="Adicionar outro lançamento desta categoria neste mês (outro valor e outra data)">+ outro valor</button></span>' +
         '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
-        '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir esta despesa só deste mês (a categoria continua)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button>' +
+        '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir só este lançamento (a categoria e os outros lançamentos continuam)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button>' +
         noteEditor(item) +
         '</div>';
     }).join("");
 
     var catOptions = availableCats.map(function (c) {
-      return '<option value="' + c.id + '">' + escHtml(c.name) + " (" + escHtml(c.group_name) + ")</option>";
+      return '<option value="' + c.id + '">' + escHtml(c.name) + " (" + escHtml(c.group_name) + ")" + (usedCatIds.indexOf(c.id) !== -1 ? " · já tem lançamento" : "") + "</option>";
     }).join("");
 
     wrap.innerHTML =
@@ -1508,6 +1526,15 @@
 
     wrap.querySelectorAll(".exp-amount").forEach(function (input) {
       input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
+    });
+    wrap.querySelectorAll(".exp-add").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sel = document.getElementById("new-cat-select-" + m), amount = document.getElementById("new-cat-amount-" + m);
+        sel.value = btn.dataset.catId; sel.dispatchEvent(new Event("change"));
+        amount.scrollIntoView({ block: "center", behavior: "smooth" });
+        amount.focus();
+        toast("Digite o valor e a data do novo lançamento e clique em Adicionar.");
+      });
     });
     wrap.querySelectorAll(".expense-line").forEach(function (line) {
       var item = items.find(function (i) { return String(i.id) === line.dataset.itemId; });
@@ -1610,7 +1637,7 @@
 
   // Apaga só o lançamento daquele mês; a categoria e os outros meses ficam como estão.
   async function deleteExpense(item, m) {
-    var msg = 'Excluir "' + (item.category_name || "esta despesa") + '" (' + fmtBRL(Number(item.amount)) + ") de " + ymFull(m) + "? Só este mês é apagado; a categoria continua."
+    var msg = 'Excluir "' + (item.category_name || "esta despesa") + '" (' + fmtBRL(Number(item.amount)) + ") de " + ymFull(m) + "? Só este lançamento é apagado; a categoria e os outros lançamentos continuam."
       + (item.split_total ? "\n\nEsta despesa foi rateada: as partes das outras ferramentas não são apagadas." : "");
     if (!window.confirm(msg)) return;
     var res = await sb.from("monthly_expenses").delete().eq("id", item.id).select();
@@ -1729,10 +1756,10 @@
       return;
     }
 
-    // A data só entra no upsert quando preenchida, para não apagar a de um lançamento que já existe.
+    // Cada "Adicionar" cria um lançamento novo: a mesma categoria pode ter vários no mês.
     var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount, paid_via: paidVia };
     if (chargedOn) row.charged_on = chargedOn;
-    var res = await sb.from("monthly_expenses").upsert(row, { onConflict: "tool_id,category_id,year,month" });
+    var res = await sb.from("monthly_expenses").insert(row);
     if (res.error) { toast("Erro ao salvar despesa: " + res.error.message, true); return; }
     toast("Despesa lançada.");
     await refreshMonth(m);
@@ -1781,18 +1808,14 @@
       catIds.push(cat.id);
     }
 
-    var exRes = await sb.from("monthly_expenses").select("tool_id, amount").eq("year", ymY(m)).eq("month", ymM(m)).in("category_id", catIds);
-    if (exRes.error) { toast("Erro ao conferir lançamentos: " + exRes.error.message, true); return; }
-    var already = (exRes.data || []).filter(function (e) { return toolIds.indexOf(e.tool_id) !== -1; });
-    if (already.length && !window.confirm('Já existe lançamento de "' + catName + '" em ' + already.length + ' das ' + targets.length + ' ferramentas marcadas neste mês. O ratear vai SUBSTITUIR esses valores. Continuar?')) return;
-
+    // Lançamento novo em cada ferramenta (não substitui os que já existem: a categoria pode ter vários no mês).
     var rows = targets.map(function (t, idx) {
       var row = { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
       if (chargedOn) row.charged_on = chargedOn; // a cobrança é uma só no cartão: mesma data em todas as partes
       if (paidVia) row.paid_via = paidVia;
       return row;
     });
-    var up = await sb.from("monthly_expenses").upsert(rows, { onConflict: "tool_id,category_id,year,month" });
+    var up = await sb.from("monthly_expenses").insert(rows);
     if (up.error) { toast("Erro ao ratear: " + up.error.message, true); return; }
     invalidateSummaryCache(toolIds);
     toast("Valor de " + fmtBRL(total) + " rateado entre " + targets.map(function (t) { return t.name; }).join(", ") + ".");

@@ -343,7 +343,12 @@ function App(){
     if(re){showToast("Erro ao salvar receita.","err");return false;}
     for(const ex of exps){
       if(!ex.category_id||num(ex.amount)===0)continue;
-      const{error:ee}=await sb.from("monthly_expenses").upsert({tool_id,year,month:int(month),category_id:ex.category_id,amount:num(ex.amount)},{onConflict:"tool_id,category_id,year,month"});
+      // Uma categoria pode ter vários lançamentos no mês: atualiza o primeiro, ou cria se não houver.
+      const{data:found,error:fe}=await sb.from("monthly_expenses").select("id").eq("tool_id",tool_id).eq("category_id",ex.category_id).eq("year",year).eq("month",int(month)).limit(1);
+      if(fe){showToast("Erro ao salvar despesa.","err");return false;}
+      const{error:ee}=found&&found.length
+        ?await sb.from("monthly_expenses").update({amount:num(ex.amount)}).eq("id",found[0].id)
+        :await sb.from("monthly_expenses").insert({tool_id,year,month:int(month),category_id:ex.category_id,amount:num(ex.amount)});
       if(ee){showToast("Erro ao salvar despesa.","err");return false;}
     }
     return true;
