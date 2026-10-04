@@ -321,6 +321,10 @@
   .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
   .pay-chip.on b { color: var(--accent-ink); }
   .expense-line.pay-hidden { display: none; }
+  .exp-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; color: var(--text-muted); }
+  .exp-sort select { padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 12px; }
+  .exp-sort .btn { padding: 4px 11px; font-size: 12px; width: auto; }
+  .exp-sort .btn[hidden] { display: none; }
   .multi-tag { padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-dim); border: 1px solid var(--border-strong); cursor: help; }
   .expense-line.is-repeat { border-top: 0; }
   .exp-add { background: none; border: 1px dashed var(--border-strong); border-radius: 999px; padding: 1px 9px; font-family: inherit; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
@@ -1249,6 +1253,58 @@
       return '<button type="button" class="pay-chip' + (f === d[0] ? " on" : "") + '" data-pf="' + d[0] + '" aria-pressed="' + (f === d[0]) + '"><span>' + d[1] + "</span><b>" + escHtml(fmtBRL(d[2])) + "</b></button>";
     }).join("");
   }
+  /* Ordenação das despesas do mês (lê os valores dos campos da própria linha, então vale também para o que acabou de ser editado). */
+  var EXP_SORTS = [
+    ["default", "Ordem original"], ["date", "Data da cobrança"], ["value", "Valor"], ["card", "Cartão (forma de pagamento)"],
+    ["cat", "Categoria (grupo)"], ["alpha", "Ordem alfabética"]
+  ];
+  state.expSort = (function () {
+    var s = null;
+    try { s = JSON.parse(safeGet("flow_fin_exp_sort") || "null"); } catch (e) { s = null; }
+    if (!s || !EXP_SORTS.some(function (x) { return x[0] === s.key; })) s = { key: "default", dir: -1 };
+    s.dir = s.dir === 1 ? 1 : -1;
+    return s;
+  })();
+  function expSortDirLabel(s) {
+    var text = s.key === "alpha" || s.key === "cat";
+    if (s.key === "date") return s.dir < 0 ? "↓ Mais recente primeiro" : "↑ Mais antiga primeiro";
+    if (text) return s.dir < 0 ? "↓ Z → A" : "↑ A → Z";
+    return s.dir < 0 ? "↓ Maior → menor" : "↑ Menor → maior";
+  }
+  function applyExpSort(m) {
+    var box = document.getElementById("exp-lines-" + m);
+    if (!box) return;
+    var s = state.expSort, lines = [].slice.call(box.querySelectorAll(".expense-line"));
+    var amount = function (l) { return parseFloat(l.querySelector(".exp-amount").value) || 0; };
+    var date = function (l) { return l.querySelector(".exp-date").value || null; };
+    var key = function (l) {
+      switch (s.key) {
+        case "date": return date(l);
+        case "value": return amount(l);
+        case "card": return { cartao: 2, biancode: 1, none: 0 }[l.dataset.pay];
+        case "cat": return l.dataset.group;
+        case "alpha": return l.dataset.name;
+      }
+      return Number(l.dataset.idx);
+    };
+    lines.sort(function (a, b) {
+      var ka = key(a), kb = key(b);
+      if (s.key === "default") return ka - kb;
+      if ((ka === null) !== (kb === null)) return ka === null ? 1 : -1; // sem data sempre no fim
+      if (ka !== kb) return (ka < kb ? -1 : 1) * s.dir;
+      // desempate: nome, depois valor (maior primeiro), depois a ordem original
+      if (a.dataset.name !== b.dataset.name) return a.dataset.name < b.dataset.name ? -1 : 1;
+      var va = amount(a), vb = amount(b);
+      if (va !== vb) return vb - va;
+      return Number(a.dataset.idx) - Number(b.dataset.idx);
+    });
+    var tail = box.querySelector(".pay-empty");
+    lines.forEach(function (l) { box.insertBefore(l, tail); });
+    var sel = document.getElementById("exp-sort-key-" + m), btn = document.getElementById("exp-sort-dir-" + m);
+    if (sel) sel.value = s.key;
+    if (btn) { btn.textContent = expSortDirLabel(s); btn.hidden = s.key === "default"; }
+  }
+
   function applyPayFilter(m) {
     var wrap = document.getElementById("detail-" + m);
     if (!wrap) return;
@@ -1456,7 +1512,7 @@
       var catName = item.category_name || "?";
       var chg = chargeInfo(item, m);
       var nth = (seenCat[item.category_id] = (seenCat[item.category_id] || 0) + 1);
-      return '<div class="expense-line' + (nth > 1 ? " is-repeat" : "") + '" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '">' +
+      return '<div class="expense-line' + (nth > 1 ? " is-repeat" : "") + '" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '" data-name="' + escHtml(catName.toLowerCase()) + '" data-group="' + escHtml(groupOf(item.category_id).toLowerCase()) + '" data-idx="' + items.indexOf(item) + '">' +
         '<span class="cat-name"><span class="cat-title">' + escHtml(catName) +
           (perCat[item.category_id] > 1 ? '<span class="multi-tag" title="Esta categoria tem ' + perCat[item.category_id] + ' lançamentos neste mês, cada um com valor, data e forma de pagamento próprios.">' + nth + " de " + perCat[item.category_id] + "</span>" : "") +
           (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
@@ -1483,6 +1539,9 @@
         '<div class="detail-col">' +
           "<h4>Despesas — " + ymFull(m) + "</h4>" +
           '<div class="pay-filter" id="pay-chips-' + m + '" role="group" aria-label="Filtrar por forma de pagamento"></div>' +
+          '<div class="exp-sort"><label for="exp-sort-key-' + m + '">Ordenar por</label>' +
+            '<select id="exp-sort-key-' + m + '">' + EXP_SORTS.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + "</option>"; }).join("") + "</select>" +
+            '<button type="button" class="btn" id="exp-sort-dir-' + m + '" title="Inverter a ordem"></button></div>' +
           '<div id="exp-lines-' + m + '">' + (expLines || '<p class="save-hint">Nenhuma despesa lançada.</p>') + '<p class="save-hint pay-empty" hidden>Nenhuma despesa nesta forma de pagamento neste mês.</p></div>' +
           '<div class="add-cat-row">' +
             '<select id="new-cat-select-' + m + '"><option value="">+ nova categoria</option>' + catOptions + "</select>" +
@@ -1574,6 +1633,18 @@
       renderPayChips(m, items); applyPayFilter(m);
     });
     renderPayChips(m, items); applyPayFilter(m);
+    document.getElementById("exp-sort-key-" + m).addEventListener("change", function () {
+      // Datas e textos começam do menor/A→Z em "Categoria" e "Alfabética"; o resto, do maior para o menor.
+      state.expSort = { key: this.value, dir: this.value === "alpha" || this.value === "cat" ? 1 : -1 };
+      safeSet("flow_fin_exp_sort", JSON.stringify(state.expSort));
+      applyExpSort(m);
+    });
+    document.getElementById("exp-sort-dir-" + m).addEventListener("click", function () {
+      state.expSort.dir = -state.expSort.dir;
+      safeSet("flow_fin_exp_sort", JSON.stringify(state.expSort));
+      applyExpSort(m);
+    });
+    applyExpSort(m);
     wrap.querySelectorAll(".exp-date").forEach(function (input) {
       input.addEventListener("change", function () { saveChargeDate(this.dataset.itemId, this.value, m); });
     });
