@@ -83,7 +83,7 @@
   .pw-checklist li { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 7px; }
   .pw-checklist li .mark { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1; }
   .pw-checklist li.ok { color: var(--text); }
-  .pw-checklist li.ok .mark { background: var(--good); border-color: var(--good); color: #fff; }
+  .pw-checklist li.ok .mark { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
   .btn {
     display: inline-flex;
     align-items: center;
@@ -265,6 +265,7 @@
   .cat-row input[type=text], .cat-row select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 12.5px; }
   .cat-row input[type=text] { flex: 1; min-width: 160px; }
   .btn-danger { color: var(--critical, #d03b3b); }
+  .split-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; background: rgba(var(--accent-rgb), .12); color: var(--accent); cursor: help; }
   .cat-rename { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 7px; border-radius: 6px; font-size: 14px; line-height: 1; }
   .cat-rename:hover { color: var(--accent); background: var(--surface-2); }
 
@@ -290,17 +291,17 @@
   .goal-card { padding: 18px 20px 16px; margin: 0; }
   .goal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .goal-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 600; }
-  .goal-value { font-family: var(--font-mono, monospace); font-size: 30px; font-weight: 600; margin-top: 6px; text-shadow: 0 0 22px rgba(34,227,122,.35); }
+  .goal-value { font-family: var(--font-mono, monospace); font-size: 30px; font-weight: 600; margin-top: 6px; text-shadow: var(--text-glow); }
   .goal-value small { font-size: 15px; color: var(--text-muted); font-weight: 500; text-shadow: none; }
-  .goal-bar { position: relative; height: 12px; border-radius: 999px; background: rgba(34,227,122,.08); border: 1px solid var(--border); margin: 14px 0 8px; overflow: visible; }
-  .goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #0f7a44, var(--accent)); box-shadow: 0 0 14px rgba(34,227,122,.6); transition: width 1s cubic-bezier(.2,.8,.2,1); }
-  .goal-pace { position: absolute; top: -5px; bottom: -5px; width: 2px; background: #eafff3; opacity: .8; }
+  .goal-bar { position: relative; height: 12px; border-radius: 999px; background: var(--track-bg); border: 1px solid var(--border); margin: 14px 0 8px; overflow: visible; }
+  .goal-fill { height: 100%; border-radius: 999px; background: var(--bar-fill); box-shadow: 0 0 14px rgba(var(--accent-rgb),.6); transition: width 1s cubic-bezier(.2,.8,.2,1); }
+  .goal-pace { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--pace-line); opacity: .8; }
   .goal-pace::after { content: attr(data-label); position: absolute; top: -18px; transform: translateX(-50%); font-size: 10px; color: var(--text-muted); white-space: nowrap; }
   .goal-lines { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 12.5px; color: var(--text-dim); margin-top: 10px; }
   .goal-lines b { color: var(--text); font-family: var(--font-mono, monospace); font-weight: 600; }
   .goal-status { margin-top: 10px; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; }
-  .goal-status.ok { background: rgba(34,227,122,.1); color: var(--good); }
-  .goal-status.bad { background: rgba(255,92,122,.1); color: var(--critical); }
+  .goal-status.ok { background: rgba(var(--good-rgb),.1); color: var(--good); }
+  .goal-status.bad { background: rgba(var(--critical-rgb),.1); color: var(--critical); }
   .goal-toggle { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 8px; cursor: pointer; }
   .goal-edit { font-size: 12px; padding: 4px 10px; }
   .health-kpis { grid-template-columns: repeat(6, 1fr); }
@@ -309,11 +310,11 @@
   .health-table th, .health-table td { text-align: right; }
   .health-table th:first-child, .health-table td:first-child { text-align: left; }
   .health-table td.l, .health-table th.l { text-align: left; }
-  .health-table select { background: rgba(4,12,8,.85); border: 1px solid var(--border-strong); color: var(--text); border-radius: 6px; padding: 3px 6px; }
+  .health-table select { background: var(--field-bg); border: 1px solid var(--border-strong); color: var(--text); border-radius: 6px; padding: 3px 6px; }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
-  .pill.ok { background: rgba(34,227,122,.12); color: var(--good); }
-  .pill.mid { background: rgba(247,201,72,.12); color: var(--warning); }
-  .pill.bad { background: rgba(255,92,122,.12); color: var(--critical); }
+  .pill.ok { background: rgba(var(--good-rgb),.12); color: var(--good); }
+  .pill.mid { background: rgba(var(--warning-rgb),.14); color: var(--warning); }
+  .pill.bad { background: rgba(var(--critical-rgb),.12); color: var(--critical); }
   .health-help summary { cursor: pointer; font-weight: 600; color: var(--text-dim); }
   .health-help ul { font-size: 12.5px; color: var(--text-dim); line-height: 1.7; padding-left: 18px; }
   @media (max-width: 1100px) { .health-kpis { grid-template-columns: repeat(3, 1fr); } .health-grid, .goal-grid { grid-template-columns: 1fr; } }
@@ -360,6 +361,7 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<script src="../assets/flow-theme.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -616,7 +618,7 @@
     var el = document.getElementById("toast");
     el.textContent = msg;
     el.style.background = isError ? "var(--critical)" : "var(--accent)";
-    el.style.color = isError ? "#fff" : "var(--accent-ink)";
+    el.style.color = isError ? "var(--on-critical)" : "var(--accent-ink)";
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
@@ -835,11 +837,11 @@
   }
 
   async function loadExpenseDetail(toolId, year, month) {
-    var res = await sb.from("monthly_expenses").select("id, amount, category_id").eq("tool_id", toolId).eq("year", year).eq("month", month);
+    var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts").eq("tool_id", toolId).eq("year", year).eq("month", month);
     if (res.error) { toast("Erro ao carregar despesas: " + res.error.message, true); return []; }
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
-      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?" };
+      return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts };
     });
   }
 
@@ -947,7 +949,9 @@
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
       return '<div class="expense-line">' +
-        '<span class="cat-name">' + escHtml(catName) + '</span>' +
+        '<span class="cat-name">' + escHtml(catName) +
+          (item.split_total ? ' <span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais (FlowPages, FlowTracking e FlowSpy) neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
+        '</span>' +
         '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
         '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
         '</div>';
@@ -1035,7 +1039,8 @@
   async function saveExpenseAmount(itemId, value, m) {
     var amount = parseFloat(value);
     if (isNaN(amount) || amount < 0) { toast("Valor inválido.", true); return; }
-    var res = await sb.from("monthly_expenses").update({ amount: amount }).eq("id", itemId);
+    // Ajustar a parte na mão deixa de ser um rateio igual, então a marca de rateio sai desta linha.
+    var res = await sb.from("monthly_expenses").update({ amount: amount, split_total: null, split_parts: null }).eq("id", itemId);
     if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
     toast("Despesa atualizada.");
     await refreshMonth(m);
@@ -1127,7 +1132,7 @@
     if (already.length && !window.confirm('Já existe lançamento de "' + catName + '" em ' + already.length + ' das 3 ferramentas neste mês. O ratear vai SUBSTITUIR esses valores. Continuar?')) return;
 
     var rows = targets.map(function (t, idx) {
-      return { tool_id: t.id, category_id: catIds[idx], year: state.activeYear, month: m, amount: shares[idx] };
+      return { tool_id: t.id, category_id: catIds[idx], year: state.activeYear, month: m, amount: shares[idx], split_total: total, split_parts: targets.length };
     });
     var up = await sb.from("monthly_expenses").upsert(rows, { onConflict: "tool_id,category_id,year,month" });
     if (up.error) { toast("Erro ao ratear: " + up.error.message, true); return; }
@@ -1289,6 +1294,7 @@
     var tok = function (k) { return cs.getPropertyValue(k).trim(); };
     var gridC = tok("--grid"), mutedC = tok("--text-muted");
     var C = { fat: tok("--accent"), desp: tok("--accent-2"), liq: tok("--accent-3") };
+    var dotFill = tok("--dot-fill");
     var mono = "JetBrains Mono, monospace";
 
     var html =
@@ -1331,7 +1337,7 @@
       });
       series[key].forEach(function (v, i) {
         if (v === null) return;
-        html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="#03100a" stroke="' + C[key] + '" stroke-width="1.6"/>';
+        html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="' + dotFill + '" stroke="' + C[key] + '" stroke-width="1.6"/>';
       });
     }
     drawSeries("fat");
@@ -1365,7 +1371,7 @@
       svg.querySelectorAll(".fx-dot").forEach(function (c) {
         var on = c.getAttribute("data-i") == i;
         c.setAttribute("r", on ? "5" : "2.6");
-        c.setAttribute("fill", on ? c.getAttribute("stroke") : "#03100a");
+        c.setAttribute("fill", on ? c.getAttribute("stroke") : dotFill);
       });
       var r = state.summaryByMonth[i + 1];
       tooltip.innerHTML = '<div class="t-month">' + MONTHS_FULL[i] + "</div>" +
@@ -1381,7 +1387,7 @@
     hit.addEventListener("mouseleave", function () {
       cross.setAttribute("opacity", "0");
       tooltip.style.display = "none";
-      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "2.6"); c.setAttribute("fill", "#03100a"); });
+      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "2.6"); c.setAttribute("fill", dotFill); });
     });
   }
   function fmtCompact(v) {
@@ -1994,6 +2000,12 @@
   sb.auth.onAuthStateChange(function (event) {
     if (event === "PASSWORD_RECOVERY") { showRecovery(); }
     else if (event === "SIGNED_OUT") { showLogin(); }
+  });
+
+  // Troca de modo claro/escuro: os gráficos leem as cores ao desenhar, então redesenha.
+  window.addEventListener("flow-theme-change", function () {
+    if (state.healthMode) { if (state.health) renderHealth(); }
+    else if (state.activeToolId) renderChart();
   });
 
   boot();

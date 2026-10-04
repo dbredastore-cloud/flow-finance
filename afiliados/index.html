@@ -169,7 +169,7 @@
   td.products-cell { white-space: normal; min-width: 220px; }
   /* % de comissão: verde = praticado nas vendas; contorno = só o cadastrado na Kiwify. */
   .pct-tag { display: inline-block; margin-top: 3px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    background: rgba(34,227,122,.14); color: var(--accent); cursor: help; }
+    background: rgba(var(--accent-rgb),.14); color: var(--accent); cursor: help; }
   .pct-tag.cad { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-strong); font-weight: 600; }
 
   .chip {
@@ -207,28 +207,28 @@
   /* Influencers Flow */
   .star { background: none; border: 0; padding: 0 6px 0 0; font-size: 16px; line-height: 1; cursor: pointer; color: var(--text-muted); vertical-align: -1px; transition: transform .15s, color .15s; }
   .star:hover { color: var(--accent); transform: scale(1.2); }
-  .star.on { color: #f5c542; text-shadow: 0 0 8px rgba(245,197,66,.55); }
-  .nav-flow { color: #f5c542; }
+  .star.on { color: var(--star); text-shadow: 0 0 8px rgba(var(--warning-rgb),.55); }
+  .nav-flow { color: var(--star-text); }
   .fi-card { margin-bottom: 18px; }
   .fi-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 14px; }
   .fi-head .e { margin-top: 3px; }
   .fi-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .fi-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; margin-bottom: 14px; }
-  .fi-bonus, .fi-tot { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: rgba(0,0,0,.18); }
+  .fi-bonus, .fi-tot { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--inset-bg); }
   .kpi-mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
   .fi-big { font-size: 28px; font-weight: 700; margin: 6px 0 8px; }
   .fi-big small { font-size: 15px; color: var(--text-muted); font-weight: 500; }
-  .goal-bar { height: 10px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
-  .goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #7dffb2); box-shadow: 0 0 12px var(--accent); }
+  .goal-bar { height: 10px; border-radius: 999px; background: var(--track-bg); overflow: hidden; }
+  .goal-fill { height: 100%; border-radius: 999px; background: var(--bar-fill-2); box-shadow: 0 0 12px rgba(var(--accent-rgb),.6); }
   .fi-bonus-txt { margin-top: 8px; font-size: 13px; }
   .fi-tot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
   .fi-tot span { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
   .fi-tot b { font-size: 17px; }
   .fi-tot .good { color: var(--good); } .fi-tot .bad { color: var(--critical); }
-  .fi-in { width: 48px; padding: 3px 5px; background: rgba(0,0,0,.3); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font: inherit; font-size: 12.5px; text-align: center; }
+  .fi-in { width: 48px; padding: 3px 5px; background: var(--field-bg); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font: inherit; font-size: 12.5px; text-align: center; }
   .fi-table td { white-space: nowrap; }
-  .fi-table tr.fi-current td { background: rgba(0,255,140,.04); }
-  .pct-tag.warn { background: rgba(245,197,66,.15); color: #f5c542; }
+  .fi-table tr.fi-current td { background: rgba(var(--accent-rgb),.06); }
+  .pct-tag.warn { background: rgba(var(--warning-rgb),.15); color: var(--warning); }
   @media (max-width: 800px) { .fi-grid { grid-template-columns: 1fr; } }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .form-grid .full { grid-column: 1 / -1; }
@@ -261,6 +261,7 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<script src="../assets/flow-theme.js"></script>
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -515,7 +516,7 @@
     var el = document.getElementById("toast");
     el.textContent = msg;
     el.style.background = isError ? "var(--critical)" : "var(--accent)";
-    el.style.color = isError ? "#fff" : "var(--accent-ink)";
+    el.style.color = isError ? "var(--on-critical)" : "var(--accent-ink)";
     el.classList.add("show");
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { el.classList.remove("show"); }, 2800);
@@ -939,11 +940,12 @@
     var barW = Math.max(2, Math.min(26, slot * 0.72));
     var cs = getComputedStyle(document.documentElement);
     var gridC = cs.getPropertyValue("--grid").trim(), mutedC = cs.getPropertyValue("--text-muted").trim(), accC = cs.getPropertyValue("--accent").trim();
+    var hiC = cs.getPropertyValue("--chart-hi").trim(), capC = cs.getPropertyValue("--chart-cap").trim(), avgC = cs.getPropertyValue("--avg-line").trim();
     var mono = "JetBrains Mono, monospace";
     var html =
       "<defs>" +
         '<linearGradient id="fxBar" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0%" stop-color="#7dffb8"/><stop offset="35%" stop-color="' + accC + '"/>' +
+          '<stop offset="0%" stop-color="' + hiC + '"/><stop offset="35%" stop-color="' + accC + '"/>' +
           '<stop offset="100%" stop-color="' + accC + '" stop-opacity="0.08"/></linearGradient>' +
         '<linearGradient id="fxScan" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0%" stop-color="' + accC + '" stop-opacity="0"/><stop offset="50%" stop-color="' + accC + '" stop-opacity="0.16"/>' +
@@ -968,7 +970,7 @@
           '<path d="M' + x0 + "," + baseY + " V" + (y0 + rr) + " Q" + x0 + "," + y0 + " " + (x0 + rr) + "," + y0 +
           " H" + (x0 + barW - rr) + " Q" + (x0 + barW) + "," + y0 + " " + (x0 + barW) + "," + (y0 + rr) + " V" + baseY + ' Z" fill="url(#fxBar)"/>' +
           // Tampa neon no topo da barra.
-          '<rect x="' + (x0 + 1) + '" y="' + y0 + '" width="' + Math.max(1, barW - 2) + '" height="2" rx="1" fill="#b6ffd6" filter="url(#fxGlow)"/>' +
+          '<rect x="' + (x0 + 1) + '" y="' + y0 + '" width="' + Math.max(1, barW - 2) + '" height="2" rx="1" fill="' + capC + '" filter="url(#fxGlow)"/>' +
           "</g>";
       }
       if (i % labelEvery === 0) html += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + mutedC + '" font-family="' + mono + '">' + esc(b.label) + "</text>";
@@ -978,8 +980,8 @@
     if (withSales.length > 1) {
       var avgV = withSales.reduce(function (s, b) { return s + b.commission; }, 0) / withSales.length;
       var ay = baseY - (avgV / maxV) * plotH;
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + ay + '" y2="' + ay + '" stroke="#eafff3" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="6 4" class="fx-area"/>' +
-        '<text x="' + (W - padR) + '" y="' + (ay - 5) + '" text-anchor="end" font-size="9.5" fill="#eafff3" fill-opacity="0.75" font-family="' + mono + '">média ' + esc(fmtBRL(avgV)) + "/" + (byMonth ? "mês" : "dia") + "</text>";
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + ay + '" y2="' + ay + '" stroke="' + avgC + '" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="6 4" class="fx-area"/>' +
+        '<text x="' + (W - padR) + '" y="' + (ay - 5) + '" text-anchor="end" font-size="9.5" fill="' + avgC + '" fill-opacity="0.85" font-family="' + mono + '">média ' + esc(fmtBRL(avgV)) + "/" + (byMonth ? "mês" : "dia") + "</text>";
     }
     html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + baseY + '" y2="' + baseY + '" stroke="' + accC + '" stroke-opacity="0.45" stroke-width="1"/>';
     html += '<rect id="chart-hit" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
@@ -2040,6 +2042,8 @@
   }
 
   sb.auth.onAuthStateChange(function (event) { if (event === "SIGNED_OUT") showOnly("login-screen"); });
+  // Troca de modo claro/escuro: os gráficos leem as cores ao desenhar, então redesenha a aba aberta.
+  window.addEventListener("flow-theme-change", function () { if (state.filtered) renderView(state.view); });
   boot();
 })();
 </script>

@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <meta name="referrer" content="no-referrer">
 <title>Flow Finance</title>
+<script src="assets/flow-theme.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
@@ -18,22 +19,28 @@
 :root[data-theme="dark"] {
   --bg:#090d13; --s1:#0f1420; --s2:#141926; --s3:#1a202e;
   --line:#1f2636; --line2:#161c28;
-  --text:#e8edf5; --dim:#8892a4; --faint:#4a5568;
+  --text:#e8edf5; --dim:#8892a4; --faint:#8b98ac;
   --card-bg:linear-gradient(160deg,#141926,#0f1420);
   --input-bg:#090d13; --modal-bg:#0f1420;
   --shadow:rgba(0,0,0,.5);
+  --brand:#00e5a0; --brand2:#00b87a; --glow:rgba(0,229,160,.12); --on-brand:#090d13;
+  --rev:#38b2f8; --cost:#f56b8a; --net:#a78bfa; --warn:#f6c344;
+  --c-pages:#38b2f8; --c-tracking:#a78bfa; --c-spy:#00e5a0; --c-subs:#f6c344;
+  color-scheme:dark;
 }
 :root[data-theme="light"] {
   --bg:#f0f4f8; --s1:#ffffff; --s2:#f7f9fc; --s3:#eef1f6;
   --line:#e2e8f0; --line2:#d1dae6;
-  --text:#1a2332; --dim:#5a6a82; --faint:#94a3b8;
+  --text:#1a2332; --dim:#5a6a82; --faint:#566579;
   --card-bg:linear-gradient(160deg,#ffffff,#f7f9fc);
   --input-bg:#ffffff; --modal-bg:#ffffff;
   --shadow:rgba(0,0,0,.1);
+  --brand:#047857; --brand2:#065f46; --glow:rgba(4,120,87,.10); --on-brand:#ffffff;
+  --rev:#0369a1; --cost:#be123c; --net:#6d28d9; --warn:#92400e;
+  --c-pages:#0369a1; --c-tracking:#6d28d9; --c-spy:#047857; --c-subs:#92400e;
+  color-scheme:light;
 }
 :root {
-  --brand:#00e5a0; --brand2:#00b87a; --glow:rgba(0,229,160,.12);
-  --rev:#38b2f8; --cost:#f56b8a; --net:#a78bfa; --warn:#f6c344;
   --r:12px; --rsm:8px; --rxs:5px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -55,11 +62,11 @@ input,select,textarea{font-family:inherit;}
 .fl label{display:block;font-size:11.5px;color:var(--dim);margin-bottom:6px;font-weight:500;}
 .fl input{width:100%;padding:11px 13px;background:var(--input-bg);border:1px solid var(--line);border-radius:var(--rsm);color:var(--text);font-size:13.5px;transition:border-color .15s;}
 .fl input:focus{outline:none;border-color:var(--brand2);box-shadow:0 0 0 3px var(--glow);}
-.btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#090d13;font-weight:700;border-radius:var(--rsm);font-size:13.5px;transition:filter .15s;}
+.btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:var(--on-brand);font-weight:700;border-radius:var(--rsm);font-size:13.5px;transition:filter .15s;}
 .btn:hover{filter:brightness(1.07);}
 .btn:disabled{opacity:.4;cursor:default;filter:none;}
-.lerr{background:rgba(245,107,138,.12);border:1px solid rgba(245,107,138,.3);color:#f56b8a;font-size:12.5px;padding:10px 12px;border-radius:var(--rsm);margin-bottom:14px;}
-.linfo{background:var(--glow);border:1px solid rgba(0,229,160,.25);color:var(--brand2);font-size:12.5px;padding:10px 12px;border-radius:var(--rsm);margin-bottom:14px;line-height:1.5;}
+.lerr{background:color-mix(in srgb,var(--cost) 12%,transparent);border:1px solid color-mix(in srgb,var(--cost) 35%,transparent);color:var(--cost);font-size:12.5px;padding:10px 12px;border-radius:var(--rsm);margin-bottom:14px;}
+.linfo{background:var(--glow);border:1px solid color-mix(in srgb,var(--brand) 30%,transparent);color:var(--brand2);font-size:12.5px;padding:10px 12px;border-radius:var(--rsm);margin-bottom:14px;line-height:1.5;}
 .lnote{font-size:11.5px;color:var(--faint);margin-top:18px;text-align:center;line-height:1.5;}
 .llink{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:var(--dim);padding:5px;}
 .llink:hover{color:var(--brand);}
@@ -86,9 +93,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:13p
 .psel select:focus,.psel input[type=month]:focus{outline:none;border-color:var(--brand2);}
 .psep{color:var(--faint);font-size:12px;}
 .sp{flex:1;}
-.add-btn{display:flex;align-items:center;gap:7px;padding:8px 16px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#090d13;font-weight:600;border-radius:var(--rsm);font-size:12.5px;white-space:nowrap;}
+.add-btn{display:flex;align-items:center;gap:7px;padding:8px 16px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:var(--on-brand);font-weight:600;border-radius:var(--rsm);font-size:12.5px;white-space:nowrap;}
 .add-btn:hover{filter:brightness(1.07);}
-.pill{display:inline-flex;align-items:center;gap:5px;background:var(--glow);border:1px solid rgba(0,229,160,.2);color:var(--brand2);font-size:11.5px;padding:5px 11px;border-radius:20px;font-weight:500;}
+.pill{display:inline-flex;align-items:center;gap:5px;background:var(--glow);border:1px solid color-mix(in srgb,var(--brand) 25%,transparent);color:var(--brand2);font-size:11.5px;padding:5px 11px;border-radius:20px;font-weight:500;}
 
 /* KPI GRID */
 .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
@@ -181,7 +188,7 @@ table.et tr:hover td{background:rgba(128,128,128,.04);}
 .form-field.half{grid-column:span 1;}
 .tool-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;}
 .tool-tab{padding:6px 12px;font-size:12px;font-weight:500;border:1px solid var(--line);border-radius:20px;color:var(--dim);transition:all .13s;}
-.tool-tab.on{color:#090d13;font-weight:600;}
+.tool-tab.on{color:var(--on-brand);font-weight:600;}
 .derived-info{background:var(--s2);border:1px solid var(--line2);border-radius:var(--rsm);padding:12px 14px;font-size:11.5px;color:var(--dim);line-height:1.8;}
 .derived-info b{color:var(--text);font-family:'JetBrains Mono';font-size:11px;}
 
@@ -210,7 +217,7 @@ const R=(typeof Recharts!=="undefined")?Recharts:null;
 
 const MONTHS_F=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MONTHS=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const TCOL={flowpages:"#38b2f8",flowtracking:"#a78bfa",flowspy:"#00e5a0",flowsubscriptions:"#f6c344"};
+const TCOL={flowpages:"var(--c-pages)",flowtracking:"var(--c-tracking)",flowspy:"var(--c-spy)",flowsubscriptions:"var(--c-subs)"};
 
 const cfg=window.FLOW_CONFIG;
 const sb=cfg.SUPABASE_URL.startsWith("http")&&cfg.SUPABASE_ANON_KEY.length>10?createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY):null;
@@ -225,7 +232,7 @@ const pct=(v)=>v==null?"—":v.toFixed(1)+"%";
 const num=(v)=>{const n=parseFloat(String(v||0).replace(/\./g,"").replace(",","."));return isNaN(n)?0:n;};
 const int=(v)=>parseInt(v||0,10)||0;
 
-const Mark=()=>(<div className="bmark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h9M5 17h5" stroke="#090d13" strokeWidth="2.5" strokeLinecap="round"/></svg></div>);
+const Mark=()=>(<div className="bmark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h9M5 17h5" stroke="var(--on-brand)" strokeWidth="2.5" strokeLinecap="round"/></svg></div>);
 const Brand=()=>(<div className="bl"><Mark/><div className="bname">Flow <b>Finance</b></div></div>);
 
 function Login({onIn}){
@@ -275,11 +282,8 @@ function App(){
   const [tools,setTools]=useState([]);const [cats,setCats]=useState([]);const [expenses,setExpenses]=useState([]);const [revenue,setRevenue]=useState([]);
   const [loading,setLoading]=useState(true);
   const [toast,setToast]=useState(null);
-  const [theme,setTheme]=useState(localStorage.getItem("ff-theme")||"dark");
   const [drawer,setDrawer]=useState(false);
   const showToast=(msg,kind="ok")=>{setToast({msg,kind});setTimeout(()=>setToast(null),2400);};
-
-  useEffect(()=>{document.documentElement.setAttribute("data-theme",theme);localStorage.setItem("ff-theme",theme);},[theme]);
 
   const now=new Date();
   const [mode,setMode]=useState("single");
@@ -356,7 +360,6 @@ function App(){
         <Brand/>
         <div className="hright">
           <span className="huser">{session.user.email}</span>
-          <button className="theme-btn" onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>{theme==="dark"?"☀️ Claro":"🌙 Escuro"}</button>
           <button className="hbtn" onClick={()=>sb.auth.signOut()}>Sair</button>
         </div>
       </header>
@@ -436,12 +439,12 @@ function App(){
                         <R.XAxis dataKey="month" stroke="var(--faint)" fontSize={10} tickLine={false} axisLine={false}/>
                         <R.YAxis stroke="var(--faint)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v=>fmt(v,true)} width={54}/>
                         <R.Tooltip contentStyle={{background:"var(--s2)",border:"1px solid var(--line)",borderRadius:8,fontSize:11.5}} labelStyle={{color:"var(--text)",fontWeight:600}} formatter={v=>fmt(v)}/>
-                        <R.Bar dataKey="Receita" fill="#38b2f8" radius={[3,3,0,0]} maxBarSize={26}/>
-                        <R.Bar dataKey="Custo" fill="#f56b8a" radius={[3,3,0,0]} maxBarSize={26}/>
-                        <R.Line dataKey="Líquido" stroke="#a78bfa" strokeWidth={2.5} dot={{r:3,fill:"#a78bfa"}} type="monotone"/>
+                        <R.Bar dataKey="Receita" fill="var(--rev)" radius={[3,3,0,0]} maxBarSize={26}/>
+                        <R.Bar dataKey="Custo" fill="var(--cost)" radius={[3,3,0,0]} maxBarSize={26}/>
+                        <R.Line dataKey="Líquido" stroke="var(--net)" strokeWidth={2.5} dot={{r:3,fill:"var(--net)"}} type="monotone"/>
                       </R.ComposedChart>
                     </R.ResponsiveContainer>
-                    <div className="legend"><span><i style={{background:"#38b2f8"}}/>Receita</span><span><i style={{background:"#f56b8a"}}/>Custo</span><span><i style={{background:"#a78bfa"}}/>Líquido</span></div>
+                    <div className="legend"><span><i style={{background:"var(--rev)"}}/>Receita</span><span><i style={{background:"var(--cost)"}}/>Custo</span><span><i style={{background:"var(--net)"}}/>Líquido</span></div>
                     </>
                   )}
                 </div>
