@@ -354,6 +354,11 @@
   .pay-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: var(--track-bg, rgba(127,127,127,.15)); border: 1px solid var(--border-strong); }
   .pay-bar-seg { display: flex; align-items: center; justify-content: center; min-width: 3px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; font-weight: 700; color: var(--accent-ink); transition: opacity .15s; }
   .pay-bar-seg + .pay-bar-seg { border-left: 2px solid var(--bg); }
+  /* Barra em blocos + régua embaixo (estilo HUD). */
+  .pay-bar { position: relative; margin-bottom: 16px; }
+  .pay-bar-seg { position: relative; }
+  .pay-bar-seg::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(0, 0, 0, .2) 7px 9px); }
+  .pay-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -9px; height: 6px; pointer-events: none; background: repeating-linear-gradient(90deg, var(--border-strong) 0 1px, transparent 1px 5%); }
   .pay-bar-seg.dim { opacity: .28; }
   .health-table td.col-on, .health-table th.col-on { background: rgba(var(--accent-rgb), .09); }
   .pay-strip-title { margin-right: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
@@ -480,7 +485,9 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/flow-hud.css">
 <script src="../assets/flow-theme.js"></script>
+<script src="../assets/flow-hud.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -691,6 +698,7 @@
           <div class="pay-filter" id="home-pay-chips" role="group" aria-label="Ver por forma de pagamento" style="margin:0"></div>
         </div>
         <p class="hint-text" id="home-pay-hint" style="margin-top:0"></p>
+        <div class="hud-rings" id="home-pay-rings"></div>
         <div class="pay-bar" id="home-pay-bar" role="img" aria-label="Proporção das despesas por forma de pagamento"></div>
         <div class="legend" id="home-pay-legend" style="margin:10px 0 4px"></div>
         <div class="chart-wrap">
@@ -1444,12 +1452,18 @@
       kpiTile("Faturamento (período)", fmtBRL(totalFat), null, "Soma do faturamento de todos os meses do período selecionado.") +
       kpiTile("Despesas (período)", fmtBRL(totalDesp), null, "Soma de todas as despesas lançadas no período selecionado, em todas as categorias.") +
       kpiTile("Líquido (período)", fmtBRL(totalLiq), totalLiq >= 0 ? "good" : "bad", "Faturamento do período − Despesas do período.") +
-      kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido do período ÷ Faturamento do período, em percentual.") +
+      kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido do período ÷ Faturamento do período, em percentual.", marginRing(margem)) +
       (lastUsers !== null ? kpiTile("Usuários totais (" + ymShort(lastKey) + ")", fmtInt(lastUsers), null, "Quantidade total acumulada de usuários até o fim do último mês do período que tem dado.") : "");
     renderPayStrip();
   }
-  function kpiTile(label, value, cls, tip) {
-    return '<div class="kpi"><div class="label"' + (tip ? ' title="' + tip + '"' : "") + '>' + label + '</div><div class="value ' + (cls || "") + ' num">' + value + "</div></div>";
+  // ring (opcional): gauge circular HUD à direita do número.
+  function kpiTile(label, value, cls, tip, ring) {
+    return '<div class="kpi' + (ring ? " has-ring" : "") + '"><div class="label"' + (tip ? ' title="' + tip + '"' : "") + '>' + label + '</div><div class="value ' + (cls || "") + ' num">' + value + "</div>" +
+      (ring ? '<div class="kpi-ring">' + ring + "</div>" : "") + "</div>";
+  }
+  function marginRing(margem) {
+    var neg = margem !== null && margem < 0;
+    return FlowHud.ring({ pct: margem === null ? 0 : Math.max(0, Math.min(100, margem * 100)), color: FlowHud.tok(neg ? "--critical" : "--accent"), size: 64, ticks: 32, text: "", label: "Margem líquida" });
   }
 
   function monthAlertMark(m) {
@@ -2127,11 +2141,15 @@
     function x(i) { return bars ? padL + slot * (i + 0.5) : (n === 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1)); }
     function y(v) { return padT + plotH - ((v - minV) / (maxV - minV)) * plotH; }
 
+    var keys = ["fat", "desp", "liq"];
+    var colorOf = { fat: C.fat, desp: C.desp, liq: C.liq };
+    // Estilo HUD: barras em blocos (máscara), degradê, área hachurada e brilho neon (ver assets/flow-hud.*).
     var html =
       "<defs>" +
         '<linearGradient id="a' + uid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0.35"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
         '<linearGradient id="x' + uid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0"/><stop offset="50%" stop-color="' + C.fat + '" stop-opacity="0.9"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
-        '<filter id="g' + uid + '" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+        FlowHud.seg("sg" + uid, W, H, y(0)) + FlowHud.hatch("ht" + uid, C.fat, 0.4) +
+        keys.map(function (k) { return FlowHud.vgrad("bg" + uid + k, colorOf[k], 1, 0.5); }).join("") +
       "</defs>";
 
     for (var g = 0; g <= 4; g++) {
@@ -2146,11 +2164,11 @@
     }
     html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.fat + '" stroke-opacity="0.4"/>';
 
-    var keys = ["fat", "desp", "liq"];
-    var colorOf = { fat: C.fat, desp: C.desp, liq: C.liq };
+    // Régua sob o eixo X (marcas a cada mês, maiores nos meses rotulados).
+    html += FlowHud.ruler(bars ? padL + slot / 2 : padL, bars ? padL + plotW - slot / 2 : padL + plotW, padT + plotH + 1, Math.max(n - 1, 1), every, C.muted);
 
     if (bars) {
-      var bw = Math.max(10, Math.min(46, slot * 0.2)), gap = 6;
+      var bw = Math.max(10, Math.min(46, slot * 0.2)), gap = 6, caps = "", barsHtml = "";
       html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + C.fat + '" opacity="0"/>';
       data.forEach(function (d, i) {
         if (!d) return;
@@ -2159,10 +2177,13 @@
           if (v == null) return;
           var bx = x(i) + (ki - 1) * (bw + gap) - bw / 2;
           var top = v >= 0 ? y(v) : y(0), h = Math.max(1, Math.abs(y(v) - y(0)));
-          html += '<rect class="fx-bar" x="' + bx + '" y="' + top + '" width="' + bw + '" height="' + h + '" rx="3" fill="' + colorOf[key] + '"/>';
-          html += '<text x="' + (bx + bw / 2) + '" y="' + (v >= 0 ? top - 4 : top + h + 10) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtShort(v) + "</text>";
+          barsHtml += '<rect class="fx-bar" x="' + bx + '" y="' + top + '" width="' + bw + '" height="' + h + '" fill="url(#bg' + uid + key + ')"/>';
+          // Tampa neon na ponta da barra.
+          caps += '<rect class="hud-glow" style="color:' + colorOf[key] + '" x="' + bx + '" y="' + (v >= 0 ? top : top + h - 2) + '" width="' + bw + '" height="2" rx="1" fill="' + colorOf[key] + '"/>';
+          caps += '<text x="' + (bx + bw / 2) + '" y="' + (v >= 0 ? top - 6 : top + h + 12) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtShort(v) + "</text>";
         });
       });
+      html += '<g mask="url(#sg' + uid + ')">' + barsHtml + "</g>" + caps;
     } else {
       // Trechos contínuos (meses sem dado interrompem a linha).
       var series = { fat: [], desp: [], liq: [] };
@@ -2175,18 +2196,23 @@
       };
       runs(series.fat).forEach(function (pts) {
         if (pts.length < 2) return;
-        html += '<path class="fx-area" d="' + smoothPath(pts) + " L" + pts[pts.length - 1][0] + "," + y(0) + " L" + pts[0][0] + "," + y(0) + ' Z" fill="url(#a' + uid + ')"/>';
+        var area = smoothPath(pts) + " L" + pts[pts.length - 1][0] + "," + y(0) + " L" + pts[0][0] + "," + y(0) + " Z";
+        html += '<path class="fx-area" d="' + area + '" fill="url(#a' + uid + ')"/><path class="fx-area" d="' + area + '" fill="url(#ht' + uid + ')"/>';
       });
       keys.forEach(function (key) {
         var dash = key === "desp" ? "5 4" : "";
         runs(series[key]).forEach(function (pts) {
           if (pts.length < 2) return;
-          html += '<path class="fx-line" d="' + smoothPath(pts) + '" fill="none" stroke="' + colorOf[key] + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#g' + uid + ')"' + (dash ? ' data-dash="' + dash + '"' : "") + "/>";
+          html += '<path class="fx-line hud-glow" style="color:' + colorOf[key] + '" d="' + smoothPath(pts) + '" fill="none" stroke="' + colorOf[key] + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"' + (dash ? ' data-dash="' + dash + '"' : "") + "/>";
         });
+        var lastI = -1;
         series[key].forEach(function (v, i) {
           if (v === null) return;
+          lastI = i;
           html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="' + C.dot + '" stroke="' + colorOf[key] + '" stroke-width="1.6"/>';
         });
+        // Halo pulsando no último ponto (valor mais recente).
+        if (lastI >= 0) html += '<circle class="hud-pulse" cx="' + x(lastI) + '" cy="' + y(series[key][lastI]) + '" r="5" fill="none" stroke="' + colorOf[key] + '" stroke-width="1.4"/>';
       });
       html += '<line id="c' + uid + '" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="url(#x' + uid + ')" stroke-width="1.5" class="fx-scan" opacity="0"/>';
     }
@@ -2253,7 +2279,8 @@
     var C = chartColors(), uid = "s" + (++chartSeq), labels = axisLabels(rows);
     var maxV = maxT * 1.08, slot = plotW / n, bw = Math.max(3, Math.min(40, slot * 0.68));
     function y(v) { return padT + plotH - (v / maxV) * plotH; }
-    var html = "";
+    // Estilo HUD: cada série vira um bloco segmentado em degradê; a ponta da pilha ganha uma tampa neon.
+    var html = "<defs>" + FlowHud.seg("sg" + uid, W, H, y(0)) + cfg.series.map(function (se, si) { return FlowHud.vgrad("sr" + uid + si, se.color, 1, 0.6); }).join("") + "</defs>";
     for (var g = 0; g <= 4; g++) {
       var gv = (maxV * g) / 4, gy = y(gv);
       html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '" stroke-dasharray="2 5"/>' +
@@ -2262,17 +2289,21 @@
     var multi = labels[0] && labels[0].indexOf("/") >= 0;
     var every = Math.ceil(n / Math.max(3, Math.floor(plotW / (multi ? 46 : 30))));
     html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + C.fat + '" opacity="0"/>';
+    var stacks = "", capsHtml = "", labelsHtml = "";
     rows.forEach(function (k, i) {
-      var cx = padL + slot * (i + 0.5), acc = 0;
-      cfg.series.forEach(function (se) {
+      var cx = padL + slot * (i + 0.5), acc = 0, lastSe = null;
+      cfg.series.forEach(function (se, si) {
         var v = Math.max(0, Number(se.get(k)) || 0);
         if (!v) return;
         var h = (v / maxV) * plotH;
-        html += '<rect class="fx-bar" x="' + (cx - bw / 2) + '" y="' + (y(acc + v)) + '" width="' + bw + '" height="' + Math.max(1, h) + '" fill="' + se.color + '" stroke="' + C.surface + '" stroke-width="1"/>';
-        acc += v;
+        stacks += '<rect class="fx-bar" x="' + (cx - bw / 2) + '" y="' + (y(acc + v)) + '" width="' + bw + '" height="' + Math.max(1, h) + '" fill="url(#sr' + uid + si + ')"/>';
+        acc += v; lastSe = se;
       });
-      if (i % every === 0) html += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[i] + "</text>";
+      if (lastSe) capsHtml += '<rect class="hud-glow" style="color:' + lastSe.color + '" x="' + (cx - bw / 2) + '" y="' + y(acc) + '" width="' + bw + '" height="2" rx="1" fill="' + lastSe.color + '"/>';
+      if (i % every === 0) labelsHtml += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[i] + "</text>";
     });
+    html += '<g mask="url(#sg' + uid + ')">' + stacks + "</g>" + capsHtml + labelsHtml;
+    html += FlowHud.ruler(padL + slot / 2, padL + plotW - slot / 2, padT + plotH + 1, Math.max(n - 1, 1), every, C.muted);
     html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.muted + '" stroke-opacity="0.5"/>';
     html += '<rect id="h' + uid + '" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
@@ -2453,7 +2484,7 @@
       kpiTile("Faturamento (período)", fmtBRL(tot.fat), null, "Soma do faturamento das quatro ferramentas em todos os meses do período.") +
       kpiTile("Despesas (período)", fmtBRL(tot.desp), null, "Soma de todas as despesas lançadas nas quatro ferramentas no período.") +
       kpiTile("Líquido (período)", fmtBRL(liq), liq >= 0 ? "good" : "bad", "Faturamento − Despesas, somando as quatro ferramentas.") +
-      kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido ÷ Faturamento do período, em percentual.") +
+      kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido ÷ Faturamento do período, em percentual.", marginRing(margem)) +
       kpiTile("Novos usuários", fmtInt(tot.novos), null, "Soma dos novos usuários das quatro ferramentas no período.") +
       kpiTile("Custo por novo usuário", fmtBRL(custoNovo), null, "Despesas totais do período ÷ Novos usuários do período.");
     renderPeriodBar();
@@ -2555,6 +2586,13 @@
       : mode === "all"
         ? "Despesas do período por forma de pagamento, somando as quatro ferramentas." + (tot.none ? " " + fmtBRL(tot.none) + " ainda sem classificar (marque Cartão Flow ou Biancode em cada despesa)." : "")
         : "Só o que foi pago em " + label[mode] + ", por ferramenta e por mês.";
+
+    // Gauges: quanto das despesas do período foi pago de cada forma.
+    document.getElementById("home-pay-rings").innerHTML = ["cartao", "biancode", "none"].filter(function (k) { return k !== "none" || tot.none > 0; }).map(function (k) {
+      var share = all > 0 ? tot[k] / all * 100 : 0;
+      return '<div class="hud-gauge">' + FlowHud.ring({ pct: share, color: colors[k], size: 84, ticks: 40, label: label[k], text: all > 0 ? Math.round(share) + "%" : "—" }) +
+        '<div class="hud-gauge-t"><span>' + label[k] + "</span><b>" + escHtml(fmtBRL(tot[k])) + "</b></div></div>";
+    }).join("");
 
     var barParts = ["cartao", "biancode", "none"].filter(function (k) { return tot[k] > 0; });
     document.getElementById("home-pay-bar").innerHTML = barParts.map(function (k) {
@@ -2920,23 +2958,26 @@
     var cs = getComputedStyle(document.documentElement), tok = function (k) { return cs.getPropertyValue(k).trim(); };
     var C = [["novos", tok("--accent")], ["renovacoes", tok("--accent-3")], ["cancelados", tok("--accent-2")]];
     var slot = plotW / 12, bw = Math.min(14, (slot - 10) / 3), mono = "JetBrains Mono, monospace", muted = tok("--text-muted");
-    var html = "<defs>" + C.map(function (c, i) {
-      return '<linearGradient id="hg' + i + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + c[1] + '"/><stop offset="100%" stop-color="' + c[1] + '" stop-opacity="0.12"/></linearGradient>';
-    }).join("") + "</defs>";
+    var html = "<defs>" + FlowHud.seg("hsg", W, H, baseY) + C.map(function (c, i) { return FlowHud.vgrad("hg" + i, c[1], 1, 0.5); }).join("") + "</defs>";
     for (var v = 0; v <= maxV + 1e-9; v += step) {
       var gy = baseY - (v / maxV) * plotH;
       html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + tok("--grid") + '" stroke-dasharray="' + (v ? "2 5" : "0") + '"/>' +
         '<text x="' + (padL - 8) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + muted + '" font-family="' + mono + '">' + fmtInt(v) + "</text>";
     }
     html += '<rect id="hscan" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + tok("--accent") + '" opacity="0"/>';
+    var hbars = "", hcaps = "", hlabels = "";
     data.forEach(function (d, i) {
       var x0 = padL + slot * i + (slot - bw * 3 - 4) / 2;
       C.forEach(function (c, j) {
         var val = d[c[0]], hgt = (val / maxV) * plotH;
-        if (hgt > 0) html += '<rect class="fx-bar hbar" data-i="' + i + '" style="animation-delay:' + (i * 30 + j * 60) + 'ms" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="' + hgt + '" rx="3" fill="url(#hg' + j + ')"/>';
+        if (hgt > 0) {
+          hbars += '<rect class="fx-bar hbar" data-i="' + i + '" style="animation-delay:' + (i * 30 + j * 60) + 'ms" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="' + hgt + '" fill="url(#hg' + j + ')"/>';
+          hcaps += '<rect class="hud-glow" style="color:' + c[1] + '" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="2" rx="1" fill="' + c[1] + '"/>';
+        }
       });
-      html += '<text x="' + (padL + slot * i + slot / 2) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + muted + '" font-family="' + mono + '">' + MONTHS[i].toUpperCase() + "</text>";
+      hlabels += '<text x="' + (padL + slot * i + slot / 2) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + muted + '" font-family="' + mono + '">' + MONTHS[i].toUpperCase() + "</text>";
     });
+    html += '<g mask="url(#hsg)">' + hbars + "</g>" + hcaps + hlabels + FlowHud.ruler(padL + slot / 2, padL + plotW - slot / 2, baseY + 1, 11, 1, muted);
     html += '<rect id="hhit" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
     svg.innerHTML = html;
     var hit = svg.querySelector("#hhit"), scan = svg.querySelector("#hscan");

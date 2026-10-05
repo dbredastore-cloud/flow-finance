@@ -280,8 +280,10 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
 <script src="../assets/flow-theme.js"></script>
+<script src="../assets/flow-hud.js"></script>
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -1025,7 +1027,8 @@
       "<defs>" +
         '<linearGradient id="fxBar" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0%" stop-color="' + hiC + '"/><stop offset="35%" stop-color="' + accC + '"/>' +
-          '<stop offset="100%" stop-color="' + accC + '" stop-opacity="0.08"/></linearGradient>' +
+          '<stop offset="100%" stop-color="' + accC + '" stop-opacity="0.5"/></linearGradient>' +
+        FlowHud.seg("fxSeg", W, H, baseY) +
         '<linearGradient id="fxScan" x1="0" y1="0" x2="0" y2="1">' +
           '<stop offset="0%" stop-color="' + accC + '" stop-opacity="0"/><stop offset="50%" stop-color="' + accC + '" stop-opacity="0.16"/>' +
           '<stop offset="100%" stop-color="' + accC + '" stop-opacity="0.02"/></linearGradient>' +
@@ -1039,21 +1042,21 @@
     }
     html += '<rect class="fx-scan" id="fx-scan" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="url(#fxScan)" opacity="0"/>';
     var labelEvery = Math.ceil(n / 14);
+    // Estilo HUD: corpo da barra em blocos (máscara) e tampa neon por cima, fora da máscara.
+    var bodies = "", tops = "", lbls = "";
     buckets.forEach(function (b, i) {
       var cx = padL + slot * i + slot / 2;
       var h = (b.commission / maxV) * plotH;
       if (h > 0) {
-        var x0 = cx - barW / 2, y0 = baseY - h, rr = Math.min(4, barW / 2, h);
+        var x0 = cx - barW / 2, y0 = baseY - h;
         var delay = "animation-delay:" + Math.min(i * 18, 600) + "ms";
-        html += '<g class="bar fx-bar" data-i="' + i + '" style="' + delay + '">' +
-          '<path d="M' + x0 + "," + baseY + " V" + (y0 + rr) + " Q" + x0 + "," + y0 + " " + (x0 + rr) + "," + y0 +
-          " H" + (x0 + barW - rr) + " Q" + (x0 + barW) + "," + y0 + " " + (x0 + barW) + "," + (y0 + rr) + " V" + baseY + ' Z" fill="url(#fxBar)"/>' +
-          // Tampa neon no topo da barra.
-          '<rect x="' + (x0 + 1) + '" y="' + y0 + '" width="' + Math.max(1, barW - 2) + '" height="2" rx="1" fill="' + capC + '" filter="url(#fxGlow)"/>' +
-          "</g>";
+        bodies += '<rect class="bar fx-bar" data-i="' + i + '" style="' + delay + '" x="' + x0 + '" y="' + y0 + '" width="' + barW + '" height="' + h + '" fill="url(#fxBar)"/>';
+        tops += '<rect class="bar hud-glow" data-i="' + i + '" style="color:' + accC + '" x="' + x0 + '" y="' + y0 + '" width="' + barW + '" height="2" rx="1" fill="' + capC + '"/>';
       }
-      if (i % labelEvery === 0) html += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + mutedC + '" font-family="' + mono + '">' + esc(b.label) + "</text>";
+      if (i % labelEvery === 0) lbls += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + mutedC + '" font-family="' + mono + '">' + esc(b.label) + "</text>";
     });
+    html += '<g mask="url(#fxSeg)">' + bodies + "</g>" + tops + lbls +
+      FlowHud.ruler(padL + slot / 2, padL + plotW - slot / 2, baseY + 1, Math.max(n - 1, 1), labelEvery, mutedC);
     // Média do período (só baldes com venda contam para não achatar a média com dias vazios).
     var withSales = buckets.filter(function (b) { return b.commission > 0; });
     if (withSales.length > 1) {

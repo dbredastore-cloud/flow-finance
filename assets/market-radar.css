@@ -72,6 +72,11 @@
   background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--track-bg) 0); box-shadow: 0 0 24px -8px rgba(var(--accent-rgb), 0.7); }
 .mr-ring.warn { background: conic-gradient(var(--warning) calc(var(--p) * 1%), var(--track-bg) 0); }
 .mr-ring.crit { background: conic-gradient(var(--critical) calc(var(--p) * 1%), var(--track-bg) 0); }
+/* Anel de marcas ao redor do gauge (dial). */
+.mr-ring { position: relative; }
+.mr-ring::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(var(--border-strong) 0 1.6deg, transparent 1.6deg 7.2deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px)); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px)); }
 .mr-ring > div { width: 88px; height: 88px; border-radius: 50%; background: var(--surface-solid); display: grid; place-items: center; align-content: center; }
 .mr-ring b { font-family: var(--font-mono); font-size: 20px; line-height: 1; }
 .mr-ring span { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em; color: var(--text-muted); margin-top: 3px; }
@@ -128,7 +133,11 @@
 .mr-chart .gridl { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
 .mr-chart .med { stroke: rgba(var(--accent-rgb), 0.45); stroke-width: 1; stroke-dasharray: 5 5; }
 .mr-chart .quad { fill: var(--text-muted); opacity: .75; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
-.mr-bub { cursor: pointer; fill: rgba(var(--accent-rgb), var(--o, .3)); stroke: var(--accent); stroke-width: 1.2; transition: stroke-width .15s, filter .15s; }
+.mr-bub { cursor: pointer; color: var(--accent); fill: rgba(var(--accent-rgb), var(--o, .3)); stroke: var(--accent); stroke-width: 1.2; transition: stroke-width .15s, filter .15s; filter: var(--hud-glow); }
+.mr-bub.partner { color: var(--accent-3); }
+.mr-bub.sel { color: var(--warning); }
+.mr-dot { fill: var(--accent); }
+.mr-dot.soft { opacity: .45; }
 .mr-bub:hover, .mr-bub.hl { stroke-width: 2.6; filter: drop-shadow(0 0 7px rgba(var(--accent-rgb), 0.9)); }
 .mr-bub.partner { stroke: var(--accent-3); fill: rgba(55, 200, 255, var(--o, .3)); }
 .mr-bub.sel { stroke: var(--warning); stroke-width: 3; }
@@ -286,10 +295,8 @@ body.mr-noscroll { overflow: hidden; }
 .mr-rank b { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
 .mr-fnote { padding: 14px 16px; border: 1px dashed var(--warning); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; color: var(--text-dim); background: rgba(var(--warning-rgb), 0.07); }
 
-.mr-vbar { fill: var(--text-muted); opacity: .8; cursor: pointer; transition: opacity .12s; }
-.mr-vbar.topic { fill: var(--accent); opacity: 1; }
-.mr-vbar.short { opacity: .5; }
-.mr-vbar.soft { opacity: .55; }
+.mr-vbar { opacity: .9; cursor: pointer; transition: opacity .12s; }
+.mr-vbar.short { opacity: .55; }
 .mr-vbar:hover { opacity: 1; filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.8)); }
 #mr-full .mr-tip { position: fixed; z-index: 90; }
 

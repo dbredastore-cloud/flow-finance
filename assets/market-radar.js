@@ -515,8 +515,11 @@
       var cls = "mr-bub" + (isPartner(c) ? " partner" : "") + (S.compare.indexOf(c.channel_id) >= 0 ? " sel" : "");
       s += '<circle class="' + cls + '" data-id="' + esc(c.channel_id) + '" cx="' + X(Math.log(c.subscribers) / Math.LN10).toFixed(1) + '" cy="' + Y(c.metrics.engagement).toFixed(1) + '" r="' + r.toFixed(1) + '" style="--o:' + (0.12 + (c.score || 0) / 100 * 0.6).toFixed(2) + '"/>';
     });
-    L.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 5).forEach(function (c) {
+    L.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 5).forEach(function (c, rank) {
       var x = X(Math.log(c.subscribers) / Math.LN10), y = Y(c.metrics.engagement), left = x > W * 0.72;
+      // Anel de mira nos 5 melhores; o primeiro pulsa.
+      var rr = 5 + 17 * Math.sqrt((c.metrics.avgViews || 0) / maxV) + 6;
+      s += '<circle class="' + (rank === 0 ? "hud-pulse" : "") + '" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + rr.toFixed(1) + '" fill="none" style="stroke:var(--accent);pointer-events:none" stroke-opacity="' + (rank === 0 ? 0.9 : 0.35) + '" stroke-width="1.2" stroke-dasharray="' + (rank === 0 ? "none" : "3 4") + '"/>';
       s += '<text x="' + (left ? x - 12 : x + 12) + '" y="' + (y - 10) + '" text-anchor="' + (left ? "end" : "start") + '" style="fill:var(--text);font-size:11px;pointer-events:none">' + esc(String(c.title).slice(0, 18)) + "</text>";
     });
     el.innerHTML = s + "</svg>";
@@ -526,6 +529,11 @@
     var W = size, H = size, cx = W / 2, cy = H / 2 + 4, R = size / 2 - 52, n = AXES.length;
     var P = function (i, v) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * v / 100, cy + Math.sin(a) * R * v / 100]; };
     var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Comparação por critério">';
+    // "Dial" externo: marcas ao redor do radar, maiores a cada 5.
+    for (var tk = 0; tk < 72; tk++) {
+      var ta = tk * 2 * Math.PI / 72, big = tk % 6 === 0, r0 = R * 1.045, r1 = R * (big ? 1.1 : 1.075);
+      s += '<line x1="' + (cx + Math.cos(ta) * r0).toFixed(1) + '" y1="' + (cy + Math.sin(ta) * r0).toFixed(1) + '" x2="' + (cx + Math.cos(ta) * r1).toFixed(1) + '" y2="' + (cy + Math.sin(ta) * r1).toFixed(1) + '" style="stroke:var(--border-strong)" stroke-width="' + (big ? 1.4 : 1) + '"/>';
+    }
     [25, 50, 75, 100].forEach(function (lv) {
       s += '<polygon points="' + AXES.map(function (a, i) { return P(i, lv).map(function (v) { return v.toFixed(1); }).join(","); }).join(" ") + '" style="fill:none;stroke:var(--border-strong);stroke-width:1;' + (lv < 100 ? "stroke-dasharray:2 4;" : "") + '"/>';
     });
@@ -535,8 +543,8 @@
     });
     list.forEach(function (c, k) {
       var pts = AXES.map(function (a, i) { return P(i, c.ax[a.key]).map(function (v) { return v.toFixed(1); }).join(","); }).join(" ");
-      s += '<polygon points="' + pts + '" style="fill:' + COLORS[k % 4] + ";fill-opacity:.16;stroke:" + COLORS[k % 4] + ';stroke-width:2;stroke-linejoin:round"/>';
-      AXES.forEach(function (a, i) { var p = P(i, c.ax[a.key]); s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" style="fill:' + COLORS[k % 4] + '"/>'; });
+      s += '<polygon class="hud-glow" points="' + pts + '" style="color:' + COLORS[k % 4] + ";fill:" + COLORS[k % 4] + ";fill-opacity:.16;stroke:" + COLORS[k % 4] + ';stroke-width:2;stroke-linejoin:round"/>';
+      AXES.forEach(function (a, i) { var p = P(i, c.ax[a.key]); s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="5.5" fill="none" style="stroke:' + COLORS[k % 4] + '" stroke-opacity=".3"/><circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2.8" style="fill:' + COLORS[k % 4] + '"/>'; });
     });
     return s + "</svg>";
   }
@@ -1196,13 +1204,17 @@
     var max = Math.max.apply(null, list.map(function (v) { return v.views; }).concat([1])) * 1.08;
     var medV = median(list.map(function (v) { return v.views; }));
     var bw = iw / list.length, Y = function (v) { return mg.t + ih - v / max * ih; };
-    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Views de cada vídeo">';
+    var accC = FlowHud.tok("--accent"), mutC = FlowHud.tok("--text-muted");
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Views de cada vídeo"><defs>' + FlowHud.seg("vseg", W, H, mg.t + ih) + FlowHud.vgrad("vgT", accC, 1, 0.5) + FlowHud.vgrad("vgO", mutC, 0.95, 0.4) + "</defs>";
     for (var t = 0; t <= 4; t++) { var yv = max * t / 4; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(yv) + '" y2="' + Y(yv) + '"/><text x="' + (mg.l - 8) + '" y="' + (Y(yv) + 3) + '" text-anchor="end">' + fmtN(yv) + "</text>"; }
-    s += '<line class="ax" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + (H - mg.b) + '" y2="' + (H - mg.b) + '"/>';
+    s += '<line class="ax" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + (H - mg.b) + '" y2="' + (H - mg.b) + '"/>' + FlowHud.ruler(mg.l + bw / 2, W - mg.r - bw / 2, H - mg.b + 1, Math.max(list.length - 1, 1), 5, mutC);
+    var bodies = "", tops = "";
     list.forEach(function (v, i) {
-      var h = Math.max(1.5, v.views / max * ih), x = mg.l + i * bw + bw * 0.14;
-      s += '<rect class="mr-vbar' + (v.topic ? " topic" : "") + (v.short ? " short" : "") + '" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + Math.max(2, bw * 0.72).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
+      var h = Math.max(1.5, v.views / max * ih), x = mg.l + i * bw + bw * 0.14, w = Math.max(2, bw * 0.72);
+      bodies += '<rect class="mr-vbar' + (v.topic ? " topic" : "") + (v.short ? " short" : "") + '" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="url(#' + (v.topic ? "vgT" : "vgO") + ')"/>';
+      tops += '<rect class="hud-glow" style="color:' + (v.topic ? accC : mutC) + ';pointer-events:none;opacity:' + (v.short ? 0.55 : 1) + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2" rx="1" fill="' + (v.topic ? accC : mutC) + '"/>';
     });
+    s += '<g mask="url(#vseg)">' + bodies + "</g>" + tops;
     if (medV != null) s += '<line class="med" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(medV) + '" y2="' + Y(medV) + '"/><text x="' + (W - mg.r) + '" y="' + (Y(medV) - 5) + '" text-anchor="end" style="fill:var(--text-dim)">mediana ' + fmtN(medV) + "</text>";
     [0, Math.floor((list.length - 1) / 2), list.length - 1].forEach(function (i, k) {
       if (!list[i]) return;
@@ -1217,11 +1229,20 @@
     var max = Math.max.apply(null, values.concat([1])), bw = iw / values.length, top = values.indexOf(max);
     var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(opts.label || "") + '">';
     for (var t = 0; t <= 2; t++) { var yv = Math.round(max * t / 2), y = mg.t + ih - yv / max * ih; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + y + '" y2="' + y + '"/><text x="' + (mg.l - 6) + '" y="' + (y + 3) + '" text-anchor="end">' + yv + "</text>"; }
+    var accC = FlowHud.tok("--accent");
+    // Matriz de pontos (um ponto por unidade), como nos painéis de referência; o dia mais cheio fica em destaque.
+    var d = Math.max(3.5, Math.min(bw * 0.62, ih / max - 2.4, 15));
     values.forEach(function (v, i) {
-      var h = v ? Math.max(3, v / max * ih) : 1.5, x = mg.l + i * bw + bw * 0.16;
-      s += '<rect class="mr-vbar topic' + (opts.highlight && i !== top ? " soft" : "") + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + (bw * 0.68).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"><title>' + esc(labels[i] + ": " + v) + "</title></rect>";
-      if (v) s += '<text x="' + (x + bw * 0.34).toFixed(1) + '" y="' + (mg.t + ih - h - 4).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + v + "</text>";
-      s += '<text x="' + (x + bw * 0.34).toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(labels[i]) + "</text>";
+      var cx = mg.l + i * bw + bw / 2, isTop = !opts.highlight || i === top, baseY = mg.t + ih, topY = baseY;
+      for (var k = 0; k < v; k++) {
+        var cy = baseY - d / 2 - 2 - k * (d + 2.4);
+        topY = cy - d / 2;
+        s += '<circle class="mr-dot' + (isTop ? "" : " soft") + (k === v - 1 ? " hud-glow" : "") + '" style="color:' + accC + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + (d / 2).toFixed(1) + '"/>';
+      }
+      if (!v) s += '<line x1="' + (cx - d / 2).toFixed(1) + '" x2="' + (cx + d / 2).toFixed(1) + '" y1="' + (baseY - 1.5) + '" y2="' + (baseY - 1.5) + '" style="stroke:var(--border-strong)" stroke-width="2" stroke-linecap="round"/>';
+      else s += '<text x="' + cx.toFixed(1) + '" y="' + (topY - 6).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + v + "</text>";
+      s += '<title>' + esc(labels[i] + ": " + v) + "</title>";
+      s += '<text x="' + cx.toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(labels[i]) + "</text>";
     });
     el.innerHTML = s + "</svg>";
   }
