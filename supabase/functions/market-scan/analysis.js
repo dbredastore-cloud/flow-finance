@@ -44,20 +44,29 @@ const CATALOG = [
 const SHORTENERS = /^(bit\.ly|tinyurl\.com|goo\.gl|t\.co|lnkd\.in|is\.gd|ow\.ly|buff\.ly|cutt\.ly|rb\.gy|encr\.pw)$/;
 const OWN_HOSTS = /(^|\.)(youtube\.com|youtu\.be|google\.com|googleusercontent\.com|goo\.gl)$/;
 
+/** Plataformas/ferramentas citadas num vídeo (l = com link na descrição) e os links da descrição. */
+export function toolsInVideo(v) {
+  const text = norm(`${v.title} ${v.desc}`);
+  const urls = String(v.desc ?? "").match(URL_RE) ?? [];
+  const linkText = urls.join(" ").toLowerCase();
+  const out = [];
+  for (const [name, cat, re] of CATALOG) {
+    const mention = re.test(text), link = re.test(linkText);
+    if (mention || link) out.push({ n: name, c: cat, l: link });
+  }
+  return { out, urls };
+}
+
 /** Conta, nos vídeos, as plataformas/ferramentas citadas e os domínios mais repetidos nos links. */
 export function detectTools(vs) {
   const counts = new Map(); // nome → { c, v, l }
   const hosts = new Map();  // domínio → nº de vídeos
   for (const v of vs) {
-    const text = norm(`${v.title} ${v.desc}`);
-    const urls = String(v.desc ?? "").match(URL_RE) ?? [];
-    const linkText = urls.join(" ").toLowerCase();
-    for (const [name, cat, re] of CATALOG) {
-      const mention = re.test(text), link = re.test(linkText);
-      if (!mention && !link) continue;
-      const e = counts.get(name) ?? { n: name, c: cat, v: 0, l: 0 };
-      e.v++; if (link) e.l++;
-      counts.set(name, e);
+    const { out, urls } = toolsInVideo(v);
+    for (const t of out) {
+      const e = counts.get(t.n) ?? { n: t.n, c: t.c, v: 0, l: 0 };
+      e.v++; if (t.l) e.l++;
+      counts.set(t.n, e);
     }
     const seen = new Set();
     for (const u of urls) {
@@ -121,7 +130,7 @@ export function extractContacts(description) {
 export function analyzeVideos(videos, match, now = Date.now()) {
   const vs = videos.filter((v) => Number.isFinite(v.ms)).sort((a, b) => b.ms - a.ms);
   const n = vs.length;
-  if (!n) return { metrics: { videos: 0 }, top: [] };
+  if (!n) return { metrics: { videos: 0 }, top: [], recent: [] };
   const age = (v) => Math.max((now - v.ms) / DAY, 0);
 
   // Frequência: janela de 90 dias; se os 50 últimos vídeos cobrem menos que isso, usa o período real.
@@ -198,7 +207,15 @@ export function analyzeVideos(videos, match, now = Date.now()) {
       views: v.views ?? 0, likes: v.likes ?? null, comments: v.comments ?? null,
       topic: topicVideos.includes(v),
     }));
-  return { metrics, top };
+  // Todos os vídeos analisados (mais novo primeiro), com o que cada um divulga, para a tela completa.
+  const topicSet = new Set(topicVideos);
+  const recentVideos = vs.map((v) => ({
+    id: v.id, title: String(v.title ?? "").slice(0, 140), ms: v.ms, dur: v.dur ?? null,
+    views: v.views ?? 0, likes: v.likes ?? null, comments: v.comments ?? null,
+    topic: topicSet.has(v),
+    tools: toolsInVideo(v).out.slice(0, 6).map((t) => ({ n: t.n, c: t.c, l: t.l ? 1 : 0 })),
+  }));
+  return { metrics, top, recent: recentVideos };
 }
 
 /** ISO 8601 (PT1H2M3S) → segundos */

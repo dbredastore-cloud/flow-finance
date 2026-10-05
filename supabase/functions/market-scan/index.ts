@@ -201,7 +201,23 @@ async function discover(body: any, userId: string) {
 }
 
 // ---------------------------------------------------------------- analyze
-async function analyzeOne(scanId: string, channelId: string, match: (t: string) => boolean) {
+async function analyzeOne(scanId: string, channelId: string, match: (t: string) => boolean, refresh = false) {
+  // "Atualizar dados deste canal": também relê inscritos, views e descrição do canal (1 unidade).
+  if (refresh) {
+    const js = await yt("/channels", { part: "snippet,statistics", id: channelId }, 1);
+    const ch = js.items?.[0];
+    if (ch) {
+      const st = ch.statistics ?? {};
+      await sb.from("market_channels").update({
+        title: ch.snippet?.title ?? null, handle: ch.snippet?.customUrl ?? null,
+        thumbnail_url: bestThumb(ch.snippet?.thumbnails), country: ch.snippet?.country ?? null,
+        description: String(ch.snippet?.description ?? "").slice(0, 1500),
+        subscribers: st.hiddenSubscriberCount ? null : num(st.subscriberCount), hidden_subs: !!st.hiddenSubscriberCount,
+        total_views: num(st.viewCount), video_count: num(st.videoCount),
+        contacts: extractContacts(ch.snippet?.description),
+      }).eq("scan_id", scanId).eq("channel_id", channelId);
+    }
+  }
   const uploads = "UU" + channelId.slice(2); // playlist de envios = "UU" + resto do ID do canal
   let ids: string[] = [];
   try {
@@ -212,7 +228,7 @@ async function analyzeOne(scanId: string, channelId: string, match: (t: string) 
     if (!String((e as Error).message).includes("404")) throw e; // 404 = canal sem envios públicos
   }
   if (!ids.length) {
-    await sb.from("market_channels").update({ metrics: { videos: 0 }, top_videos: [], analyzed_at: new Date().toISOString() })
+    await sb.from("market_channels").update({ metrics: { videos: 0 }, top_videos: [], recent_videos: [], analyzed_at: new Date().toISOString() })
       .eq("scan_id", scanId).eq("channel_id", channelId);
     return;
   }
@@ -222,9 +238,9 @@ async function analyzeOne(scanId: string, channelId: string, match: (t: string) 
     ms: Date.parse(v.snippet?.publishedAt ?? ""), dur: durationSeconds(v.contentDetails?.duration),
     views: num(v.statistics?.viewCount), likes: num(v.statistics?.likeCount), comments: num(v.statistics?.commentCount),
   }));
-  const { metrics, top } = analyzeVideos(videos, match);
+  const { metrics, top, recent } = analyzeVideos(videos, match);
   const { error } = await sb.from("market_channels")
-    .update({ metrics, top_videos: top, analyzed_at: new Date().toISOString(), error: null })
+    .update({ metrics, top_videos: top, recent_videos: recent, analyzed_at: new Date().toISOString(), error: null })
     .eq("scan_id", scanId).eq("channel_id", channelId);
   if (error) throw error;
 }
@@ -241,7 +257,7 @@ async function analyze(body: any) {
   const failed: Record<string, string> = {};
   let quotaStop: Fail | null = null;
   await Promise.all(channelIds.map(async (id) => {
-    try { await analyzeOne(scanId, id, match); }
+    try { await analyzeOne(scanId, id, match, body.refresh === true); }
     catch (e) {
       if (e instanceof Fail && e.code === "quota") { quotaStop = e; return; }
       const msg = String((e as Error)?.message ?? e).slice(0, 250);

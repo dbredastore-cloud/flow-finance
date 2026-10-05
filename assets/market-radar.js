@@ -25,6 +25,7 @@
   var STATUS = [["novo", "Novo"], ["prospectar", "Prospectar"], ["contatado", "Contatado"], ["parceiro", "Parceiro"], ["descartado", "Descartado"]];
   var COLORS = ["var(--accent)", "var(--accent-3)", "var(--warning)", "var(--accent-2)"];
   var WEIGHTS_KEY = "market_weights";
+  var CHANNEL_COLS = "scan_id, channel_id, title, handle, thumbnail_url, country, description, channel_created, subscribers, hidden_subs, total_views, video_count, topic_hits, hit_keywords, sample_videos, metrics, top_videos, contacts, analyzed_at, error";
   // Categorias de plataformas/ferramentas detectadas nas descrições (ver CATALOG em market-scan/analysis.js).
   var TOOL_CATS = [
     ["aff", "Plataformas de afiliados"], ["mkt", "Marketplaces"], ["net", "Redes de afiliados"],
@@ -185,7 +186,8 @@
     }, 700);
   }
   async function openScan(id) {
-    var r = await A.sb.from("market_channels").select("*").eq("scan_id", id);
+    // Sem recent_videos (pesado): ele só é lido ao expandir um canal.
+    var r = await A.sb.from("market_channels").select(CHANNEL_COLS).eq("scan_id", id);
     if (r.error) throw r.error;
     S.scan = S.scans.filter(function (s) { return s.id === id; })[0] || null;
     S.channels = r.data || [];
@@ -263,6 +265,13 @@
       var dr = document.createElement("aside"); dr.id = "mr-drawer"; dr.setAttribute("role", "dialog"); dr.setAttribute("aria-label", "Análise do canal"); dr.setAttribute("aria-hidden", "true");
       document.body.appendChild(scrim); document.body.appendChild(dr);
       scrim.addEventListener("click", closeDrawer);
+    }
+    if (!$("mr-full")) {
+      var full = document.createElement("div");
+      full.id = "mr-full"; full.hidden = true; full.setAttribute("role", "dialog"); full.setAttribute("aria-modal", "true"); full.setAttribute("aria-label", "Pesquisa completa do canal");
+      full.innerHTML = '<div class="mr-full-bar"><button class="btn" id="mr-full-back" type="button">← Voltar ao radar</button><span class="mr-full-title" id="mr-full-title"></span><div class="mr-full-acts" id="mr-full-acts"></div></div>' +
+        '<div class="mr-full-body" id="mr-full-body"></div><div class="mr-tip" id="mr-full-tip"></div>';
+      document.body.appendChild(full);
     }
     $("mr-chips").innerHTML = PRESETS.map(function (p) { return '<button type="button" class="mr-chip" data-kw="' + esc(p) + '">' + esc(p) + "</button>"; }).join("");
     $("mr-depth").value = "quick";
@@ -820,7 +829,8 @@
     var links = (ct.links || []).filter(function (u) { return /^https:\/\//i.test(u); }).map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(u.replace(/^https:\/\/(www\.)?/, "")) + "</a>"; }).join("");
     var mails = (ct.emails || []).map(function (e) { return '<a href="mailto:' + esc(e) + '">' + esc(e) + "</a>"; }).join("");
     $("mr-drawer").innerHTML =
-      '<div class="mr-d-head">' + avHtml(c) + '<div><h3>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</h3><div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · desde " + new Date(c.channel_created).getFullYear() : "") + '</div></div><button class="btn btn-ghost mr-d-close" id="mr-d-close" type="button" aria-label="Fechar">✕</button></div>' +
+      '<div class="mr-d-top"><button class="btn btn-primary" type="button" data-expand="' + esc(c.channel_id) + '" title="Abre uma tela completa com todas as informações e os últimos vídeos deste canal">⤢ Expandir pesquisa</button><button class="btn btn-ghost mr-d-close" id="mr-d-close" type="button" aria-label="Fechar">✕</button></div>' +
+      '<div class="mr-d-head">' + avHtml(c) + '<div><h3>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</h3><div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · desde " + new Date(c.channel_created).getFullYear() : "") + "</div></div></div>" +
       '<div class="mr-d-score"><div class="mr-ring ' + cls + '" style="--p:' + c.score + '"><div><b>' + c.score + "</b><span>SCORE</span></div></div><div class=\"mr-d-axes\">" +
         AXES.map(function (a) { return '<div title="' + esc(a.tip) + '"><span>' + a.label + '</span><span class="mr-bar"><i style="width:' + Math.round(c.ax[a.key]) + '%"></i></span><b>' + Math.round(c.ax[a.key]) + "</b></div>"; }).join("") + "</div></div>" +
       '<div class="mr-d-stats">' + stat("Inscritos", c.hidden_subs ? "oculto" : fmtN(c.subscribers)) + stat("Views médias", fmtN(m.avgViews)) + stat("Engajamento", pct(m.engagement)) +
@@ -940,6 +950,8 @@
     var drawer = $("mr-drawer");
     drawer.addEventListener("click", function (e) {
       if (e.target.closest("#mr-d-close")) return closeDrawer();
+      var ex = e.target.closest("[data-expand]");
+      if (ex) return openFull(ex.dataset.expand);
       var c = e.target.closest("[data-cmp-add]");
       if (c) { toggleCompare(c.dataset.cmpAdd); renderDrawer(c.dataset.cmpAdd); }
     });
@@ -951,7 +963,11 @@
       var d = e.target.closest("[data-cmp-del]");
       if (d) toggleCompare(d.dataset.cmpDel, false);
     });
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.openId) closeDrawer(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (S.full) closeFull(); else if (S.openId) closeDrawer();
+    });
+    bindFull();
 
     var tip = $("mr-tip"), bub = $("mr-bubbles");
     bub.addEventListener("mousemove", function (e) {
@@ -979,6 +995,383 @@
     window.addEventListener("flow-theme-change", function () { if (visible() && S.channels.length) { renderCharts(); renderCompare(); } });
   }
   function visible() { return A && A.root && !A.root.hidden; }
+
+  /* ---------------- Tela completa ("Expandir pesquisa") ---------------- */
+  var DAY_MS = 86400000;
+  var DOW = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  var VIDEO_FILTERS = [["all", "Todos"], ["long", "Vídeos"], ["short", "Shorts"], ["topic", "Sobre o tema"], ["tools", "Divulgam algo"]];
+  function chById(id) { return S.channels.filter(function (c) { return c.channel_id === id; })[0]; }
+  function fullChannel() { return S.full ? chById(S.full.id) : null; }
+
+  // Vídeos da tela completa, com os números de cada um (views por dia, engajamento, tipo).
+  function fullVideos(c) {
+    var now = Date.now();
+    return (c.recent || []).map(function (v) {
+      var age = Math.max((now - v.ms) / DAY_MS, 0), short = v.dur != null && v.dur > 0 && v.dur <= 180;
+      var eng = v.views > 0 && v.likes != null ? ((v.likes || 0) + (v.comments || 0)) / v.views : null;
+      return Object.assign({}, v, { age: age, short: short, eng: eng, vpd: v.views / Math.max(age, 1) });
+    });
+  }
+  function fmtDur(s) {
+    if (s == null) return "—";
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60, p = function (n) { return n < 10 ? "0" + n : n; };
+    return h ? h + ":" + p(m) + ":" + p(sec) : m + ":" + p(sec);
+  }
+  function ago(days) { return days < 1 ? "hoje" : Math.floor(days) === 1 ? "há 1 dia" : "há " + fmtInt(Math.floor(days)) + " dias"; }
+  function sumOf(arr, fn) { return arr.reduce(function (s, x) { return s + (fn(x) || 0); }, 0); }
+  function aggVideos(list) {
+    var views = sumOf(list, function (v) { return v.views; }), inter = sumOf(list, function (v) { return (v.likes || 0) + (v.comments || 0); });
+    return { n: list.length, avgViews: list.length ? views / list.length : null, avgLikes: list.length ? sumOf(list, function (v) { return v.likes; }) / list.length : null,
+      avgComments: list.length ? sumOf(list, function (v) { return v.comments; }) / list.length : null, eng: views ? inter / views : null };
+  }
+
+  async function openFull(id) {
+    var c = chById(id);
+    if (!c || !c.ok) return;
+    closeDrawer();
+    S.full = { id: id, filter: "all", sort: { key: "date", dir: -1 }, text: "" };
+    $("mr-full").hidden = false;
+    document.body.classList.add("mr-noscroll");
+    $("mr-full").scrollTop = 0;
+    renderFullBar(c);
+    $("mr-full-body").innerHTML = '<p class="mr-hint" style="padding:30px 0;text-align:center">Carregando os vídeos do canal…</p>';
+    if (!c.recent) {
+      try {
+        var r = await A.sb.from("market_channels").select("recent_videos").eq("scan_id", c.scan_id).eq("channel_id", id).maybeSingle();
+        c.recent = (r.data && r.data.recent_videos) || [];
+      } catch (e) { c.recent = []; }
+    }
+    if (S.full && S.full.id === id) renderFull(c);
+  }
+  function closeFull() {
+    S.full = null;
+    if ($("mr-full")) $("mr-full").hidden = true;
+    document.body.classList.remove("mr-noscroll");
+  }
+
+  function renderFullBar(c) {
+    $("mr-full-title").textContent = c.title;
+    var inCmp = S.compare.indexOf(c.channel_id) >= 0, st = statusOf(c);
+    $("mr-full-acts").innerHTML =
+      '<select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select>" +
+      '<button class="btn" type="button" data-full-cmp="' + esc(c.channel_id) + '">' + (inCmp ? "✓ Na comparação" : "Comparar") + "</button>" +
+      '<button class="btn" type="button" data-full-csv="1">Exportar vídeos (CSV)</button>' +
+      '<button class="btn" type="button" data-full-refresh="1" title="Relê o canal e os últimos 50 vídeos no YouTube (gasta cerca de 3 unidades da cota)">↻ Atualizar dados</button>' +
+      '<a class="btn btn-primary" href="' + chUrl(c.channel_id) + '" target="_blank" rel="noopener noreferrer">Abrir no YouTube ↗</a>';
+  }
+
+  function marketMedianAx() {
+    var med = {};
+    AXES.forEach(function (a) { med[a.key] = median(analyzed().map(function (c) { return c.ax[a.key]; })); });
+    return med;
+  }
+  // Posição do canal entre os analisados nesta varredura (1 = melhor).
+  function rankOf(c, get, higher) {
+    var vals = analyzed().map(get).filter(function (v) { return v != null && isFinite(v); });
+    var mine = get(c);
+    if (mine == null || !isFinite(mine)) return null;
+    var better = vals.filter(function (v) { return higher ? v > mine : v < mine; }).length;
+    return { rank: better + 1, of: vals.length, median: median(vals) };
+  }
+  var FULL_CMP = [
+    { label: "Score de parceria", get: function (c) { return c.score; }, fmt: function (v) { return fmtInt(v); }, hi: true },
+    { label: "Inscritos", get: function (c) { return c.subscribers; }, fmt: fmtN, hi: true },
+    { label: "Views médias (10 últimos)", get: function (c) { return c.metrics.avgViews; }, fmt: fmtN, hi: true },
+    { label: "Engajamento", get: function (c) { return c.metrics.engagement; }, fmt: function (v) { return pct(v); }, hi: true },
+    { label: "Posts por semana", get: function (c) { return c.metrics.perWeek; }, fmt: function (v) { return dec(v); }, hi: true },
+    { label: "Semanas ativas (de 12)", get: function (c) { return c.metrics.activeWeeks; }, fmt: function (v) { return fmtInt(v); }, hi: true },
+    { label: "Conteúdo sobre o tema", get: function (c) { return c.metrics.topicShare; }, fmt: function (v) { return pct(v, 0); }, hi: true },
+    { label: "Vídeos com link de afiliado", get: function (c) { return c.metrics.affShare; }, fmt: function (v) { return pct(v, 0); }, hi: true },
+    { label: "Momentum", get: function (c) { return c.metrics.momentum; }, fmt: function (v) { return dec(v) + "×"; }, hi: true },
+    { label: "Último vídeo (dias atrás)", get: function (c) { return c.metrics.lastDays; }, fmt: function (v) { return v === 0 ? "hoje" : fmtInt(v); }, hi: false }
+  ];
+
+  function kpiF(label, value, sub, tip) {
+    return '<div class="mr-fk"' + (tip ? ' title="' + esc(tip) + '"' : "") + "><small>" + label + '</small><b class="num">' + value + "</b>" + (sub ? "<span>" + sub + "</span>" : "") + "</div>";
+  }
+
+  function renderFull(c) {
+    var m = c.metrics, vids = fullVideos(c), hasVids = vids.length > 0, st = statusOf(c);
+    renderFullBar(c);
+    var cls = c.score >= 65 ? "" : c.score >= 45 ? "warn" : "crit";
+    var age = c.channel_created ? Math.max(0, Math.floor((Date.now() - Date.parse(c.channel_created)) / DAY_MS / 365.25 * 10) / 10) : null;
+    var viewsPerSub = c.subscribers ? m.avgViews / c.subscribers : null;
+
+    var hero =
+      '<section class="mr-fsec mr-fhero">' + avHtml(c, "lg") +
+        '<div class="mr-fhero-main"><h2>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + (st !== "novo" ? '<span class="mr-badge k">' + esc(STATUS.filter(function (s) { return s[0] === st; })[0][1]) + "</span>" : "") + "</h2>" +
+          '<div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · no YouTube desde " + new Date(c.channel_created).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) + (age != null ? " (" + dec(age) + " anos)" : "") : "") + "</div>" +
+          '<div class="sub">Dados lidos em ' + (c.analyzed_at ? esc(fmtDateTime(c.analyzed_at)) : "—") + " · aparece na busca por: " + esc((c.hit_keywords || []).join(", ") || "—") + "</div></div>" +
+        '<div class="mr-fhero-score"><div class="mr-ring ' + cls + '" style="--p:' + c.score + '"><div><b>' + c.score + "</b><span>SCORE</span></div></div></div>" +
+      "</section>";
+
+    var kpis = '<section class="mr-fsec"><h3>Números do canal</h3><div class="mr-fkpis">' +
+      kpiF("Inscritos", c.hidden_subs ? "oculto" : fmtInt(c.subscribers), c.subscribers ? fmtN(c.subscribers) : "", "Inscritos do canal.") +
+      kpiF("Views do canal", fmtN(c.total_views), fmtInt(c.total_views), "Visualizações de todos os vídeos desde a criação.") +
+      kpiF("Vídeos publicados", fmtInt(c.video_count), "no canal todo") +
+      kpiF("Views por inscrito", viewsPerSub == null ? "—" : dec(viewsPerSub * 100, 1) + "%", "views médias ÷ inscritos", "Quanto da base inscrita assiste cada vídeo recente.") +
+      kpiF("Views médias", fmtInt(m.avgViews), "últimos 10 vídeos") +
+      kpiF("Mediana de views", fmtInt(m.medianViews), "últimos 10 vídeos", "Não se distorce quando um vídeo viraliza.") +
+      kpiF("Engajamento", pct(m.engagement), "(curtidas + comentários) ÷ views") +
+      kpiF("Posts por semana", dec(m.perWeek), m.in30 + " nos últimos 30 dias") +
+      kpiF("Semanas com vídeo", m.activeWeeks + " de 12", "regularidade") +
+      kpiF("Último vídeo", m.lastDays === 0 ? "hoje" : m.lastDays + " dias", "atrás") +
+      kpiF("Shorts", pct(m.shortsPct, 0), "dos últimos " + m.videos + " envios") +
+      kpiF("Duração média", m.avgDurMin == null ? "—" : dec(m.avgDurMin) + " min", "vídeos longos") +
+      kpiF("Momentum", m.momentum == null ? "—" : dec(m.momentum) + "×", "views/dia recentes vs. anteriores", "Views por dia dos 5 vídeos mais novos ÷ os 5 anteriores.") +
+      kpiF("Sobre o tema", pct(m.topicShare, 0), m.topicCount + " de " + m.videos + " vídeos") +
+      kpiF("Views no tema", m.topicAvgViews == null ? "—" : fmtN(m.topicAvgViews), "média dos vídeos do tema") +
+      kpiF("Engajamento no tema", pct(m.topicEngagement), "só nos vídeos do tema") +
+      kpiF("Links de afiliado", pct(m.affShare, 0), "dos vídeos") +
+      kpiF("Fala de anúncios", pct(m.adsShare, 0), "Google Ads / tráfego pago") +
+      "</div></section>";
+
+    var med = marketMedianAx();
+    var read =
+      '<div class="mr-f2"><section class="mr-fsec"><h3>Leitura do radar</h3><ul class="mr-d-list">' + readout(c).map(function (i) { return "<li" + (i.warn ? ' class="warn"' : "") + ">" + i.t + "</li>"; }).join("") + "</ul>" +
+        '<div class="mr-d-axes" style="margin-top:14px">' + AXES.map(function (a) { return '<div title="' + esc(a.tip) + '"><span>' + a.label + '</span><span class="mr-bar"><i style="width:' + Math.round(c.ax[a.key]) + '%"></i></span><b>' + Math.round(c.ax[a.key]) + "</b></div>"; }).join("") + "</div></section>" +
+      '<section class="mr-fsec"><h3>Canal × mediana do mercado</h3><p class="mr-hint">Verde: este canal. Azul: a mediana dos canais desta varredura em cada critério.</p><div class="mr-chart" id="mr-full-radar"></div>' +
+        '<div class="mr-legend"><span><i style="background:var(--accent)"></i>' + esc(String(c.title).slice(0, 30)) + '</span><span><i style="background:var(--accent-3)"></i>Mediana do mercado</span></div></section></div>';
+
+    var cmp = '<section class="mr-fsec"><h3>Posição na varredura <small class="muted">(' + analyzed().length + " canais)</small></h3><div class=\"table-scroll\"><table class=\"mr-cmp\"><thead><tr><th class=\"l\">Métrica</th><th>Este canal</th><th>Mediana do mercado</th><th class=\"l\">Posição</th></tr></thead><tbody>" +
+      FULL_CMP.map(function (r) {
+        var rk = rankOf(c, r.get, r.hi), mine = r.get(c);
+        if (!rk) return '<tr><td class="l muted">' + r.label + '</td><td class="num">—</td><td class="num">—</td><td class="l">—</td></tr>';
+        var pctPos = rk.of > 1 ? (rk.of - rk.rank) / (rk.of - 1) * 100 : 100;
+        return '<tr><td class="l muted">' + r.label + '</td><td class="num">' + r.fmt(mine) + '</td><td class="num">' + (rk.median == null ? "—" : r.fmt(rk.median)) + '</td><td class="l"><span class="mr-rank"><span class="mr-bar"><i style="width:' + pctPos.toFixed(0) + '%"></i></span><b>' + rk.rank + "º de " + rk.of + "</b></span></td></tr>";
+      }).join("") + "</tbody></table></div></section>";
+
+    var noVids = '<div class="mr-fnote">Esta varredura é anterior ao detalhamento por vídeo. Clique em <b>↻ Atualizar dados</b> (cerca de 3 unidades da cota) para carregar os últimos 50 vídeos deste canal com as métricas de cada um.</div>';
+    var charts = '<section class="mr-fsec"><h3>Desempenho dos últimos ' + vids.length + ' vídeos</h3>' + (hasVids ?
+      '<p class="mr-hint">Cada barra é um vídeo, do mais antigo (esquerda) ao mais novo. Verde: fala do tema; cinza: outros assuntos; barras mais claras são Shorts. A linha pontilhada é a mediana de views. Clique numa barra para abrir o vídeo.</p><div class="mr-chart mr-vchart" id="mr-full-views"></div>' : noVids) + "</section>";
+
+    var cadence = '<div class="mr-f2"><section class="mr-fsec"><h3>Cadência de postagem</h3>' + (hasVids ? '<p class="mr-hint">Vídeos por semana nas últimas 12 semanas (a última barra é a semana atual).</p><div class="mr-chart" id="mr-full-weekly"></div>' : noVids) + "</section>" +
+      '<section class="mr-fsec"><h3>Dia da semana que publica</h3>' + (hasVids ? '<p class="mr-hint">Nos últimos ' + vids.length + ' vídeos, horário de Brasília.</p><div class="mr-chart" id="mr-full-dow"></div>' : noVids) + "</section></div>";
+
+    var groups = "";
+    if (hasVids) {
+      var longs = vids.filter(function (v) { return !v.short; }), shorts = vids.filter(function (v) { return v.short; });
+      var topics = vids.filter(function (v) { return v.topic; }), others = vids.filter(function (v) { return !v.topic; });
+      var row = function (label, a) {
+        return "<tr><td class=\"l\">" + label + '</td><td class="num">' + a.n + '</td><td class="num">' + (a.avgViews == null ? "—" : fmtN(a.avgViews)) + '</td><td class="num">' + (a.avgLikes == null ? "—" : fmtN(a.avgLikes)) + '</td><td class="num">' + (a.avgComments == null ? "—" : fmtN(a.avgComments)) + '</td><td class="num">' + pct(a.eng) + "</td></tr>";
+      };
+      groups = '<section class="mr-fsec"><h3>Comparativos entre os vídeos</h3><div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Grupo</th><th>Vídeos</th><th>Views médias</th><th>Curtidas médias</th><th>Comentários médios</th><th>Engajamento</th></tr></thead><tbody>' +
+        row("Vídeos longos", aggVideos(longs)) + row("Shorts", aggVideos(shorts)) + row("Falam do tema", aggVideos(topics)) + row("Outros assuntos", aggVideos(others)) + row("Todos", aggVideos(vids)) + "</tbody></table></div></section>";
+    }
+
+    var best = "";
+    if (hasVids) {
+      var byViews = vids.slice().sort(function (a, b) { return b.views - a.views; }).slice(0, 4);
+      var byEng = vids.filter(function (v) { return v.eng != null && v.views >= 100; }).sort(function (a, b) { return b.eng - a.eng; }).slice(0, 4);
+      var card = function (v, metric) {
+        return '<a class="mr-vcard" href="' + vidUrl(v.id) + '" target="_blank" rel="noopener noreferrer"><img src="https://i.ytimg.com/vi/' + encodeURIComponent(v.id) + '/mqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer"><div><b>' + esc(v.title) + '</b><span>' + metric + " · " + fmtDate(v.ms) + (v.short ? " · Short" : "") + "</span></div></a>";
+      };
+      best = '<div class="mr-f2"><section class="mr-fsec"><h3>Mais vistos</h3><div class="mr-vcards">' + byViews.map(function (v) { return card(v, fmtInt(v.views) + " views"); }).join("") + "</div></section>" +
+        '<section class="mr-fsec"><h3>Maior engajamento</h3><div class="mr-vcards">' + (byEng.map(function (v) { return card(v, pct(v.eng) + " · " + fmtInt(v.views) + " views"); }).join("") || '<span class="muted">Sem vídeos com dados suficientes.</span>') + "</div></section></div>";
+    }
+
+    var table = '<section class="mr-fsec"><h3>Últimos vídeos postados</h3>' + (hasVids ?
+      '<div class="mr-tools" id="mr-full-vtools"></div><div class="table-scroll"><table class="mr-table mr-vtable"><thead id="mr-full-vhead"></thead><tbody id="mr-full-vbody"></tbody></table></div><p class="mr-hint" id="mr-full-vcount"></p>' : noVids) + "</section>";
+
+    var ct = c.contacts || {};
+    var mails = (ct.emails || []).map(function (e) { return '<a href="mailto:' + esc(e) + '">' + esc(e) + "</a>"; }).join("");
+    var links = (ct.links || []).filter(function (u) { return /^https:\/\//i.test(u); }).map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(u.replace(/^https:\/\/(www\.)?/, "")) + "</a>"; }).join("");
+    var found = (c.sample_videos || []).map(function (v) { return '<div class="mr-vid"><a href="' + vidUrl(v.id) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + "</a></div>"; }).join("");
+    var about = '<div class="mr-f2"><section class="mr-fsec">' + (toolsSection(c) || '<h3>Ferramentas e parceiros que divulga</h3><p class="mr-hint">Sem dados nesta varredura.</p>') + "</section>" +
+      '<section class="mr-fsec"><h3>Contato e sobre o canal</h3>' + (mails || links ? '<div class="mr-links" style="margin-bottom:12px">' + mails + links + "</div>" : '<p class="mr-hint">Nenhum contato público na descrição.</p>') +
+        (c.description ? '<div class="mr-desc mr-desc-full">' + esc(c.description) + "</div>" : "") +
+        (found ? '<h4 class="mr-sub-h">Apareceu na busca com estes vídeos</h4>' + found : "") + "</section></div>";
+
+    $("mr-full-body").innerHTML = hero + kpis + read + cmp + charts + cadence + groups + best + table + about +
+      '<p class="mr-hint" style="text-align:center">Dados da YouTube Data API: estatísticas públicas do canal e dos últimos 50 vídeos. "Divulga" é lido de títulos, descrições e links, e não de falas dentro dos vídeos.</p>';
+
+    $("mr-full-radar").innerHTML = radarSvg([c, { ax: med }], clamp($("mr-full-radar").clientWidth || 380, 300, 460));
+    if (hasVids) { drawFullViews(c, vids); drawFullWeekly(m.weekly || []); drawFullDow(vids); renderFullVideoTools(c); renderFullVideoTable(c); }
+  }
+
+  /* gráficos da tela completa */
+  function drawFullViews(c, vids) {
+    var el = $("mr-full-views"), list = vids.slice().reverse(); // antigo → novo
+    var W = Math.max(el.clientWidth || 800, 320), H = 250, mg = { l: 50, r: 12, t: 12, b: 30 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
+    var max = Math.max.apply(null, list.map(function (v) { return v.views; }).concat([1])) * 1.08;
+    var medV = median(list.map(function (v) { return v.views; }));
+    var bw = iw / list.length, Y = function (v) { return mg.t + ih - v / max * ih; };
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Views de cada vídeo">';
+    for (var t = 0; t <= 4; t++) { var yv = max * t / 4; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(yv) + '" y2="' + Y(yv) + '"/><text x="' + (mg.l - 8) + '" y="' + (Y(yv) + 3) + '" text-anchor="end">' + fmtN(yv) + "</text>"; }
+    s += '<line class="ax" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + (H - mg.b) + '" y2="' + (H - mg.b) + '"/>';
+    list.forEach(function (v, i) {
+      var h = Math.max(1.5, v.views / max * ih), x = mg.l + i * bw + bw * 0.14;
+      s += '<rect class="mr-vbar' + (v.topic ? " topic" : "") + (v.short ? " short" : "") + '" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + Math.max(2, bw * 0.72).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"/>';
+    });
+    if (medV != null) s += '<line class="med" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(medV) + '" y2="' + Y(medV) + '"/><text x="' + (W - mg.r) + '" y="' + (Y(medV) - 5) + '" text-anchor="end" style="fill:var(--text-dim)">mediana ' + fmtN(medV) + "</text>";
+    [0, Math.floor((list.length - 1) / 2), list.length - 1].forEach(function (i, k) {
+      if (!list[i]) return;
+      s += '<text x="' + (mg.l + i * bw + bw / 2) + '" y="' + (H - 10) + '" text-anchor="' + (k === 0 ? "start" : k === 2 ? "end" : "middle") + '">' + new Date(list[i].ms).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + "</text>";
+    });
+    el.innerHTML = s + "</svg>";
+    el._list = list;
+  }
+  function barChart(el, labels, values, opts) {
+    opts = opts || {};
+    var W = Math.max(el.clientWidth || 420, 280), H = 190, mg = { l: 30, r: 8, t: 14, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
+    var max = Math.max.apply(null, values.concat([1])), bw = iw / values.length, top = values.indexOf(max);
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(opts.label || "") + '">';
+    for (var t = 0; t <= 2; t++) { var yv = Math.round(max * t / 2), y = mg.t + ih - yv / max * ih; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + y + '" y2="' + y + '"/><text x="' + (mg.l - 6) + '" y="' + (y + 3) + '" text-anchor="end">' + yv + "</text>"; }
+    values.forEach(function (v, i) {
+      var h = v ? Math.max(3, v / max * ih) : 1.5, x = mg.l + i * bw + bw * 0.16;
+      s += '<rect class="mr-vbar topic' + (opts.highlight && i !== top ? " soft" : "") + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + (bw * 0.68).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2"><title>' + esc(labels[i] + ": " + v) + "</title></rect>";
+      if (v) s += '<text x="' + (x + bw * 0.34).toFixed(1) + '" y="' + (mg.t + ih - h - 4).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + v + "</text>";
+      s += '<text x="' + (x + bw * 0.34).toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(labels[i]) + "</text>";
+    });
+    el.innerHTML = s + "</svg>";
+  }
+  function drawFullWeekly(weekly) {
+    var labels = weekly.map(function (_, i) { return i === weekly.length - 1 ? "atual" : "-" + (weekly.length - 1 - i); });
+    barChart($("mr-full-weekly"), labels, weekly, { label: "Vídeos por semana" });
+  }
+  function drawFullDow(vids) {
+    var counts = [0, 0, 0, 0, 0, 0, 0];
+    vids.forEach(function (v) { counts[new Date(v.ms - 3 * 3600000).getUTCDay()]++; });
+    barChart($("mr-full-dow"), DOW, counts, { label: "Vídeos por dia da semana", highlight: true });
+  }
+
+  /* tabela de vídeos */
+  function renderFullVideoTools(c) {
+    var f = S.full;
+    $("mr-full-vtools").innerHTML = '<input type="search" id="mr-full-q" placeholder="Buscar no título…" aria-label="Buscar no título" value="' + esc(f.text) + '">' +
+      VIDEO_FILTERS.map(function (x) { return '<button type="button" class="pay-chip' + (f.filter === x[0] ? " on" : "") + '" data-vf="' + x[0] + '" aria-pressed="' + (f.filter === x[0]) + '">' + x[1] + "</button>"; }).join("");
+  }
+  var VCOLS = [
+    ["title", "Vídeo", "l"], ["date", "Publicado", "l"], ["dur", "Duração", ""], ["views", "Views", ""], ["likes", "Curtidas", ""],
+    ["comments", "Comentários", ""], ["eng", "Engaj.", ""], ["vpd", "Views/dia", ""], ["tools", "Divulga", "l"]
+  ];
+  function renderFullVideoTable(c) {
+    var f = S.full, q = f.text.trim().toLowerCase();
+    var list = fullVideos(c).filter(function (v) {
+      if (q && String(v.title).toLowerCase().indexOf(q) < 0) return false;
+      if (f.filter === "long") return !v.short;
+      if (f.filter === "short") return v.short;
+      if (f.filter === "topic") return v.topic;
+      if (f.filter === "tools") return (v.tools || []).some(function (t) { return t.c !== "ads"; });
+      return true;
+    });
+    var key = f.sort.key, dir = f.sort.dir;
+    var val = function (v) { return key === "date" ? v.ms : key === "title" ? String(v.title).toLowerCase() : key === "tools" ? (v.tools || []).filter(function (t) { return t.c !== "ads"; }).length : v[key]; };
+    list.sort(function (a, b) {
+      var x = val(a), y = val(b);
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return x < y ? -dir : x > y ? dir : 0;
+    });
+    $("mr-full-vhead").innerHTML = "<tr>" + VCOLS.map(function (col) {
+      var arrow = f.sort.key === col[0] ? ' <span class="arrow">' + (dir < 0 ? "↓" : "↑") + "</span>" : "";
+      return '<th class="sortable ' + col[2] + '" data-vs="' + col[0] + '">' + col[1] + arrow + "</th>";
+    }).join("") + "</tr>";
+    $("mr-full-vbody").innerHTML = list.length ? list.map(function (v) {
+      var tools = (v.tools || []).filter(function (t) { return t.c !== "ads"; });
+      return "<tr><td class=\"l\"><div class=\"mr-vt\"><img src=\"https://i.ytimg.com/vi/" + encodeURIComponent(v.id) + "/mqdefault.jpg\" alt=\"\" loading=\"lazy\" referrerpolicy=\"no-referrer\"><div><a href=\"" + vidUrl(v.id) + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + esc(v.title) + "</a><div>" +
+        (v.short ? '<span class="mr-badge k">Short</span>' : "") + (v.topic ? '<span class="mr-badge p">tema</span>' : "") + "</div></div></div></td>" +
+        '<td class="l num">' + fmtDate(v.ms) + '<div class="muted" style="font-family:inherit;font-size:11px">' + ago(v.age) + "</div></td>" +
+        '<td class="num">' + fmtDur(v.dur) + '</td><td class="num">' + fmtInt(v.views) + '</td><td class="num">' + (v.likes == null ? "—" : fmtInt(v.likes)) + '</td><td class="num">' + (v.comments == null ? "—" : fmtInt(v.comments)) + '</td><td class="num">' + pct(v.eng) + '</td><td class="num">' + fmtN(v.vpd) + "</td>" +
+        '<td class="l mr-divulga">' + (tools.length ? tools.slice(0, 4).map(function (t) { return '<span class="mr-tool mini' + (FLOW_LIKE[t.c] ? " like" : "") + '" title="' + (t.l ? "com link" : "só mencionado") + '">' + esc(t.n) + (t.l ? " 🔗" : "") + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td></tr>";
+    }).join("") : '<tr><td colspan="' + VCOLS.length + '" class="empty">Nenhum vídeo com esses filtros.</td></tr>';
+    $("mr-full-vcount").textContent = list.length + " de " + (c.recent || []).length + " vídeos";
+  }
+
+  async function refreshFull() {
+    var c = fullChannel();
+    if (!c) return;
+    var btn = document.querySelector("[data-full-refresh]");
+    btn.disabled = true; btn.textContent = "Atualizando…";
+    var r = await call({ action: "analyze", scanId: c.scan_id, channelIds: [c.channel_id], refresh: true });
+    btn.disabled = false; btn.textContent = "↻ Atualizar dados";
+    if (!r.ok) { A.toast("Não foi possível atualizar: " + (r.error || "erro"), true); return; }
+    if (r.failed && r.failed[c.channel_id]) { A.toast("O YouTube recusou a leitura: " + r.failed[c.channel_id], true); return; }
+    var fresh = await A.sb.from("market_channels").select(CHANNEL_COLS + ", recent_videos").eq("scan_id", c.scan_id).eq("channel_id", c.channel_id).maybeSingle();
+    if (fresh.error || !fresh.data) { A.toast("Atualizado, mas não foi possível reler o canal.", true); return; }
+    var rv = fresh.data.recent_videos || [];
+    delete fresh.data.recent_videos;
+    Object.assign(c, fresh.data);
+    c.recent = rv;
+    prepare();
+    renderAnalysis();
+    var keep = $("mr-full").scrollTop;
+    renderFull(c);
+    $("mr-full").scrollTop = keep;
+    loadScans().then(renderGauge).catch(function () {});
+    A.toast("Dados atualizados (" + (r.spent || 0) + " unidades de cota).");
+  }
+
+  function exportFullCsv() {
+    var c = fullChannel();
+    if (!c) return;
+    var rows = [["Título", "URL", "Publicado", "Duração (s)", "Tipo", "Views", "Curtidas", "Comentários", "Engajamento", "Views por dia", "Sobre o tema", "Divulga"].map(csvCell).join(",")];
+    fullVideos(c).forEach(function (v) {
+      rows.push([v.title, vidUrl(v.id), new Date(v.ms).toISOString().slice(0, 10), v.dur, v.short ? "Short" : "Vídeo", v.views, v.likes, v.comments, v.eng == null ? "" : v.eng.toFixed(4), Math.round(v.vpd), v.topic ? "sim" : "não",
+        (v.tools || []).filter(function (t) { return t.c !== "ads"; }).map(function (t) { return t.n + (t.l ? " (link)" : ""); }).join("; ")].map(csvCell).join(","));
+    });
+    var blob = new Blob(["﻿" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "videos-" + String(c.title).replace(/[^\w\-]+/g, "_").slice(0, 40) + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+
+  function bindFull() {
+    var box = $("mr-full");
+    box.addEventListener("click", function (e) {
+      if (e.target.closest("#mr-full-back")) return closeFull();
+      var c = fullChannel();
+      if (!c) return;
+      var cmp = e.target.closest("[data-full-cmp]");
+      if (cmp) { toggleCompare(c.channel_id); renderFullBar(c); return; }
+      if (e.target.closest("[data-full-refresh]")) return refreshFull();
+      if (e.target.closest("[data-full-csv]")) return exportFullCsv();
+      var vf = e.target.closest("[data-vf]");
+      if (vf) { S.full.filter = vf.dataset.vf; renderFullVideoTools(c); renderFullVideoTable(c); return; }
+      var vs = e.target.closest("th[data-vs]");
+      if (vs) { var k = vs.dataset.vs; S.full.sort = { key: k, dir: S.full.sort.key === k ? -S.full.sort.dir : (k === "title" ? 1 : -1) }; renderFullVideoTable(c); return; }
+      var bar = e.target.closest(".mr-vbar[data-i]");
+      if (bar) { var list = $("mr-full-views")._list, v = list && list[+bar.dataset.i]; if (v) window.open(vidUrl(v.id), "_blank", "noopener"); }
+    });
+    box.addEventListener("input", function (e) {
+      if (e.target.id !== "mr-full-q" || !S.full) return;
+      S.full.text = e.target.value;
+      var c = fullChannel();
+      if (c) renderFullVideoTable(c);
+    });
+    box.addEventListener("change", function (e) {
+      var sel = e.target.closest("select[data-status]");
+      if (!sel) return;
+      sel.className = "mr-funnel s-" + sel.value;
+      setStatus(sel.dataset.status, sel.value);
+    });
+    var tip = $("mr-full-tip");
+    box.addEventListener("mousemove", function (e) {
+      var bar = e.target.closest ? e.target.closest(".mr-vbar[data-i]") : null;
+      if (!bar || !S.full) { tip.style.display = "none"; return; }
+      var list = $("mr-full-views")._list, v = list && list[+bar.dataset.i];
+      if (!v) return;
+      tip.innerHTML = "<b>" + esc(v.title) + "</b><div><span>Publicado</span>" + fmtDate(v.ms) + "</div><div><span>Views</span>" + fmtInt(v.views) + "</div><div><span>Curtidas</span>" + (v.likes == null ? "—" : fmtInt(v.likes)) + "</div><div><span>Comentários</span>" + (v.comments == null ? "—" : fmtInt(v.comments)) + "</div><div><span>Engajamento</span>" + pct(v.eng) + "</div><div><span>Tipo</span>" + (v.short ? "Short" : "Vídeo") + (v.topic ? " · tema" : "") + "</div>";
+      tip.style.display = "block";
+      var x = e.clientX + 14, y = e.clientY + 14;
+      if (x + 270 > window.innerWidth) x = e.clientX - 270;
+      if (y + 190 > window.innerHeight) y = e.clientY - 190;
+      tip.style.left = Math.max(x, 4) + "px"; tip.style.top = Math.max(y, 4) + "px";
+    });
+    box.addEventListener("mouseleave", function () { tip.style.display = "none"; });
+    window.addEventListener("resize", function () {
+      var c = fullChannel();
+      if (!c || !c.recent || !c.recent.length || $("mr-full").hidden) return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { var v = fullVideos(c); drawFullViews(c, v); drawFullWeekly(c.metrics.weekly || []); drawFullDow(v); $("mr-full-radar").innerHTML = radarSvg([c, { ax: marketMedianAx() }], clamp($("mr-full-radar").clientWidth || 380, 300, 460)); }, 150);
+    });
+    window.addEventListener("flow-theme-change", function () {
+      var c = fullChannel();
+      if (c && !$("mr-full").hidden) { var keep = $("mr-full").scrollTop; renderFull(c); $("mr-full").scrollTop = keep; }
+    });
+  }
 
   /* ---------------- API pública ---------------- */
   async function show() {
