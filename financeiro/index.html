@@ -392,6 +392,7 @@
 
   /* ---------- Flow Health ---------- */
   .tool-btn.health-btn { margin-top: 6px; color: var(--accent); font-weight: 700; }
+  .tool-btn.clients-btn { margin-top: 2px; color: var(--accent-3); font-weight: 700; }
   .tooltip { position: absolute; pointer-events: none; z-index: 5; padding: 8px 10px; font-size: 12px; min-width: 190px; display: none; }
   .tooltip .t-title { font-weight: 700; margin-bottom: 4px; }
   .tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; }
@@ -486,8 +487,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
+<link rel="stylesheet" href="../assets/customer-health.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
+<script src="../assets/customer-health.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -557,6 +560,7 @@
     <button class="tool-btn home-btn" id="home-btn" type="button">⌂ Home</button>
     <nav class="tool-list" id="tool-list"></nav>
     <button class="tool-btn health-btn" id="health-btn">⚡ Flow Health</button>
+    <button class="tool-btn clients-btn" id="clients-btn" type="button">♥ Saúde dos clientes</button>
     <a class="tool-btn" href="../afiliados/" style="text-decoration:none; border-top:1px solid var(--border); border-radius:0; padding-top:14px;">Afiliados →</a>
     <div class="sidebar-foot">
       <div class="note" id="user-email"></div>
@@ -602,6 +606,8 @@
       <p class="alerts-sub">A Kiwify releu um mês que já tinha fechado e algum número mudou. Veja abaixo quais vendas mudaram e por quê.</p>
       <div id="alerts-list"></div>
     </section>
+
+    <div id="clients-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1425,6 +1431,7 @@
     var list = document.getElementById("tool-list");
     list.innerHTML = "";
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
+    document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2647,11 +2654,23 @@
     document.getElementById("home-view").hidden = v !== "home";
     document.getElementById("health-view").hidden = v !== "health";
     document.getElementById("tool-view").hidden = v !== "tool";
-    document.getElementById("period-bar").hidden = v === "health";
+    document.getElementById("clients-view").hidden = v !== "clients";
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients";
     document.getElementById("year-switch").hidden = v !== "health";
+    if (v !== "clients") CustomerHealth.hide();
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
+    else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
     renderSidebar();
+  }
+  CustomerHealth.init({
+    root: document.getElementById("clients-view"), sb: sb, url: SUPABASE_URL, toast: toast,
+    userId: function () { return state.userId; }
+  });
+  document.getElementById("clients-btn").addEventListener("click", function () { openClients(); });
+  async function openClients() {
+    setView("clients");
+    await CustomerHealth.show();
   }
   function setHealthMode(on) { setView(on ? "health" : "tool"); }
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
@@ -3181,6 +3200,7 @@
     var session = sessionRes.data && sessionRes.data.session;
     if (!session) { showLogin(); return; }
     document.getElementById("user-email").textContent = session.user.email;
+    state.userId = session.user.id;
     var alertsReady = loadAlerts().catch(function () { state.alerts = []; });
     loadSecurity().then(renderSecurity).catch(function () {});
 
@@ -3211,6 +3231,7 @@
     }
     await selectTool(initialTool.id);
     if (view === "health") openHealth();
+    else if (view === "clients") openClients();
     prefetchOtherTools();
   }
 
@@ -3222,6 +3243,7 @@
   // Troca de modo claro/escuro: os gráficos leem as cores ao desenhar, então redesenha.
   window.addEventListener("flow-theme-change", function () {
     if (state.view === "health") { if (state.health) renderHealth(); }
+    else if (state.view === "clients") CustomerHealth.redraw();
     else if (state.view === "home") { if (state.home) renderHome(); }
     else if (state.activeToolId) renderChart();
   });
