@@ -178,7 +178,7 @@
   .year-switch button:hover { background: var(--surface-2); }
   .year-switch .year-label { font-weight: 700; font-size: 15px; width: 52px; text-align: center; }
 
-  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .kpi {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -297,7 +297,7 @@
   .home-grid .panel { margin: 0; }
   .home-grid .panel-head { flex-wrap: wrap; gap: 6px 14px; align-items: flex-start; }
   .home-grid .legend { flex-wrap: wrap; gap: 4px 12px; }
-  .home-kpis { grid-template-columns: repeat(3, 1fr); }
+  .home-kpis { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
   .tdot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; }
   .total-row td { font-weight: 700; border-top: 1px solid var(--border-strong); }
   #home-tools th, #home-tools td, #home-groups th, #home-groups td { padding-left: 8px; padding-right: 8px; font-size: 12.5px; }
@@ -756,6 +756,7 @@
               <th title="Receita bruta faturada no mês.">Faturamento</th>
               <th title="Soma de todas as despesas lançadas no mês, em todas as categorias.">Despesas</th>
               <th title="Quantidade de usuários novos que entraram no mês.">Novos usu.</th>
+              <th title="Faturamento do mês ÷ vendas pagas (novos usuários) do mês: a média líquida de cada venda.">Ticket médio</th>
               <th title="Reembolsos do mês ÷ Novos usuários do mês, em percentual.">% Reemb.</th>
               <th title="Quantidade total acumulada de usuários até o fim do mês.">Usu. totais</th>
               <th title="Despesas totais do mês ÷ Novos usuários do mês.">Custo/novo</th>
@@ -1444,11 +1445,12 @@
 
   function renderKpis() {
     var keys = Object.keys(state.summaryByMonth).map(Number);
-    var totalFat = 0, totalDesp = 0, totalLiq = 0;
+    var totalFat = 0, totalDesp = 0, totalLiq = 0, totalNovos = 0;
     var lastUsers = null, lastKey = 0;
     keys.forEach(function (k) {
       var r = state.summaryByMonth[k];
       totalFat += Number(r.faturamento) || 0;
+      totalNovos += Number(r.novos_usuarios) || 0;
       totalDesp += Number(r.total_despesas) || 0;
       totalLiq += Number(r.liquido) || 0;
       if (Number(r.usuarios_totais) > 0 && k >= lastKey) { lastKey = k; lastUsers = r.usuarios_totais; }
@@ -1460,9 +1462,14 @@
       kpiTile("Despesas (período)", fmtBRL(totalDesp), null, "Soma de todas as despesas lançadas no período selecionado, em todas as categorias.") +
       kpiTile("Líquido (período)", fmtBRL(totalLiq), totalLiq >= 0 ? "good" : "bad", "Faturamento do período − Despesas do período.") +
       kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido do período ÷ Faturamento do período, em percentual.", marginRing(margem)) +
+      kpiTile("Ticket médio", fmtBRL(ticketOf(totalFat, totalNovos)), null, TICKET_TIP) +
       (lastUsers !== null ? kpiTile("Usuários totais (" + ymShort(lastKey) + ")", fmtInt(lastUsers), null, "Quantidade total acumulada de usuários até o fim do último mês do período que tem dado.") : "");
     renderPayStrip();
   }
+  // Ticket médio = faturamento ÷ vendas pagas. "Novos usuários" é a quantidade de vendas pagas do mês
+  // (na Kiwify), e o faturamento é o valor líquido dessas vendas. null quando não há venda.
+  var TICKET_TIP = "Faturamento ÷ vendas pagas (novos usuários) do período. É a média líquida de cada venda, contando novas compras e renovações.";
+  function ticketOf(fat, novos) { return Number(novos) > 0 ? (Number(fat) || 0) / Number(novos) : null; }
   // ring (opcional): gauge circular HUD à direita do número.
   function kpiTile(label, value, cls, tip, ring) {
     return '<div class="kpi' + (ring ? " has-ring" : "") + '"><div class="label"' + (tip ? ' title="' + tip + '"' : "") + '>' + label + '</div><div class="value ' + (cls || "") + ' num">' + value + "</div>" +
@@ -1497,6 +1504,7 @@
         '<td class="num">' + (r ? fmtBRL(r.faturamento) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.total_despesas) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtInt(r.novos_usuarios) : "—") + "</td>" +
+        '<td class="num">' + (r && r.has_revenue !== false ? fmtBRL(ticketOf(r.faturamento, r.novos_usuarios)) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtPct(r.percentual_reembolso) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtInt(r.usuarios_totais) : "—") + "</td>" +
         '<td class="num">' + (r ? fmtBRL(r.custo_por_novo_usuario) : "—") + "</td>" +
@@ -1510,7 +1518,7 @@
       detailTr.className = "detail-row" + (state.openMonth === m ? " open" : "");
       detailTr.dataset.month = m;
       var td = document.createElement("td");
-      td.colSpan = 10;
+      td.colSpan = 11;
       td.innerHTML = '<div class="detail-wrap" id="detail-' + m + '"></div>';
       detailTr.appendChild(td);
       body.appendChild(detailTr);
@@ -2492,6 +2500,7 @@
       kpiTile("Despesas (período)", fmtBRL(tot.desp), null, "Soma de todas as despesas lançadas nas quatro ferramentas no período.") +
       kpiTile("Líquido (período)", fmtBRL(liq), liq >= 0 ? "good" : "bad", "Faturamento − Despesas, somando as quatro ferramentas.") +
       kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido ÷ Faturamento do período, em percentual.", marginRing(margem)) +
+      kpiTile("Ticket médio (geral)", fmtBRL(ticketOf(tot.fat, tot.novos)), null, TICKET_TIP + " Aqui somando as quatro ferramentas.") +
       kpiTile("Novos usuários", fmtInt(tot.novos), null, "Soma dos novos usuários das quatro ferramentas no período.") +
       kpiTile("Custo por novo usuário", fmtBRL(custoNovo), null, "Despesas totais do período ÷ Novos usuários do período.");
     renderPeriodBar();
@@ -2529,6 +2538,7 @@
         '<td class="num ' + (l >= 0 ? "liq-pos" : "liq-neg") + '">' + fmtBRL(l) + "</td>" +
         '<td class="num">' + fmtPct(s.fat > 0 ? l / s.fat : null) + "</td>" +
         '<td class="num">' + fmtInt(s.novos) + "</td>" +
+        '<td class="num">' + fmtBRL(ticketOf(s.fat, s.novos)) + "</td>" +
         '<td class="num">' + fmtPct(s.novos > 0 ? s.reemb / s.novos : null) + "</td>" +
         '<td class="num">' + fmtBRL(s.novos > 0 ? s.desp / s.novos : null) + "</td></tr>";
     }
@@ -2536,7 +2546,7 @@
       "<thead><tr>" + th("Ferramenta") + th("Faturamento", "Soma do faturamento da ferramenta no período.") + th("% fat.", "Participação da ferramenta no faturamento total.") +
         th("Despesas", "Soma das despesas da ferramenta no período.") + th("% desp.", "Participação da ferramenta nas despesas totais.") +
         th("Líquido", "Faturamento − Despesas da ferramenta.") + th("Margem", "Líquido ÷ Faturamento da ferramenta.") +
-        th("Novos usu.", "Novos usuários da ferramenta no período.") + th("% Reemb.", "Reembolsos ÷ Novos usuários no período.") +
+        th("Novos usu.", "Novos usuários da ferramenta no período.") + th("Ticket médio", TICKET_TIP) + th("% Reemb.", "Reembolsos ÷ Novos usuários no período.") +
         th("Custo/novo", "Despesas ÷ Novos usuários da ferramenta.") + "</tr></thead><tbody>" +
       per.map(function (s) { return toolRow(s.tool.name, s.color, s, false); }).join("") +
       toolRow("Total", null, tot, true) + "</tbody>";
