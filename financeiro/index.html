@@ -351,6 +351,11 @@
   .note-dot { margin-left: 6px; font-size: 11px; cursor: help; }
   .pay-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -4px 0 18px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 12.5px; color: var(--text-muted); }
   .pay-strip[hidden] { display: none; }
+  .pay-bar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; background: var(--track-bg, rgba(127,127,127,.15)); border: 1px solid var(--border-strong); }
+  .pay-bar-seg { display: flex; align-items: center; justify-content: center; min-width: 3px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; font-weight: 700; color: var(--accent-ink); transition: opacity .15s; }
+  .pay-bar-seg + .pay-bar-seg { border-left: 2px solid var(--bg); }
+  .pay-bar-seg.dim { opacity: .28; }
+  .health-table td.col-on, .health-table th.col-on { background: rgba(var(--accent-rgb), .09); }
   .pay-strip-title { margin-right: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
   .pay-sum { display: inline-flex; align-items: baseline; gap: 7px; padding: 3px 12px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-dim); }
   .pay-sum b { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; color: var(--text); }
@@ -679,6 +684,21 @@
           </div>
         </section>
       </div>
+
+      <section class="panel" id="home-pay-panel">
+        <div class="panel-head">
+          <h3>Cartão Flow × Biancode</h3>
+          <div class="pay-filter" id="home-pay-chips" role="group" aria-label="Ver por forma de pagamento" style="margin:0"></div>
+        </div>
+        <p class="hint-text" id="home-pay-hint" style="margin-top:0"></p>
+        <div class="pay-bar" id="home-pay-bar" role="img" aria-label="Proporção das despesas por forma de pagamento"></div>
+        <div class="legend" id="home-pay-legend" style="margin:10px 0 4px"></div>
+        <div class="chart-wrap">
+          <svg id="home-pay-chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;" role="img" aria-label="Despesas por forma de pagamento em cada mês"></svg>
+          <div class="tooltip" id="home-pay-tip"></div>
+        </div>
+        <div class="table-scroll" style="margin-top:14px"><table class="health-table" id="home-pay-table"></table></div>
+      </section>
 
       <section class="panel">
         <div class="panel-head"><h3>Resumo por ferramenta</h3></div>
@@ -2352,7 +2372,7 @@
   async function loadHome(range) {
     var fy = ymY(range.from), ty = ymY(range.to);
     var res = await Promise.all([
-      pageAll(function () { return sb.from("monthly_expenses").select("tool_id, category_id, year, month, amount").gte("year", fy).lte("year", ty); }),
+      pageAll(function () { return sb.from("monthly_expenses").select("tool_id, category_id, year, month, amount, paid_via").gte("year", fy).lte("year", ty); }),
       pageAll(function () { return sb.from("monthly_revenue").select("tool_id, year, month, faturamento, reembolsos, novos_usuarios").gte("year", fy).lte("year", ty); }),
       pageAll(function () { return sb.from("expense_categories").select("id, tool_id, group_name"); })
     ]);
@@ -2364,7 +2384,7 @@
       var p = perTool[toolId];
       if (!p) return null;
       keys[k] = 1;
-      return p.byYm[k] || (p.byYm[k] = { fat: 0, desp: 0, novos: 0, reemb: 0, hasRev: false });
+      return p.byYm[k] || (p.byYm[k] = { fat: 0, desp: 0, novos: 0, reemb: 0, hasRev: false, pay: { cartao: 0, biancode: 0, none: 0 } });
     }
     res[0].forEach(function (e) {
       var k = ym(e.year, e.month);
@@ -2373,6 +2393,7 @@
       if (!c) return;
       var a = Number(e.amount) || 0, cat = catById[e.category_id], g = (cat && cat.group_name) || "Outros", p = perTool[e.tool_id];
       c.desp += a;
+      c.pay[e.paid_via === "cartao" || e.paid_via === "biancode" ? e.paid_via : "none"] += a;
       p.groups[g] = (p.groups[g] || 0) + a;
     });
     res[1].forEach(function (r) {
@@ -2455,6 +2476,7 @@
     var legend = per.map(function (s) { return '<span><span class="dot" style="background:' + s.color + '"></span>' + escHtml(s.tool.name) + "</span>"; }).join("");
     document.getElementById("home-legend-rev").innerHTML = legend;
     document.getElementById("home-legend-exp").innerHTML = legend;
+    renderHomePay();
 
     // Resumo por ferramenta (com linha de total).
     var th = function (label, tip) { return "<th" + (tip ? ' title="' + escHtml(tip) + '"' : "") + ">" + label + "</th>"; };
@@ -2501,6 +2523,80 @@
         return cellMoney(t);
       }).join("") + cellMoney(gTotal) + '<td class="num">' + (gTotal > 0 ? "100,0%" : "—") + "</td></tr></tbody>";
   }
+
+  /* Home: o que foi pago no Cartão Flow e o que foi cobrado pela Biancode.
+     "Todas" mostra a divisão por forma de pagamento; escolher uma delas mostra, por ferramenta, só o que foi pago daquele jeito. */
+  state.homePay = "all";
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function renderHomePay() {
+    var h = state.home;
+    if (!h) return;
+    var mode = state.homePay, rows = h.rows;
+    var per = state.tools.map(function (t, i) {
+      var p = h.perTool[t.id] || { byYm: {} };
+      var s = { tool: t, color: toolColor(t, i), cartao: 0, biancode: 0, none: 0, byYm: p.byYm };
+      Object.keys(p.byYm).forEach(function (k) { var c = p.byYm[k].pay; s.cartao += c.cartao; s.biancode += c.biancode; s.none += c.none; });
+      return s;
+    });
+    var tot = { cartao: 0, biancode: 0, none: 0 };
+    per.forEach(function (s) { tot.cartao += s.cartao; tot.biancode += s.biancode; tot.none += s.none; });
+    var all = tot.cartao + tot.biancode + tot.none;
+    var colors = { cartao: cssVar("--accent"), biancode: cssVar("--accent-3"), none: cssVar("--text-muted") };
+    var label = { cartao: PAY_LABEL.cartao, biancode: PAY_LABEL.biancode, none: "Sem classificar" };
+    var pctOf = function (v) { return all > 0 ? fmtPct(v / all) : "—"; };
+
+    var chips = [["all", "Todas", all], ["cartao", PAY_LABEL.cartao, tot.cartao], ["biancode", PAY_LABEL.biancode, tot.biancode]];
+    document.getElementById("home-pay-chips").innerHTML = chips.map(function (d) {
+      return '<button type="button" class="pay-chip' + (mode === d[0] ? " on" : "") + '" data-hp="' + d[0] + '" aria-pressed="' + (mode === d[0]) + '"><span>' + d[1] + "</span><b>" + escHtml(fmtBRL(d[2])) + "</b></button>";
+    }).join("");
+
+    document.getElementById("home-pay-hint").textContent = !all
+      ? "Nenhuma despesa lançada neste período."
+      : mode === "all"
+        ? "Despesas do período por forma de pagamento, somando as quatro ferramentas." + (tot.none ? " " + fmtBRL(tot.none) + " ainda sem classificar (marque Cartão Flow ou Biancode em cada despesa)." : "")
+        : "Só o que foi pago em " + label[mode] + ", por ferramenta e por mês.";
+
+    var barParts = ["cartao", "biancode", "none"].filter(function (k) { return tot[k] > 0; });
+    document.getElementById("home-pay-bar").innerHTML = barParts.map(function (k) {
+      var w = (tot[k] / all * 100).toFixed(2);
+      return '<span class="pay-bar-seg' + (mode !== "all" && mode !== k ? " dim" : "") + '" style="width:' + w + "%;background:" + colors[k] + '" title="' + escHtml(label[k] + ": " + fmtBRL(tot[k]) + " (" + pctOf(tot[k]) + ")") + '">' + (tot[k] / all >= 0.12 ? escHtml(pctOf(tot[k])) : "") + "</span>";
+    }).join("");
+
+    var series, legend;
+    if (mode === "all") {
+      var keys = ["cartao", "biancode"].concat(tot.none > 0 ? ["none"] : []);
+      series = keys.map(function (k) {
+        return { name: label[k], color: colors[k], get: function (m) { return per.reduce(function (a, s) { var c = s.byYm[m]; return a + (c ? c.pay[k] : 0); }, 0); } };
+      });
+      legend = keys.map(function (k) { return '<span><span class="dot" style="background:' + colors[k] + '"></span>' + label[k] + "</span>"; }).join("");
+    } else {
+      series = per.map(function (s) { return { name: s.tool.name, color: s.color, get: function (m) { var c = s.byYm[m]; return c ? c.pay[mode] : 0; } }; });
+      legend = per.map(function (s) { return '<span><span class="dot" style="background:' + s.color + '"></span>' + escHtml(s.tool.name) + "</span>"; }).join("");
+    }
+    document.getElementById("home-pay-legend").innerHTML = legend;
+    drawStackedChart({ svgId: "home-pay-chart", tipId: "home-pay-tip", rows: rows, series: series, empty: mode === "all" ? "Sem despesas neste período" : "Nada pago em " + label[mode] + " neste período" });
+
+    var money = function (v, on) { return '<td class="num' + (on ? " col-on" : "") + '">' + (v ? fmtBRL(v) : "—") + "</td>"; };
+    var pcell = function (v, on) { return '<td class="num' + (on ? " col-on" : "") + '">' + (v ? pctOf(v) : "—") + "</td>"; };
+    var on = function (k) { return mode === k; };
+    var line = function (name, color, s, isTotal) {
+      var t = s.cartao + s.biancode + s.none;
+      return "<tr" + (isTotal ? ' class="total-row"' : "") + "><td>" + (color ? '<span class="tdot" style="background:' + color + '"></span>' : "") + escHtml(name) + "</td>" +
+        money(s.cartao, on("cartao")) + pcell(s.cartao, on("cartao")) + money(s.biancode, on("biancode")) + pcell(s.biancode, on("biancode")) + money(s.none, false) + money(t, false) + "</tr>";
+    };
+    var th = function (t, tip) { return "<th" + (tip ? ' title="' + escHtml(tip) + '"' : "") + ">" + t + "</th>"; };
+    document.getElementById("home-pay-table").innerHTML =
+      "<thead><tr>" + th("Ferramenta") + th(PAY_LABEL.cartao, "Pago no cartão da empresa.") + th("% total", "Participação do Cartão Flow nas despesas totais do período.") +
+        th(PAY_LABEL.biancode, "Cobrado pela Biancode.") + th("% total", "Participação da Biancode nas despesas totais do período.") +
+        th("Sem classificar", "Despesas que ainda não foram marcadas como Cartão Flow ou Biancode.") + th("Total") + "</tr></thead><tbody>" +
+      per.map(function (s) { return line(s.tool.name, s.color, s, false); }).join("") + line("Total", null, tot, true) + "</tbody>";
+  }
+  document.getElementById("home-pay-chips").addEventListener("click", function (e) {
+    var b = e.target.closest(".pay-chip");
+    if (!b) return;
+    state.homePay = b.dataset.hp;
+    renderHomePay();
+  });
 
   /* ---------------- Flow Health ---------------- */
   // Métricas vêm prontas da função SQL flow_health(ano); aqui só combinamos e desenhamos.
