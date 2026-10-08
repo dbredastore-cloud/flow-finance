@@ -4,6 +4,8 @@
 //   discover → busca vídeos por palavra-chave, junta os canais, lê estatísticas e grava a varredura.
 //   analyze  → para até 8 canais por chamada, lê os últimos 50 envios e calcula as métricas.
 //   finish   → fecha a varredura.
+//   find / add_channel → pesquisa de um youtuber específico (por nome, @usuario ou link): localiza o canal e cria
+//              uma varredura de 1 canal, que segue por analyze + finish.
 //
 // Cota da YouTube Data API (10.000/dia, compartilhada com o youtube-sync):
 //   search.list = 100 · channels/playlistItems/videos = 1.
@@ -200,6 +202,92 @@ async function discover(body: any, userId: string) {
   }
 }
 
+// ---------------------------------------------------------------- canal específico
+// Aceita link (/@usuario, /channel/UC…, /user/…, /c/…), @usuario, ID do canal ou o nome.
+function parseRef(raw: string): { id?: string; handle?: string; user?: string; custom?: string; name: string } {
+  let s = raw.trim();
+  try { s = decodeURIComponent(s); } catch { /* mantém como veio */ }
+  let m = s.match(/^(UC[\w-]{20,24})$/) ?? s.match(/youtube\.com\/channel\/(UC[\w-]{20,24})/i);
+  if (m) return { id: m[1], name: s };
+  m = s.match(/youtube\.com\/@([^/?#\s]+)/i) ?? s.match(/^@([^/?#\s]+)$/);
+  if (m) return { handle: m[1], name: m[1] };
+  m = s.match(/youtube\.com\/user\/([^/?#\s]+)/i);
+  if (m) return { user: m[1], name: m[1] };
+  m = s.match(/youtube\.com\/c\/([^/?#\s]+)/i);
+  if (m) return { custom: m[1], name: m[1] };
+  return { name: s.replace(/^https?:\/\/(www\.)?youtube\.com\/?/i, "").trim() || s };
+}
+const card = (ch: any) => ({
+  channel_id: ch.id, title: ch.snippet?.title ?? null, handle: ch.snippet?.customUrl ?? null,
+  thumbnail_url: bestThumb(ch.snippet?.thumbnails), country: ch.snippet?.country ?? null,
+  subscribers: ch.statistics?.hiddenSubscriberCount ? null : num(ch.statistics?.subscriberCount),
+  video_count: num(ch.statistics?.videoCount), description: String(ch.snippet?.description ?? "").slice(0, 200),
+});
+const DEFAULT_KEYWORDS = ["afiliado", "google ads", "tráfego pago"];
+
+// Localiza o canal. Link/@usuario/ID custam ~1 unidade; busca por nome custa ~101.
+async function findChannel(body: any, userId: string) {
+  const q = String(body.query ?? "").trim().slice(0, 200);
+  if (!q) throw new Fail("input", "Digite o nome ou o link do canal.");
+  const ref = parseRef(q), fields = "snippet,statistics";
+  let items: any[] = [];
+  if (ref.id) items = (await yt("/channels", { part: fields, id: ref.id }, 1)).items ?? [];
+  else if (ref.handle) items = (await yt("/channels", { part: fields, forHandle: "@" + ref.handle }, 1)).items ?? [];
+  else if (ref.user) items = (await yt("/channels", { part: fields, forUsername: ref.user }, 1)).items ?? [];
+  let exact = items.length > 0;
+  if (!exact) {
+    const used = await quotaToday();
+    if (used + 102 > DAILY_CAP) throw new Fail("cap", `Teto diário de varreduras atingido (${used} de ${DAILY_CAP}). Tente por link ou @usuario, que custa quase nada, ou amanhã.`);
+    const term = ref.custom ?? ref.handle ?? ref.user ?? ref.name;
+    const sr = await yt("/search", { part: "snippet", type: "channel", q: term, maxResults: 5 }, 100);
+    const ids = [...new Set<string>((sr.items ?? []).map((i: any) => i?.snippet?.channelId ?? i?.id?.channelId).filter((c: unknown) => typeof c === "string" && CHANNEL_RE.test(c as string)))];
+    if (ids.length) {
+      const js = await yt("/channels", { part: fields, id: ids.join(",") }, 1);
+      const byId = new Map<string, any>((js.items ?? []).map((c: any) => [c.id, c]));
+      items = ids.map((i) => byId.get(i)).filter(Boolean);
+    }
+  }
+  // Registra o gasto de cota desta consulta (não aparece no histórico de varreduras).
+  const { data: lk } = await sb.from("market_scans").insert({
+    created_by: userId, keywords: [q.slice(0, 80)], options: { mode: "lookup" }, status: "done", candidates: items.length,
+  }).select("id").single();
+  if (lk) await addQuota(lk.id as string);
+  return { ok: true, exact, candidates: items.map(card), spent };
+}
+
+// Cria uma varredura de um canal só (a análise dos vídeos é feita em seguida pela ação "analyze").
+async function addChannel(body: any, userId: string) {
+  const id = String(body.channelId ?? "");
+  if (!CHANNEL_RE.test(id)) throw new Fail("input", "Canal inválido.");
+  const kw: string[] = [...new Set(
+    (Array.isArray(body.keywords) ? body.keywords : [])
+      .map((k: unknown) => String(k ?? "").trim().replace(/\s+/g, " ").slice(0, 80)).filter(Boolean),
+  )].slice(0, MAX_KEYWORDS) as string[];
+  const keywords = kw.length ? kw : DEFAULT_KEYWORDS;
+  const used = await quotaToday();
+  if (used + 10 > DAILY_CAP) throw new Fail("cap", `Teto diário de varreduras atingido (${used} de ${DAILY_CAP}). Tente amanhã.`);
+  const js = await yt("/channels", { part: "snippet,statistics", id }, 1);
+  const ch = js.items?.[0];
+  if (!ch) throw new Fail("input", "Canal não encontrado no YouTube.");
+  const st = ch.statistics ?? {};
+  const { data: scan, error } = await sb.from("market_scans").insert({
+    created_by: userId, keywords, options: { mode: "channel", channel_title: ch.snippet?.title ?? null }, candidates: 1,
+  }).select("id").single();
+  if (error) throw error;
+  const scanId = scan.id as string;
+  const { error: e2 } = await sb.from("market_channels").upsert({
+    scan_id: scanId, channel_id: id, title: ch.snippet?.title ?? null, handle: ch.snippet?.customUrl ?? null,
+    thumbnail_url: bestThumb(ch.snippet?.thumbnails), country: ch.snippet?.country ?? null,
+    description: String(ch.snippet?.description ?? "").slice(0, 1500), channel_created: ch.snippet?.publishedAt ?? null,
+    subscribers: st.hiddenSubscriberCount ? null : num(st.subscriberCount), hidden_subs: !!st.hiddenSubscriberCount,
+    total_views: num(st.viewCount), video_count: num(st.videoCount), topic_hits: 0, hit_keywords: [], sample_videos: [],
+    contacts: extractContacts(ch.snippet?.description),
+  }, { onConflict: "scan_id,channel_id" });
+  if (e2) { await sb.from("market_scans").update({ status: "error", error: String(e2.message).slice(0, 300) }).eq("id", scanId); throw e2; }
+  await addQuota(scanId);
+  return { ok: true, scanId, channelIds: [id], title: ch.snippet?.title ?? null, keywords, spent };
+}
+
 // ---------------------------------------------------------------- analyze
 async function analyzeOne(scanId: string, channelId: string, match: (t: string) => boolean, refresh = false) {
   // "Atualizar dados deste canal": também relê inscritos, views e descrição do canal (1 unidade).
@@ -293,6 +381,8 @@ Deno.serve(async (req) => {
   try {
     switch (body.action) {
       case "discover": return json(await discover(body, userId));
+      case "find": return json(await findChannel(body, userId));
+      case "add_channel": return json(await addChannel(body, userId));
       case "analyze": return json(await analyze(body));
       case "finish": return json(await finish(body));
       case "quota": return json({ ok: true, used: await quotaToday(), cap: DAILY_CAP });

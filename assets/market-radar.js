@@ -153,9 +153,11 @@
   async function loadScans() {
     var r = await A.sb.from("market_scans").select("id, created_at, keywords, options, status, candidates, analyzed, quota_units, error").order("created_at", { ascending: false }).limit(30);
     if (r.error) throw r.error;
-    S.scans = r.data || [];
+    var all = r.data || [];
     var since = ptMidnight().getTime();
-    S.quotaUsed = S.scans.reduce(function (s, x) { return s + (Date.parse(x.created_at) >= since ? (x.quota_units || 0) : 0); }, 0);
+    S.quotaUsed = all.reduce(function (s, x) { return s + (Date.parse(x.created_at) >= since ? (x.quota_units || 0) : 0); }, 0);
+    // "lookup" = só a busca do nome do canal (existe para contar a cota); não é uma varredura para abrir.
+    S.scans = all.filter(function (x) { return !(x.options && x.options.mode === "lookup"); });
   }
   async function loadTargets() {
     var r = await A.sb.from("market_targets").select("channel_id, status");
@@ -218,6 +220,14 @@
             '<label>Vídeos publicados <select id="mr-since"><option value="90d">nos últimos 90 dias</option><option value="1y" selected>no último ano</option><option value="any">em qualquer época</option></select></label>' +
             '<span class="mr-est" id="mr-est"></span>' +
           "</div>" +
+          '<form class="mr-solo" id="mr-solo" autocomplete="off">' +
+            '<span class="mr-solo-lbl">Ou pesquise um youtuber específico</span>' +
+            '<label class="mr-input"><span class="mr-prompt">@</span>' +
+              '<input id="mr-yt-q" type="text" maxlength="200" placeholder="nome do canal, @usuario ou link (youtube.com/@canal)" aria-label="Nome ou link do canal do YouTube"></label>' +
+            '<button class="btn mr-solo-go" id="mr-yt-go" type="submit">Pesquisar canal</button>' +
+            '<span class="mr-est" id="mr-solo-est">Link ou @usuario: ~4 unidades · só o nome: ~105 (precisa buscar)</span>' +
+          "</form>" +
+          '<div class="mr-pick" id="mr-pick" hidden></div>' +
         "</div>" +
         '<div class="mr-gauge" id="mr-gauge"></div>' +
       "</section>" +
@@ -318,6 +328,7 @@
   function setBusy(b) {
     S.running = b;
     $("mr-go").disabled = b; $("mr-go").textContent = b ? "Varrendo…" : "Iniciar varredura";
+    $("mr-yt-go").disabled = b;
     $("mr-radar").classList.toggle("busy", b);
   }
 
@@ -355,6 +366,62 @@
     catch (e) { return endScan("Varredura salva, mas não foi possível carregar o resultado: " + (e.message || e), true); }
     endScan(stopped ? "Varredura parcial: " + stopped : (ids.length ? "Varredura concluída." : "Nenhum canal encontrado para esses termos."), !!stopped);
   }
+  /* ---------------- youtuber específico ---------------- */
+  function openConsole() {
+    $("mr-console").hidden = false; $("mr-log").innerHTML = ""; logCount = 0; setProgress(2);
+  }
+  async function runSolo() {
+    if (S.running) return;
+    var q = $("mr-yt-q").value.trim();
+    if (!q) { A.toast("Digite o nome ou o link do canal.", true); $("mr-yt-q").focus(); return; }
+    $("mr-pick").hidden = true; $("mr-pick").innerHTML = "";
+    setBusy(true); openConsole();
+    logLine("Procurando o canal “" + q + "” no YouTube…", "cur");
+    var d = await call({ action: "find", query: q });
+    if (!d.ok) return endScan(d.error || "falha ao procurar o canal", true);
+    var cands = d.candidates || [];
+    if (!cands.length) return endScan("Nenhum canal encontrado para “" + q + "”. Confira o nome ou cole o link do canal.", true);
+    if (d.exact && cands.length === 1) { logLine("Canal localizado: " + cands[0].title, "ok"); return scanSolo(cands[0]); }
+    logLine(cands.length + " canais parecidos · " + d.spent + " unidades de cota. Escolha o certo abaixo.", "ok");
+    setProgress(0); setBusy(false);
+    renderPick(cands);
+  }
+  function renderPick(cands) {
+    var box = $("mr-pick");
+    box.hidden = false;
+    box.innerHTML = '<div class="mr-pick-h">Qual destes é o canal?</div>' + cands.map(function (c, i) {
+      return '<button type="button" class="mr-pick-i" data-pick="' + i + '">' +
+        (c.thumbnail_url ? '<img src="' + esc(c.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="mr-pick-ph"></span>') +
+        '<span class="mr-pick-t"><b>' + esc(c.title || "Sem nome") + "</b><small>" + esc((c.handle || "") + (c.handle ? " · " : "") +
+          (c.subscribers == null ? "inscritos ocultos" : fmtInt(c.subscribers) + " inscritos") + " · " + fmtInt(c.video_count || 0) + " vídeos") + "</small>" +
+          (c.description ? "<em>" + esc(c.description) + "</em>" : "") + "</span></button>";
+    }).join("");
+    S.picks = cands;
+  }
+  async function scanSolo(cand) {
+    try {
+      $("mr-pick").hidden = true;
+      setBusy(true); if ($("mr-console").hidden) openConsole();
+      var kws = parseKeywords($("mr-q").value);
+      logLine("Lendo dados e até 50 vídeos de " + cand.title + "…", "cur"); setProgress(20);
+      var a = await call({ action: "add_channel", channelId: cand.channel_id, keywords: kws });
+      if (!a.ok) return endScan(a.error || "falha ao registrar o canal", true);
+      setProgress(45);
+      var r = await call({ action: "analyze", scanId: a.scanId, channelIds: [cand.channel_id] });
+      if (!r.ok) return endScan(r.error || "falha ao analisar o canal", true);
+      var failed = Object.keys(r.failed || {});
+      await call({ action: "finish", scanId: a.scanId });
+      setProgress(100);
+      if (failed.length) logLine("Falha na análise: " + r.failed[failed[0]], "bad");
+      else logLine("Canal analisado.", "ok");
+      await loadScans(); renderGauge(); renderEstimate();
+      await openScan(a.scanId);
+      endScan(failed.length ? "Canal salvo, mas a análise dos vídeos falhou." : "Pesquisa concluída: " + cand.title, !!failed.length);
+      if (!failed.length) openFull(cand.channel_id);
+    } catch (e) {
+      endScan("Erro: " + (e.message || e), true);
+    }
+  }
   function endScan(msg, bad) {
     logLine(msg, bad ? "bad" : "ok");
     setBusy(false);
@@ -368,7 +435,9 @@
     $("mr-empty").hidden = has && S.channels.length > 0;
     $("mr-results").hidden = !has || !S.channels.length;
     $("mr-scan-sel").innerHTML = S.scans.map(function (s) {
-      return '<option value="' + esc(s.id) + '"' + (S.scan && s.id === S.scan.id ? " selected" : "") + ">" + esc(fmtDateTime(s.created_at) + " · " + (s.keywords || []).join(", ") + " · " + (s.analyzed || 0) + " canais") + "</option>";
+      var solo = s.options && s.options.mode === "channel";
+      var what = solo ? "Canal: " + (s.options.channel_title || (s.keywords || []).join(", ")) : (s.keywords || []).join(", ") + " · " + (s.analyzed || 0) + " canais";
+      return '<option value="' + esc(s.id) + '"' + (S.scan && s.id === S.scan.id ? " selected" : "") + ">" + esc(fmtDateTime(s.created_at) + " · " + what) + "</option>";
     }).join("");
     if (!has) return;
     if (!S.channels.length) {
@@ -878,6 +947,13 @@
   /* ---------------- eventos ---------------- */
   function bind() {
     $("mr-form").addEventListener("submit", function (e) { e.preventDefault(); runScan(); });
+    $("mr-solo").addEventListener("submit", function (e) { e.preventDefault(); runSolo(); });
+    $("mr-pick").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-pick]");
+      if (!b || S.running || !S.picks) return;
+      var c = S.picks[Number(b.dataset.pick)];
+      if (c) scanSolo(c);
+    });
     $("mr-q").addEventListener("input", renderEstimate);
     ["mr-depth", "mr-lang", "mr-since"].forEach(function (id) { $(id).addEventListener("change", renderEstimate); });
     $("mr-chips").addEventListener("click", function (e) {

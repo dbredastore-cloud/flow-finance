@@ -67,6 +67,22 @@
 .mr-est b { color: var(--accent); }
 .mr-est.warn b { color: var(--critical); }
 
+.mr-solo { position: relative; z-index: 1; display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border-strong); }
+.mr-solo-lbl { flex: 1 0 100%; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.mr-solo .mr-input { min-height: 42px; }
+.mr-solo-go { min-height: 42px; padding: 0 18px; font-family: var(--font-display); letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.mr-solo .mr-est { align-self: center; flex: 1 0 100%; margin-left: 0; }
+.mr-pick { position: relative; z-index: 1; margin-top: 12px; display: grid; gap: 8px; }
+.mr-pick-h { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); }
+.mr-pick-i { display: flex; gap: 12px; align-items: flex-start; text-align: left; padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; color: var(--text);
+  background: rgba(var(--accent-rgb), 0.05); border: 1px solid rgba(var(--accent-rgb), 0.25); transition: all .15s; font: inherit; }
+.mr-pick-i:hover, .mr-pick-i:focus-visible { border-color: var(--accent); box-shadow: 0 0 14px -4px rgba(var(--accent-rgb), 0.7); outline: none; }
+.mr-pick-i img, .mr-pick-ph { width: 44px; height: 44px; border-radius: 50%; flex: none; object-fit: cover; background: var(--track-bg); }
+.mr-pick-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mr-pick-t b { font-size: 14px; }
+.mr-pick-t small { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.mr-pick-t em { font-style: normal; font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
 .mr-gauge { position: relative; z-index: 1; text-align: center; }
 .mr-ring { --p: 0; width: 112px; height: 112px; margin: 0 auto 8px; border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--track-bg) 0); box-shadow: 0 0 24px -8px rgba(var(--accent-rgb), 0.7); }

@@ -177,6 +177,21 @@
   .col-grip:hover::after, .col-grip:focus-visible::after, .col-grip.dragging::after { background: var(--accent); }
   .col-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   body.col-resizing { cursor: col-resize; user-select: none; }
+  /* Produtos: linha que abre a lista de afiliados do produto. */
+  th.has-tip { text-decoration: underline dotted; text-underline-offset: 4px; cursor: help; }
+  tr.clickable-prod { cursor: pointer; }
+  tr.clickable-prod:hover, tr.clickable-prod.open { background: var(--surface-2); }
+  tr.clickable-prod .caret { display: inline-block; width: 14px; color: var(--accent); transition: transform .15s; }
+  tr.clickable-prod.open .caret { transform: rotate(90deg); }
+  tr.prod-detail > td { padding: 0; background: var(--surface-2); border-bottom: 1px solid var(--border-strong); }
+  .prod-detail-wrap { padding: 14px 16px 16px 30px; white-space: normal; border-left: 3px solid var(--accent); }
+  .prod-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-bottom: 10px; }
+  .prod-detail-head b { font-size: 14px; }
+  .prod-detail-head .muted { font-size: 12px; }
+  .prod-sub-scroll { max-height: 440px; overflow: auto; }
+  table.prod-sub { width: 100%; }
+  table.prod-sub thead th { background: var(--surface); position: sticky; top: 0; z-index: 1; }
+  table.prod-sub tr.total-row td { font-weight: 700; border-top: 1px solid var(--border-strong); background: var(--surface); }
   tr.clickable-yt { cursor: pointer; }
   tr.clickable-yt:hover, tr.clickable-yt.open { background: var(--surface-2); }
   tr.yt-detail > td { padding: 0; background: var(--surface-2); }
@@ -437,9 +452,16 @@
     <section id="view-products" hidden>
       <section class="panel">
         <div class="panel-head"><h3>Produtos da Kiwify</h3></div>
-        <p class="muted" style="font-size:12.5px; margin:-4px 0 12px;">Todos os produtos da conta Kiwify, com as vendas feitas por afiliados no período e status selecionados.</p>
-        <div class="table-scroll"><table>
-          <thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>Afiliados que venderam</th></tr></thead>
+        <p class="muted" style="font-size:12.5px; margin:-4px 0 8px;">Todos os produtos da conta Kiwify, com as vendas feitas por afiliados no período e status selecionados nos filtros do topo. <strong>Clique num produto</strong> para ver, logo abaixo dele, quais afiliados venderam, quantas vendas, o faturamento e a comissão de cada um.</p>
+        <p class="muted" style="font-size:12.5px; margin:0 0 12px;">Passe o mouse sobre os títulos das colunas para ver o que cada número significa. Atenção: <strong>"Afiliados que venderam"</strong> conta pessoas diferentes, não soma com as vendas. Um afiliado pode fazer várias vendas (ex.: 13 vendas feitas por 8 afiliados).</p>
+        <div class="table-scroll"><table class="prod-table">
+          <thead><tr>
+            <th class="l has-tip" title="Nome do produto na Kiwify. Clique na linha para ver os afiliados que venderam.">Produto</th>
+            <th class="has-tip" title="Quantidade de vendas feitas por afiliados neste produto, dentro do período e do status escolhidos nos filtros do topo (por padrão, só vendas aprovadas). Cada pedido pago conta como 1 venda.">Vendas</th>
+            <th class="has-tip" title="Soma do valor cobrado do cliente nessas vendas (o preço que o cliente pagou, antes de descontar comissão e taxas).">Faturamento</th>
+            <th class="has-tip" title="Soma do que foi pago de comissão aos afiliados nessas vendas.">Comissão</th>
+            <th class="has-tip" title="Quantos afiliados DIFERENTES fizeram pelo menos 1 venda deste produto no período. Não é uma soma com as vendas: um mesmo afiliado pode ter feito várias. Exemplo: 13 vendas e 8 afiliados significa que 8 pessoas fizeram, juntas, as 13 vendas.">Afiliados que venderam</th>
+          </tr></thead>
           <tbody id="products-body"></tbody>
         </table></div>
       </section>
@@ -1300,12 +1322,61 @@
       return { id: p.id, name: p.name, count: 0, amount: 0, commission: 0, sellers: {} };
     }));
     $("products-body").innerHTML = list.length ? list.map(function (x) {
-      var empty = !x.count;
-      return '<tr' + (empty ? ' class="muted"' : "") + '><td class="l">' + esc(x.name) + '</td><td class="num">' + fmtInt(x.count) +
+      var empty = !x.count, pk = String(x.id || x.name), open = !empty && state.openProduct === pk, n = Object.keys(x.sellers).length;
+      var row = '<tr class="prod-row' + (empty ? " muted" : " clickable-prod") + (open ? " open" : "") + '"' + (empty ? "" : ' data-pk="' + esc(pk) + '" tabindex="0" role="button" aria-expanded="' + open + '" title="Clique para ver os afiliados que venderam este produto"') + '>' +
+        '<td class="l"><span class="caret">' + (empty ? "" : "▸") + "</span>" + esc(x.name) + '</td><td class="num">' + fmtInt(x.count) +
         '</td><td class="num">' + (empty ? "—" : fmtBRL(x.amount)) + '</td><td class="num">' + (empty ? "—" : fmtBRL(x.commission)) +
-        '</td><td class="num">' + fmtInt(Object.keys(x.sellers).length) + "</td></tr>";
+        '</td><td class="num"' + (empty ? "" : ' title="' + esc(fmtInt(n) + (n === 1 ? " afiliado fez" : " afiliados diferentes fizeram") + " as " + fmtInt(x.count) + (x.count === 1 ? " venda" : " vendas") + " deste produto") + '"') + ">" + fmtInt(n) + "</td></tr>";
+      return open ? row + productDetailRow(sales, x) : row;
     }).join("") : '<tr><td colspan="5" class="empty">Nenhum produto importado ainda.</td></tr>';
   }
+
+  // Afiliados que venderam um produto: vendas, faturamento e comissão de cada um (maior comissão primeiro).
+  function productSellers(sales, p) {
+    var rows = {};
+    sales.forEach(function (s) {
+      if (p.id ? s.product_id !== p.id : productName(s) !== p.name) return;
+      var r = rows[s.affiliate_email] || (rows[s.affiliate_email] = {
+        email: s.affiliate_email, name: (state.byEmail[s.affiliate_email] && state.byEmail[s.affiliate_email].name) || s.affiliate_name || s.affiliate_email, count: 0, amount: 0, commission: 0
+      });
+      r.count++; r.amount += Number(s.amount) || 0; r.commission += Number(s.commission) || 0;
+    });
+    return Object.keys(rows).map(function (k) { return rows[k]; }).sort(function (a, b) { return b.commission - a.commission || b.count - a.count; });
+  }
+  function productDetailRow(sales, p) {
+    var list = productSellers(sales, p);
+    var body = list.map(function (a) {
+      return '<tr class="clickable" data-email="' + esc(a.email) + '" title="Clique para abrir a ficha do afiliado"><td class="l"><div class="who"><div class="n">' + esc(a.name) + '</div><div class="e">' + esc(a.email) + "</div></div></td>" +
+        '<td class="num">' + fmtInt(a.count) + '</td><td class="num">' + fmtBRL(a.amount) + '</td><td class="num">' + fmtBRL(a.commission) +
+        '</td><td class="num">' + pctOf(a.count, p.count) + '</td><td class="num">' + pctOf(a.commission, a.amount) + "</td></tr>";
+    }).join("");
+    return '<tr class="prod-detail"><td colspan="5"><div class="prod-detail-wrap">' +
+      '<div class="prod-detail-head"><b>' + esc(p.name) + '</b><span class="muted">' + fmtInt(list.length) + (list.length === 1 ? " afiliado" : " afiliados") + " · " + fmtInt(p.count) + (p.count === 1 ? " venda" : " vendas") + " · " + fmtBRL(p.commission) + " em comissões</span></div>" +
+      '<div class="prod-sub-scroll"><table class="prod-sub"><thead><tr><th class="l has-tip" title="Afiliado que fez venda deste produto. Clique na linha para abrir a ficha dele.">Afiliado</th>' +
+      '<th class="has-tip" title="Vendas deste produto feitas por este afiliado no período e status dos filtros.">Vendas</th>' +
+      '<th class="has-tip" title="Soma do valor cobrado dos clientes nas vendas deste afiliado neste produto.">Faturamento</th>' +
+      '<th class="has-tip" title="Comissão que este afiliado recebeu neste produto.">Comissão</th>' +
+      '<th class="has-tip" title="Quanto das vendas deste produto foi feito por este afiliado (vendas dele ÷ vendas totais do produto).">% das vendas</th>' +
+      '<th class="has-tip" title="Comissão ÷ faturamento deste afiliado neste produto, ou seja, a porcentagem de comissão que ele efetivamente recebeu.">% comissão</th></tr></thead><tbody>' +
+      body + '<tr class="total-row"><td class="l">Total do produto</td><td class="num">' + fmtInt(p.count) + '</td><td class="num">' + fmtBRL(p.amount) + '</td><td class="num">' + fmtBRL(p.commission) + '</td><td class="num">' + (p.count ? "100%" : "—") + '</td><td class="num">' + pctOf(p.commission, p.amount) + "</td></tr>" +
+      "</tbody></table></div></div></td></tr>";
+  }
+  function pctOf(a, b) { return b > 0 ? (a / b * 100).toFixed(1).replace(".", ",") + "%" : "—"; }
+  function toggleProduct(pk) {
+    state.openProduct = state.openProduct === pk ? null : pk;
+    renderProducts(state.filtered || []);
+    var row = document.querySelector('#products-body tr[data-pk="' + (window.CSS && CSS.escape ? CSS.escape(pk) : pk) + '"]');
+    if (row && state.openProduct) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  $("products-body").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr[data-pk]");
+    if (tr && !e.target.closest(".prod-detail")) toggleProduct(tr.dataset.pk);
+  });
+  $("products-body").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tr = e.target.closest("tr[data-pk]");
+    if (tr && e.target === tr) { e.preventDefault(); toggleProduct(tr.dataset.pk); }
+  });
 
   /* ---------------- YouTube ---------------- */
   var DAY_MS = 86400000;
