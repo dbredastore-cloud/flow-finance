@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
+<title>Equipe · Flow</title>
+<style>
+  /* Cores e tokens: ../assets/flow-theme.css */
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }
+  a { color: var(--accent); }
+  button, input, select, textarea { font-family: inherit; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  [hidden] { display: none !important; }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  #status-screen, #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  .login-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px 28px; }
+  .login-card h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .login-card p.sub { color: var(--text-muted); font-size: 13px; margin: 0 0 24px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input { width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 14px; }
+  .msg { font-size: 12.5px; margin-top: 10px; border-radius: var(--radius-sm); padding: 8px 10px; }
+  .msg.error { background: color-mix(in oklab, var(--critical) 14%, transparent); color: var(--critical); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn-primary:hover { background: var(--accent); filter: brightness(1.07); }
+  .btn-block { width: 100%; padding: 10px 16px; }
+  .btn-danger { color: var(--critical); border-color: color-mix(in oklab, var(--critical) 45%, transparent); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 24px; background: var(--head-bg, var(--surface)); border-bottom: 1px solid var(--border-strong); backdrop-filter: blur(8px); }
+  .topbar h1 { font-size: 16px; margin: 0; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+  .topbar .sp { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-muted); }
+  main { max-width: 980px; margin: 0 auto; padding: 22px 24px 80px; display: grid; gap: 18px; }
+  .panel { padding: 18px 20px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); min-width: 0; }
+  .panel h2 { margin: 0 0 4px; font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .panel p.hint { margin: 0 0 14px; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+  .panel p.hint b { color: var(--text-dim); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+  td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .table-scroll { overflow-x: auto; }
+  .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border: 1px solid var(--accent); color: var(--accent); }
+  .tag.warn { border-color: var(--warning); color: var(--warning); }
+  .muted { color: var(--text-muted); }
+  .empty { padding: 18px 10px; text-align: center; color: var(--text-muted); }
+
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .form-row .field { margin: 0; flex: 1 1 220px; }
+  .pw-wrap { position: relative; }
+  .pw-wrap input { padding-right: 78px; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .pw-wrap button { position: absolute; right: 4px; top: 4px; bottom: 4px; padding: 0 10px; }
+
+  .secret { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-sm); border: 1px dashed var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); font-size: 13px; line-height: 1.6; }
+  .secret code { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border-strong); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 14px; user-select: all; }
+  .secret .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
+
+  ol.steps { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8; color: var(--text-dim); }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; transition: all .2s; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; z-index: 99; pointer-events: none; max-width: 90vw; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/flow-theme.css">
+<script src="../assets/flow-theme.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/secure-login.js"></script>
+</head>
+<body>
+
+<div id="status-screen" style="display:none;">
+  <div class="login-card">
+    <h1 id="status-title">Carregando…</h1>
+    <p class="sub" id="status-text">Conectando ao painel.</p>
+    <button type="button" class="btn btn-primary btn-block" id="status-retry" style="display:none;">Tentar de novo</button>
+  </div>
+</div>
+
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <h1>Equipe</h1>
+    <p class="sub">Entre com a mesma conta do painel.</p>
+    <form id="login-form">
+      <div class="field"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" required></div>
+      <button type="submit" class="btn btn-primary btn-block" id="login-submit">Entrar</button>
+      <div id="login-msg"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <h1>Equipe</h1>
+    <a class="btn btn-sm" href="../financeiro/">Financeiro</a>
+    <a class="btn btn-sm" href="../afiliados/">Afiliados</a>
+    <div class="sp"><span id="user-email"></span><button class="btn btn-sm" id="logout-btn" type="button">Sair</button></div>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>Quem tem acesso</h2>
+      <p class="hint">Estas pessoas entram em <b>todos os painéis</b> (Financeiro, Afiliados, Rastrear Mercado, Equipe) e veem e alteram tudo. Quem não está nesta lista, mesmo com conta, não enxerga nenhum dado.</p>
+      <div class="table-scroll"><table><thead><tr><th>E-mail</th><th>Último acesso</th><th>Acesso desde</th><th></th></tr></thead><tbody id="members"></tbody></table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Adicionar pessoa</h2>
+      <p class="hint">Cria a conta e já libera o acesso. Defina uma <b>senha provisória</b> (mínimo 10 caracteres) ou deixe o painel gerar uma. Passe a senha à pessoa por um canal seguro e peça para ela trocar em <b>Minha conta</b>, abaixo. Se o e-mail já tiver conta, só o acesso é liberado.</p>
+      <form id="add-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field"><label for="add-email">E-mail</label><input id="add-email" type="email" required placeholder="pessoa@empresa.com"></div>
+          <div class="field"><label for="add-pw">Senha provisória</label>
+            <div class="pw-wrap"><input id="add-pw" type="text" minlength="10" placeholder="deixe em branco para gerar" autocomplete="off"><button class="btn btn-sm" type="button" id="add-gen">Gerar</button></div></div>
+          <button class="btn btn-primary" type="submit" id="add-btn">Criar acesso</button>
+        </div>
+      </form>
+      <div id="add-result"></div>
+    </section>
+
+    <section class="panel" id="others-panel" hidden>
+      <h2>Contas sem acesso</h2>
+      <p class="hint">Contas que existem no sistema mas não estão na lista de acesso (por exemplo, quem se cadastrou por conta própria). Elas não veem nenhum dado. Libere o acesso ou exclua a conta.</p>
+      <div class="table-scroll"><table><thead><tr><th>E-mail</th><th>Criada em</th><th>Último acesso</th><th></th></tr></thead><tbody id="others"></tbody></table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Minha conta</h2>
+      <p class="hint">Troque a sua senha (mínimo 10 caracteres).</p>
+      <form id="pw-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field"><label for="my-pw">Nova senha</label><input id="my-pw" type="password" minlength="10" required autocomplete="new-password"></div>
+          <div class="field"><label for="my-pw2">Repita a nova senha</label><input id="my-pw2" type="password" minlength="10" required autocomplete="new-password"></div>
+          <button class="btn" type="submit" id="pw-btn">Trocar senha</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Desligar o cadastro público</h2>
+      <p class="hint">Hoje qualquer pessoa pode criar uma conta pela API do Supabase. Ela não vê nenhum dado (só quem está na lista acima vê), mas o ideal é fechar a porta. Isso é feito no painel do Supabase, não aqui:</p>
+      <ol class="steps">
+        <li>Abra <a href="https://supabase.com/dashboard/project/jagmnogcpxeujtsrrotd/auth/providers" target="_blank" rel="noopener noreferrer">Authentication → Sign In / Providers</a> do projeto.</li>
+        <li>Em <b>User Signups</b>, desligue <b>Allow new users to sign up</b> e clique em <b>Save changes</b>.</li>
+        <li>Confira em <a href="https://supabase.com/dashboard/project/jagmnogcpxeujtsrrotd/auth/users" target="_blank" rel="noopener noreferrer">Authentication → Users</a> se não há contas estranhas; o que sobrar sem acesso aparece em "Contas sem acesso" aqui.</li>
+      </ol>
+      <p class="hint" style="margin:10px 0 0">Esta tela continua criando contas normalmente com o cadastro público desligado, e quem já tem conta continua entrando.</p>
+    </section>
+  </main>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  var SUPABASE_URL = "https://jagmnogcpxeujtsrrotd.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var me = null, data = { members: [], others: [] };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function toast(msg, isError) {
+    var el = $("toast");
+    el.textContent = msg;
+    el.style.background = isError ? "var(--critical)" : "var(--accent)";
+    el.style.color = isError ? "var(--on-critical, #fff)" : "var(--accent-ink)";
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove("show"); }, 3200);
+  }
+  function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString("pt-BR") : "—"; }
+  function ago(iso) {
+    if (!iso) return '<span class="muted">nunca entrou</span>';
+    var d = (Date.now() - Date.parse(iso)) / 86400000;
+    var rel = d < 1 ? "hoje" : d < 2 ? "ontem" : "há " + Math.floor(d) + " dias";
+    return esc(new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })) + ' <span class="muted">· ' + rel + "</span>";
+  }
+
+  /* ---------------- login ---------------- */
+  function showOnly(id) {
+    ["status-screen", "login-screen"].forEach(function (s) { $(s).style.display = s === id ? "flex" : "none"; });
+    $("app").hidden = id !== "app";
+  }
+  function showStatus(title, text, retry) {
+    $("status-title").textContent = title; $("status-text").textContent = text;
+    $("status-retry").style.display = retry ? "inline-flex" : "none";
+    showOnly("status-screen");
+  }
+  $("status-retry").addEventListener("click", function () { boot(); });
+  $("login-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var btn = $("login-submit"), msg = $("login-msg");
+    msg.innerHTML = ""; btn.disabled = true; btn.textContent = "Entrando…";
+    var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, $("login-email").value.trim(), $("login-password").value);
+    btn.disabled = false; btn.textContent = "Entrar";
+    if (res.error) { msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>"; return; }
+    boot();
+  });
+  $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
+  sb.auth.onAuthStateChange(function (ev) { if (ev === "SIGNED_OUT") showOnly("login-screen"); });
+
+  /* ---------------- chamadas ---------------- */
+  async function call(body) {
+    var res = await sb.functions.invoke("team-admin", { body: body });
+    var out = res.data;
+    if (res.error && !(out && out.error)) {
+      try { out = await res.error.context.json(); } catch (e) { out = { ok: false, error: res.error.message || "falha na chamada" }; }
+    }
+    return out || { ok: false, error: "sem resposta" };
+  }
+
+  async function boot() {
+    showStatus("Carregando…", "Verificando sua sessão.", false);
+    var s = await sb.auth.getSession();
+    var session = s.data && s.data.session;
+    if (!session) { showOnly("login-screen"); return; }
+    $("user-email").textContent = session.user.email;
+    var r = await call({ action: "list" });
+    if (!r.ok) {
+      if (r.error === "unauthorized") showStatus("Sem permissão", "Só quem já tem acesso ao painel pode ver a Equipe.", false);
+      else showStatus("Não foi possível carregar", r.error || "Erro desconhecido.", true);
+      return;
+    }
+    me = r.me; data = r;
+    showOnly("app"); render();
+  }
+  async function reload() {
+    var r = await call({ action: "list" });
+    if (!r.ok) { toast("Não foi possível atualizar a lista: " + (r.error || "erro"), true); return; }
+    data = r; render();
+  }
+
+  /* ---------------- tela ---------------- */
+  function render() {
+    $("members").innerHTML = data.members.length ? data.members.map(function (u) {
+      var self = u.user_id === me;
+      return "<tr><td>" + esc(u.email) + (self ? '<span class="tag">você</span>' : "") + (u.confirmed ? "" : '<span class="tag warn">não confirmado</span>') + "</td>" +
+        '<td class="num">' + ago(u.last_sign_in_at) + '</td><td class="num">' + fmtDate(u.access_since) + "</td>" +
+        '<td><div class="acts"><button class="btn btn-sm" data-act="reset" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Redefinir senha</button>' +
+        (self ? "" : '<button class="btn btn-sm btn-danger" data-act="revoke" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Remover acesso</button>') + "</div></td></tr>";
+    }).join("") : '<tr><td colspan="4" class="empty">Ninguém na lista.</td></tr>';
+    $("others-panel").hidden = !data.others.length;
+    $("others").innerHTML = data.others.map(function (u) {
+      return "<tr><td>" + esc(u.email) + "</td><td class=\"num\">" + fmtDate(u.created_at) + '</td><td class="num">' + ago(u.last_sign_in_at) + "</td>" +
+        '<td><div class="acts"><button class="btn btn-sm btn-primary" data-act="grant" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Dar acesso</button>' +
+        '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Excluir conta</button></div></td></tr>';
+    }).join("");
+  }
+
+  function secretBox(title, email, password, note) {
+    return '<div class="secret"><b>' + esc(title) + "</b>" +
+      '<div class="row">E-mail: <code>' + esc(email) + '</code></div>' +
+      (password ? '<div class="row">Senha provisória: <code id="secret-pw">' + esc(password) + '</code> <button class="btn btn-sm" type="button" data-act="copy">Copiar e-mail e senha</button></div>' : "") +
+      '<div class="muted" style="font-size:12.5px">' + note + "</div></div>";
+  }
+
+  function randomPw() {
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", buf = new Uint32Array(14);
+    crypto.getRandomValues(buf);
+    return Array.prototype.map.call(buf, function (n) { return chars[n % chars.length]; }).join("");
+  }
+  $("add-gen").addEventListener("click", function () { $("add-pw").value = randomPw(); });
+
+  $("add-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var btn = $("add-btn"), email = $("add-email").value.trim(), pw = $("add-pw").value;
+    if (pw && pw.length < 10) { toast("A senha precisa ter pelo menos 10 caracteres.", true); return; }
+    btn.disabled = true; btn.textContent = "Criando…"; $("add-result").innerHTML = "";
+    var r = await call({ action: "create", email: email, password: pw });
+    btn.disabled = false; btn.textContent = "Criar acesso";
+    if (!r.ok) { toast(r.error || "Não foi possível criar.", true); return; }
+    $("add-form").reset();
+    $("add-result").innerHTML = r.existed
+      ? secretBox("Acesso liberado", r.email, null, "Essa pessoa já tinha conta, então a senha dela continua a mesma. Se ela não lembra, use <b>Redefinir senha</b> na lista.")
+      : secretBox("Acesso criado", r.email, r.password, "Esta senha aparece só agora. Envie por um canal seguro e peça para a pessoa trocar em <b>Minha conta</b> no primeiro acesso. Endereço do painel: " + esc(location.origin) + "/financeiro/");
+    toast("Acesso liberado para " + r.email + ".");
+    await reload();
+  });
+
+  document.addEventListener("click", async function (e) {
+    var b = e.target.closest("[data-act]");
+    if (!b) return;
+    var act = b.dataset.act, id = b.dataset.id, email = b.dataset.email;
+    if (act === "copy") {
+      var txt = "Painel: " + location.origin + "/financeiro/\nE-mail: " + document.querySelector("#add-result .secret code").textContent + "\nSenha provisória: " + $("secret-pw").textContent;
+      try { await navigator.clipboard.writeText(txt); toast("Copiado."); } catch (err) { toast("Não foi possível copiar; selecione o texto e copie.", true); }
+      return;
+    }
+    var r;
+    if (act === "revoke") {
+      if (!confirm("Remover o acesso de " + email + "? A conta continua existindo, mas deixa de ver os dados.")) return;
+      r = await call({ action: "revoke", userId: id });
+    } else if (act === "grant") {
+      if (!confirm("Dar acesso total aos painéis para " + email + "?")) return;
+      r = await call({ action: "grant", userId: id });
+    } else if (act === "delete") {
+      if (!confirm("Excluir a conta de " + email + " de vez? Não dá para desfazer.")) return;
+      r = await call({ action: "delete_user", userId: id });
+    } else if (act === "reset") {
+      if (!confirm("Gerar uma nova senha provisória para " + email + "? A senha antiga deixa de valer.")) return;
+      r = await call({ action: "reset_password", userId: id });
+      if (r.ok) $("add-result").innerHTML = secretBox("Nova senha criada", email, r.password, "Esta senha aparece só agora. Envie por um canal seguro e peça para a pessoa trocar em <b>Minha conta</b>.");
+    }
+    if (!r || !r.ok) { toast((r && r.error) || "Erro.", true); return; }
+    toast(act === "reset" ? "Senha redefinida." : "Pronto.");
+    if (act !== "reset") await reload();
+    else $("add-result").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  $("pw-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var a = $("my-pw").value, b = $("my-pw2").value;
+    if (a.length < 10) { toast("A senha precisa ter pelo menos 10 caracteres.", true); return; }
+    if (a !== b) { toast("As duas senhas não são iguais.", true); return; }
+    $("pw-btn").disabled = true;
+    var res = await sb.auth.updateUser({ password: a });
+    $("pw-btn").disabled = false;
+    if (res.error) { toast("Não foi possível trocar: " + res.error.message, true); return; }
+    $("pw-form").reset(); toast("Senha trocada.");
+  });
+
+  boot();
+})();
+</script>
+</body>
+</html>
