@@ -24,6 +24,20 @@ tr.fd-vdetail > td { padding: 0; background: var(--inset-bg); white-space: norma
 .fd-vd .mr-desc-full { max-height: 260px; }
 .fd-vd mark { background: rgba(var(--accent-rgb), 0.28); color: var(--text); padding: 0 3px; border-radius: 3px; font-weight: 700; }
 @media (max-width: 860px) { .fd-vd { grid-template-columns: 1fr; } #fd-full .mr-fhero { grid-template-columns: 1fr; } }
+.fd-f3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 1100px) { .fd-f3 { grid-template-columns: 1fr; } }
+.fd-dctl { align-items: center; }
+.fd-dlbl { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); margin-right: 2px; }
+.fd-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
+.fd-date input, .fd-qdate input { padding: 5px 8px; border-radius: var(--radius-sm); background: var(--field-bg); border: 1px solid var(--border-strong); color: var(--text); font-size: 12.5px; color-scheme: dark light; }
+.fd-qdate { margin: 4px 0 14px; font-size: 13px; color: var(--text-dim); }
+.fd-qdate #fd-qres b { color: var(--text); }
+.fd-qdate #fd-qres .bad { color: var(--critical); }
+.fd-dtable { max-height: 420px; overflow-y: auto; }
+.fd-dtable thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+#fd-full tr.muted-row td { color: var(--text-muted); }
+#fd-full .mr-fk b span.good, #fd-full td span.good { color: var(--accent); }
+#fd-full td span.bad { color: var(--critical); }
 /* nome do influencer clicável nos contratos */
 .fi-name-btn { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
 .fi-name-btn:hover, .fi-name-btn:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; outline: none; }

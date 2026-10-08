@@ -2253,16 +2253,28 @@
       if (r2.error) { toast("Erro: " + r2.error.message, true); return; }
       c.active = true;
       toast("Adicionado aos Influencers Flow.");
+      syncFavYoutube(email);
       openContract(c.id);
     } else {
       var r3 = await sb.from("influencer_contracts").insert({ affiliate_email: email }).select().single();
       if (r3.error) { toast("Erro: " + r3.error.message, true); return; }
       state.fi.contracts.push(r3.data);
       toast("Adicionado aos Influencers Flow. Confira os termos do contrato.");
+      syncFavYoutube(email);
       openContract(r3.data.id);
     }
     try { await loadFlowInf(); } catch (err) {}
     refreshStars();
+  }
+
+  // Ao favoritar, já grava a primeira foto diária do canal (inscritos e views) para começar o histórico dia a dia.
+  function syncFavYoutube(email) {
+    var a = state.byEmail[email];
+    if (!a || !String(a.youtube || "").trim()) return;
+    sb.functions.invoke("youtube-sync", { body: { email: email } })
+      .then(function () { return loadYoutube(); })
+      .then(function () { if (state.view === "flowinf") renderFlowInf(); })
+      .catch(function (e) { console.warn("YouTube do favorito:", e); });
   }
 
   function refreshStars() {
