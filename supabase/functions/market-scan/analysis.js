@@ -18,7 +18,14 @@ const SOCIAL_HOST = /(^|\.)(instagram\.com|t\.me|telegram\.me|wa\.me|api\.whatsa
    Categorias: aff plataforma de afiliados · mkt marketplace · net rede de afiliados · ads anúncios ·
    trk rastreamento (≈ FlowTracking) · pg páginas e funis (≈ FlowPages) · spy espionagem (≈ FlowSpy) ·
    auto automação/e-mail · host hospedagem. */
+// Ferramentas da própria Flow ("flow pages", "flowpages", "flow-tracking"…). Categoria "flow".
+const FLOW_TOOLS = [
+  ["FlowPages", /(?<![a-z])flow[\s\-_.]*pages?(?![a-z])/i],
+  ["FlowTracking", /(?<![a-z])flow[\s\-_.]*track(?:ing)?(?![a-z])/i],
+  ["FlowSpy", /(?<![a-z])flow[\s\-_.]*spy(?![a-z])/i],
+];
 const CATALOG = [
+  ...FLOW_TOOLS.map(([n, re]) => [n, "flow", re]),
   ["Hotmart", "aff", /hotmart|hotm\.io/], ["Kiwify", "aff", /kiwify/], ["Eduzz", "aff", /eduzz|edz\.la/],
   ["Monetizze", "aff", /monetizze/], ["Braip", "aff", /braip/], ["Ticto", "aff", /ticto\.(app|com)|\bticto\b/],
   ["PerfectPay", "aff", /perfectpay/], ["Lastlink", "aff", /lastlink/], ["ClickBank", "aff", /clickbank/],
@@ -57,6 +64,26 @@ export function toolsInVideo(v) {
   return { out, urls };
 }
 
+// Trecho do texto em volta da primeira menção (para mostrar no painel de onde veio a detecção).
+function excerpt(text, re) {
+  const m = re.exec(text);
+  if (!m) return null;
+  const a = Math.max(0, m.index - 80), b = Math.min(text.length, m.index + m[0].length + 110);
+  return (a > 0 ? "…" : "") + text.slice(a, b).replace(/\s+/g, " ").trim() + (b < text.length ? "…" : "");
+}
+
+/** Menções às ferramentas Flow no vídeo: [{ n, w: "d" descrição | "t" título, x: trecho, l: 1 se está num link }]. */
+export function flowMentions(v) {
+  const desc = String(v.desc ?? ""), title = String(v.title ?? "");
+  const urls = desc.match(URL_RE) ?? [];
+  const out = [];
+  for (const [n, re] of FLOW_TOOLS) {
+    const d = excerpt(desc, re), t = excerpt(title, re);
+    if (d || t) out.push({ n, w: d ? "d" : "t", x: (d ?? t).slice(0, 280), l: urls.some((u) => re.test(u)) ? 1 : 0 });
+  }
+  return out;
+}
+
 /** Conta, nos vídeos, as plataformas/ferramentas citadas e os domínios mais repetidos nos links. */
 export function detectTools(vs) {
   const counts = new Map(); // nome → { c, v, l }
@@ -78,7 +105,9 @@ export function detectTools(vs) {
       hosts.set(host, (hosts.get(host) ?? 0) + 1);
     }
   }
-  const tools = [...counts.values()].sort((a, b) => b.l * 2 + b.v - (a.l * 2 + a.v)).slice(0, 14);
+  // As ferramentas da Flow vêm sempre primeiro.
+  const rank = (t) => (t.c === "flow" ? 1e6 : 0) + t.l * 2 + t.v;
+  const tools = [...counts.values()].sort((a, b) => rank(b) - rank(a)).slice(0, 14);
   const links = [...hosts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([h, n]) => ({ h: h.slice(0, 60), v: n }));
   return { tools, links };
 }
@@ -193,6 +222,8 @@ export function analyzeVideos(videos, match, now = Date.now()) {
     affShare: r3(aff / n),
     adsShare: r3(ads / n),
     momentum: r3(momentum),
+    flowChecked: true, // esta análise já procura FlowPages / FlowTracking / FlowSpy
+    flowVideos: vs.filter((v) => flowMentions(v).length > 0).length,
     weekly,
     activeWeeks: weekly.filter((c) => c > 0).length,
   };
@@ -209,12 +240,16 @@ export function analyzeVideos(videos, match, now = Date.now()) {
     }));
   // Todos os vídeos analisados (mais novo primeiro), com o que cada um divulga, para a tela completa.
   const topicSet = new Set(topicVideos);
-  const recentVideos = vs.map((v) => ({
-    id: v.id, title: String(v.title ?? "").slice(0, 140), ms: v.ms, dur: v.dur ?? null,
-    views: v.views ?? 0, likes: v.likes ?? null, comments: v.comments ?? null,
-    topic: topicSet.has(v),
-    tools: toolsInVideo(v).out.slice(0, 6).map((t) => ({ n: t.n, c: t.c, l: t.l ? 1 : 0 })),
-  }));
+  const recentVideos = vs.map((v) => {
+    const fx = flowMentions(v);
+    return {
+      id: v.id, title: String(v.title ?? "").slice(0, 140), ms: v.ms, dur: v.dur ?? null,
+      views: v.views ?? 0, likes: v.likes ?? null, comments: v.comments ?? null,
+      topic: topicSet.has(v),
+      tools: toolsInVideo(v).out.slice(0, 6).map((t) => ({ n: t.n, c: t.c, l: t.l ? 1 : 0 })),
+      ...(fx.length ? { fx } : {}),
+    };
+  });
   return { metrics, top, recent: recentVideos };
 }
 

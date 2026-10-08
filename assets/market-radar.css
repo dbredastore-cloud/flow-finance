@@ -193,6 +193,22 @@ table.mr-table { min-width: 1380px; }
 .mr-tool { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; color: var(--text); background: rgba(var(--accent-rgb), 0.1); border: 1px solid rgba(var(--accent-rgb), 0.35); }
 .mr-tool small { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); margin-left: 3px; }
 .mr-tool.like { background: rgba(var(--warning-rgb), 0.12); border-color: var(--warning); }
+.mr-tool.flow { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 12px -3px rgba(var(--accent-rgb), 0.7); }
+.mr-tool.flow small { color: inherit; opacity: .75; font-weight: 500; }
+.mr-flowsec { border-color: rgba(var(--accent-rgb), 0.45); }
+.mr-flowsec .mr-fkpis { margin-bottom: 14px; }
+.mr-flowlist { display: grid; gap: 12px; }
+.mr-flowcard { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 14px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); }
+.mr-flowthumb img { width: 176px; height: 99px; object-fit: cover; border-radius: 6px; display: block; background: var(--inset-bg); }
+.mr-flowtitle { color: var(--text); font-weight: 600; font-size: 14px; line-height: 1.35; text-decoration: none; }
+.mr-flowtitle:hover { color: var(--accent); }
+.mr-flowmeta { margin: 4px 0 8px; font-size: 12px; color: var(--text-muted); }
+.mr-flowmeta b { color: var(--text); }
+.mr-flowchips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.mr-flowx { margin: 4px 0 0; padding: 7px 10px; border-left: 2px solid var(--accent); background: rgba(var(--accent-rgb), 0.05); border-radius: 0 6px 6px 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); overflow-wrap: anywhere; }
+.mr-flowx > span { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-right: 4px; }
+.mr-flowx mark { background: rgba(var(--accent-rgb), 0.28); color: var(--text); padding: 0 3px; border-radius: 3px; font-weight: 700; }
+@media (max-width: 640px) { .mr-flowcard { grid-template-columns: 1fr; } .mr-flowthumb img { width: 100%; height: auto; aspect-ratio: 16/9; } }
 .mr-tool.soft { background: transparent; border-color: var(--border-strong); color: var(--text-dim); }
 .mr-tool.mini { padding: 1px 8px; font-size: 11.5px; margin-right: 4px; }
 table.mr-table thead th { padding: 10px 8px; }
