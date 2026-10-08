@@ -33,6 +33,11 @@ tr.fd-vdetail > td { padding: 0; background: var(--inset-bg); white-space: norma
 .fd-qdate { margin: 4px 0 14px; font-size: 13px; color: var(--text-dim); }
 .fd-qdate #fd-qres b { color: var(--text); }
 .fd-qdate #fd-qres .bad { color: var(--critical); }
+.fd-showing { margin: 0 0 8px; font-family: var(--font-mono); font-size: 12px; letter-spacing: .04em; color: var(--accent); }
+.fd-warns { margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px dashed var(--warning); background: rgba(var(--warning-rgb), 0.07); }
+.fd-warns p { margin: 3px 0; font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+#fd-full .mr-tools .pay-chip:disabled { opacity: .38; cursor: not-allowed; }
+#fd-full .mr-tools .pay-chip:disabled:hover { border-color: var(--border-strong); color: var(--text-dim); }
 .fd-dtable { max-height: 420px; overflow-y: auto; }
 .fd-dtable thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
 #fd-full tr.muted-row td { color: var(--text-muted); }

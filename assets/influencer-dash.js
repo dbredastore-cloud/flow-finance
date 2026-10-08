@@ -119,7 +119,7 @@ window.InfluencerDash = (function () {
     var ctx = A.getCtx(contractId);
     if (!ctx) return;
     S = { id: contractId, ctx: ctx, videos: null, snaps: [], scope: "contract", type: "all", text: "", sort: { key: "date", dir: -1 }, open: null, busy: false,
-      range: { preset: "all", from: null, to: null }, gran: "day", metric: "subs", qdate: "", dc: null };
+      range: { preset: "7d", from: null, to: null }, gran: "day", metric: "subs", qdate: "", dc: null };
     $("fd-full").hidden = false; document.body.classList.add("mr-noscroll"); $("fd-full").scrollTop = 0;
     renderBar();
     $("fd-body").innerHTML = '<p class="mr-hint" style="padding:40px 0;text-align:center">Carregando os dados do canal…</p>';
@@ -136,7 +136,7 @@ window.InfluencerDash = (function () {
       var r = await Promise.all([
         A.sb.from("youtube_videos").select("video_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short, description, tags")
           .eq("channel_id", ch.channel_id).order("published_at", { ascending: false }).limit(600),
-        A.sb.from("youtube_channel_snapshots").select("day, subscribers, total_views, video_count").eq("channel_id", ch.channel_id).order("day")
+        A.sb.from("youtube_channel_snapshots").select("day, subscribers, total_views, video_count, taken_at").eq("channel_id", ch.channel_id).order("day")
       ]);
       if (S !== my) return;
       my.videos = r[0].error ? [] : (r[0].data || []);
@@ -391,37 +391,59 @@ window.InfluencerDash = (function () {
   function dshort(n) { var p = dstr(n).split("-"); return p[2] + "/" + p[1]; }
   function lerp(x, y, t) { return x == null || y == null ? null : Math.round(x + (y - x) * t); }
   function sgn(n, f) { return (n > 0 ? "+" : n < 0 ? "−" : "") + (f || fmtInt)(Math.abs(n)); }
+  function brtDay(ms) { return Math.floor((ms - 3 * 3600000) / DAY); }
+  // Hoje no horário de Brasília (o mesmo fuso em que o sync grava a foto do dia).
+  function todayDn() { return dn(new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" })); }
+  function monthStart(n, add) { var d = new Date(n * DAY); return Math.round(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + (add || 0), 1) / DAY); }
 
   // Série contínua, um ponto por dia. Dias em que o painel não gravou a foto (ex.: sem sync) são estimados em linha reta.
   function series() {
     var pts = (S.snaps || []).filter(function (s) { return s.subscribers != null || s.total_views != null; }).map(function (s) {
-      return { d: dn(s.day), subs: s.subscribers == null ? null : Number(s.subscribers), views: s.total_views == null ? null : Number(s.total_views) };
+      return { d: dn(s.day), subs: s.subscribers == null ? null : Number(s.subscribers), views: s.total_views == null ? null : Number(s.total_views), at: s.taken_at };
     });
     if (!pts.length) return null;
     var out = [];
     for (var i = 0; i < pts.length; i++) {
       var a = pts[i], b = pts[i + 1];
-      out.push({ d: a.d, subs: a.subs, views: a.views, est: false });
+      out.push({ d: a.d, subs: a.subs, views: a.views, est: false, at: a.at });
       if (b) for (var d = a.d + 1; d < b.d; d++) { var t = (d - a.d) / (b.d - a.d); out.push({ d: d, subs: lerp(a.subs, b.subs, t), views: lerp(a.views, b.views, t), est: true }); }
     }
     return out;
   }
+  // Valor no fim do dia d. Fora do histórico não existe dado (não repete o último valor).
   function valueAt(ser, d, key) {
-    if (d < ser[0].d) return null;
-    if (d > ser[ser.length - 1].d) return ser[ser.length - 1][key];
+    if (d < ser[0].d || d > ser[ser.length - 1].d) return null;
     return ser[d - ser[0].d][key];
   }
-  function dailyWindow(ser, m) {
-    var first = ser[0].d, last = ser[ser.length - 1].d, r = S.range, from = first, to = last;
-    if (r.preset === "7d") from = last - 6;
-    else if (r.preset === "15d") from = last - 14;
-    else if (r.preset === "30d") from = last - 29;
-    else if (r.preset === "contract") from = dn(S.ctx.c.start_date);
-    else if (r.preset === "custom") { from = r.from; to = r.to; }
-    from = clamp(from, first, last); to = clamp(to, first, last);
-    if (from > to) from = to;
-    return { from: from, to: to, first: first, last: last };
+  // Valor de partida para medir o ganho do dia d: fim do dia anterior; no 1º registro, ele mesmo.
+  function baseAt(ser, d, key) { return d - 1 >= ser[0].d ? valueAt(ser, d - 1, key) : valueAt(ser, ser[0].d, key); }
+
+  var PRESETS = [["today", "Hoje"], ["yesterday", "Ontem"], ["7d", "7 dias"], ["15d", "15 dias"], ["month", "Este mês"], ["lastmonth", "Mês passado"], ["custom", "Personalizado"]];
+  // Janela pedida pelo filtro, sempre a partir de hoje (não do último registro).
+  function requestedWindow() {
+    var t = todayDn(), r = S.range;
+    switch (r.preset) {
+      case "today": return { from: t, to: t };
+      case "yesterday": return { from: t - 1, to: t - 1 };
+      case "7d": return { from: t - 6, to: t };
+      case "15d": return { from: t - 14, to: t };
+      case "month": return { from: monthStart(t), to: t };
+      case "lastmonth": return { from: monthStart(t, -1), to: monthStart(t) - 1 };
+      default:
+        var f = r.from != null ? r.from : t - 29, to = r.to != null ? r.to : t;
+        return { from: Math.min(f, to), to: Math.max(f, to) };
+    }
   }
+  // Parte da janela que tem registro.
+  function effWindow(ser, req) {
+    var from = Math.max(req.from, ser[0].d), to = Math.min(req.to, ser[ser.length - 1].d);
+    return from > to ? null : { from: from, to: to };
+  }
+  // Só oferece o agrupamento que faz sentido para o tamanho do período.
+  function allowedGran(days) { return { day: true, week: days >= 10, fortnight: days >= 28, month: days >= 45 }; }
+  var GRAN_LABEL = { day: "dia", week: "semana", fortnight: "quinzena", month: "mês" };
+  var GRAN_MIN = { week: "10 dias", fortnight: "28 dias", month: "45 dias" };
+
   // Agrupa os dias da janela em dia / semana (seg–dom) / quinzena (1–15 e 16–fim) / mês.
   function bucketsOf(win, gran) {
     var out = [], d = win.from;
@@ -438,7 +460,15 @@ window.InfluencerDash = (function () {
     while (d <= win.to) { var sp = span(d); out.push({ s: Math.max(sp.s, win.from), e: Math.min(sp.e, win.to), label: sp.label, full: sp.s >= win.from && sp.e <= win.to }); d = sp.e + 1; }
     return out;
   }
-  function brtDay(ms) { return Math.floor((ms - 3 * 3600000) / DAY); }
+  function bucketStats(ser, b, m, key) {
+    var first = ser[0].d, single = b.s === first && b.e === first;   // o 1º registro só serve de ponto de partida
+    var baseS = baseAt(ser, b.s, "subs"), baseW = baseAt(ser, b.s, "views");
+    var endS = valueAt(ser, b.e, "subs"), endW = valueAt(ser, b.e, "views");
+    var vids = m.vids.filter(function (v) { var x = brtDay(v.ms); return x >= b.s && x <= b.e; });
+    return { label: b.label, s: b.s, e: b.e, full: b.full, endS: endS, baseS: baseS, endW: endW, vids: vids,
+      gainS: single || endS == null || baseS == null ? null : endS - baseS, gainW: single || endW == null || baseW == null ? null : endW - baseW,
+      est: !!(ser[b.e - first] && ser[b.e - first].est) };
+  }
 
   function renderDaily() {
     var el = $("fd-daily");
@@ -446,59 +476,79 @@ window.InfluencerDash = (function () {
     var head = '<h3>Métricas dia a dia <small class="muted">inscritos e alcance do canal</small></h3>';
     var ser = series();
     if (!ser) { S.dc = null; el.innerHTML = head + '<div class="mr-fnote">Ainda não há histórico. O painel grava uma foto do canal (inscritos e views) a cada atualização do YouTube, uma por dia. Clique em <b>↻ Atualizar canal</b> para gravar a primeira; os números diários aparecem a partir daí. A API do YouTube não informa o passado, então não dá para recuperar dias anteriores ao primeiro registro.</div>'; return; }
-    var m = build(), win = dailyWindow(ser, m), r = S.range;
+    var m = build(), first = ser[0].d, last = ser[ser.length - 1].d, today = todayDn();
+    var req = requestedWindow(), reqDays = req.to - req.from + 1, eff = effWindow(ser, req);
+    var allow = allowedGran(reqDays);
+    if (!allow[S.gran]) S.gran = "day";
     var noSubs = ser.every(function (p) { return p.subs == null; });
     if (noSubs) S.metric = "views";
     var key = S.metric === "views" ? "views" : "subs";
-    var bks = bucketsOf(win, S.gran).map(function (b) {
-      var base = valueAt(ser, b.s - 1, key); if (base == null) base = valueAt(ser, win.first, key);
-      var endV = valueAt(ser, b.e, key), baseV = valueAt(ser, b.s - 1, "views"); if (baseV == null) baseV = valueAt(ser, win.first, "views");
-      var baseS = valueAt(ser, b.s - 1, "subs"); if (baseS == null) baseS = valueAt(ser, win.first, "subs");
-      var endS = valueAt(ser, b.e, "subs"), endW = valueAt(ser, b.e, "views");
-      var vids = m.vids.filter(function (v) { var x = brtDay(v.ms); return x >= b.s && x <= b.e; });
-      return { label: b.label, s: b.s, e: b.e, full: b.full, endS: endS, gainS: endS != null && baseS != null ? endS - baseS : null, baseS: baseS,
-        endW: endW, gainW: endW != null && baseV != null ? endW - baseV : null, vids: vids, est: !!(ser[b.e - ser[0].d] && ser[b.e - ser[0].d].est) };
-    });
-    S.dc = { ser: ser, win: win, key: key, bks: bks };
 
-    var days = win.to - win.from + 1;
-    var s0 = valueAt(ser, win.from - 1, "subs"); if (s0 == null) s0 = valueAt(ser, win.first, "subs");
-    var s1 = valueAt(ser, win.to, "subs");
-    var v0 = valueAt(ser, win.from - 1, "views"); if (v0 == null) v0 = valueAt(ser, win.first, "views");
-    var v1 = valueAt(ser, win.to, "views");
-    var gs = s0 != null && s1 != null ? s1 - s0 : null, gv = v0 != null && v1 != null ? v1 - v0 : null;
-    var perDay = bksDaily(ser, win);
-    var best = perDay.slice().sort(function (a, b) { return b.g - a.g; })[0], worst = perDay.slice().sort(function (a, b) { return a.g - b.g; })[0];
-    var inWin = m.vids.filter(function (v) { var x = brtDay(v.ms); return x >= win.from && x <= win.to; });
-    var estCount = ser.filter(function (p) { return p.d >= win.from && p.d <= win.to && p.est; }).length;
-
-    function chip(attr, val, label, on) { return '<button type="button" class="pay-chip' + (on ? " on" : "") + '" ' + attr + '="' + val + '" aria-pressed="' + on + '">' + label + "</button>"; }
-    var presets = [["7d", "7 dias"], ["15d", "15 dias"], ["30d", "30 dias"], ["contract", "Desde o contrato"], ["all", "Tudo"]];
-    var controls = '<div class="mr-tools fd-dctl">' +
-      '<span class="fd-dlbl">Período</span>' + presets.map(function (p) { return chip("data-fd-range", p[0], p[1], r.preset === p[0]); }).join("") +
-      '<label class="fd-date">de <input type="date" id="fd-from" value="' + dstr(win.from) + '" min="' + dstr(win.first) + '" max="' + dstr(win.last) + '"></label>' +
-      '<label class="fd-date">até <input type="date" id="fd-to" value="' + dstr(win.to) + '" min="' + dstr(win.first) + '" max="' + dstr(win.last) + '"></label></div>' +
+    function chip(attr, val, label, on, dis, tip) { return '<button type="button" class="pay-chip' + (on ? " on" : "") + '" ' + attr + '="' + val + '" aria-pressed="' + on + '"' + (dis ? ' disabled title="' + esc(tip) + '"' : "") + ">" + label + "</button>"; }
+    var custom = S.range.preset === "custom";
+    var controls = '<div class="mr-tools fd-dctl"><span class="fd-dlbl">Período</span>' +
+      PRESETS.map(function (p) { return chip("data-fd-range", p[0], p[1], S.range.preset === p[0]); }).join("") +
+      (custom ? '<label class="fd-date">de <input type="date" id="fd-from" value="' + dstr(req.from) + '" min="' + dstr(first) + '" max="' + dstr(today) + '"></label>' +
+        '<label class="fd-date">até <input type="date" id="fd-to" value="' + dstr(req.to) + '" min="' + dstr(first) + '" max="' + dstr(today) + '"></label>' : "") + "</div>" +
       '<div class="mr-tools fd-dctl"><span class="fd-dlbl">Agrupar por</span>' +
-      [["day", "Dia"], ["week", "Semana"], ["fortnight", "Quinzena"], ["month", "Mês"]].map(function (g) { return chip("data-fd-gran", g[0], g[1], S.gran === g[0]); }).join("") +
+      ["day", "week", "fortnight", "month"].map(function (g) { return chip("data-fd-gran", g, { day: "Dia", week: "Semana", fortnight: "Quinzena", month: "Mês" }[g], S.gran === g, !allow[g], "Precisa de um período de pelo menos " + GRAN_MIN[g]); }).join("") +
       '<span class="muted" style="margin:0 4px">|</span><span class="fd-dlbl">Gráfico</span>' +
       (noSubs ? "" : chip("data-fd-metric", "subs", "Inscritos", key === "subs")) + chip("data-fd-metric", "views", "Alcance (views do canal)", key === "views") + "</div>";
+    var showing = '<p class="fd-showing">' + (reqDays === 1 ? "Dia " + dfmt(req.from) : "De " + dfmt(req.from) + " a " + dfmt(req.to) + " (" + reqDays + " dias)") + "</p>";
+    var qd = '<div class="fd-qdate"><label>Consultar uma data: <input type="date" id="fd-qdate" min="' + dstr(first) + '" max="' + dstr(last) + '" value="' + (S.qdate || "") + '"></label> <span id="fd-qres"></span></div>';
 
-    var qd = '<div class="fd-qdate"><label>Consultar uma data: <input type="date" id="fd-qdate" min="' + dstr(win.first) + '" max="' + dstr(win.last) + '" value="' + (S.qdate || "") + '"></label> <span id="fd-qres"></span></div>';
+    // Sem nenhum dia gravado na janela pedida.
+    if (!eff) {
+      S.dc = { ser: ser };
+      var why = req.to < first
+        ? "O histórico do painel começa em <b>" + dfmt(first) + "</b>; não há registro de antes disso (a API do YouTube não informa o passado)."
+        : "O último registro é de <b>" + dfmt(last) + "</b>. Clique em <b>↻ Atualizar canal</b> para gravar os números de hoje.";
+      el.innerHTML = head + controls + showing + '<div class="mr-fnote">Sem registro neste período. ' + why + "</div>" + qd;
+      updateQdate();
+      return;
+    }
+
+    var s0 = baseAt(ser, eff.from, "subs"), s1 = valueAt(ser, eff.to, "subs");
+    var v0 = baseAt(ser, eff.from, "views"), v1 = valueAt(ser, eff.to, "views");
+    var noBase = eff.from - 1 < first, baseDay = noBase ? first : eff.from - 1;
+    var effDays = eff.to - eff.from + 1, den = Math.max(noBase ? effDays - 1 : effDays, 1);
+    var gs = s0 != null && s1 != null ? s1 - s0 : null, gv = v0 != null && v1 != null ? v1 - v0 : null;
+    var partial = eff.from > req.from || eff.to < req.to;
+    var dayGains = [];
+    for (var d = Math.max(eff.from, first + 1); d <= eff.to; d++) {
+      var a = valueAt(ser, d - 1, "subs"), b = valueAt(ser, d, "subs");
+      if (a != null && b != null) dayGains.push({ d: d, g: b - a });
+    }
+    var best = dayGains.slice().sort(function (x, y) { return y.g - x.g; })[0], worst = dayGains.slice().sort(function (x, y) { return x.g - y.g; })[0];
+    var inWin = m.vids.filter(function (v) { var x = brtDay(v.ms); return x >= eff.from && x <= eff.to; });
+    var estCount = ser.filter(function (p) { return p.d >= eff.from && p.d <= eff.to && p.est; }).length;
+
+    var bks = bucketsOf(eff, S.gran).map(function (b) { return bucketStats(ser, b, m, key); });
+    // Períodos curtos (hoje, ontem…) ganham um gráfico com os 14 dias até a data, com o período escolhido em destaque.
+    var ctxMode = effDays < 7;
+    var chartWin = ctxMode ? { from: Math.max(first, eff.to - 13), to: eff.to } : eff;
+    var cbks = bucketsOf(chartWin, ctxMode ? "day" : S.gran).map(function (b) { return bucketStats(ser, b, m, key); });
+    S.dc = { ser: ser, key: key, win: eff, chartWin: chartWin, cbks: cbks, ctxMode: ctxMode };
 
     var kpis = '<div class="mr-fkpis">' +
-      kf("Inscritos em " + dfmt(win.to), noSubs ? "oculto" : fmtInt(s1), s1 != null ? fmtN(s1) : "", "Inscritos do canal no fim do período escolhido.") +
-      kf("Inscritos antes do período", noSubs ? "—" : fmtInt(s0), "fim de " + dfmt(Math.max(win.from - 1, win.first)), "Inscritos no último dia anterior ao período (ou no primeiro registro, se o período começa nele).") +
-      kf("Inscritos ganhos", gs == null ? "—" : '<span class="' + (gs >= 0 ? "good" : "bad") + '">' + sgn(gs) + "</span>", s0 ? pct(gs / s0, 2) + " · " + dec(gs / days, 1) + " por dia" : "", "Diferença líquida: entradas menos saídas de inscritos no período.") +
-      kf("Alcance no período", gv == null ? "—" : '<span class="good">' + sgn(gv, fmtN) + "</span>", gv == null ? "" : fmtInt(gv) + " views · " + fmtN(gv / days) + " por dia", "Alcance = visualizações novas do canal inteiro (vídeos e Shorts, antigos e novos) no período.") +
-      kf("Views do canal em " + dfmt(win.to), fmtN(v1), fmtInt(v1) + " no total") +
-      kf("Melhor dia", best && gs != null ? '<span class="good">' + sgn(best.g) + "</span>" : "—", best && gs != null ? dfmt(best.d) : "sem dados") +
-      kf("Pior dia", worst && worst.g < 0 ? '<span class="bad">' + sgn(worst.g) + "</span>" : "—", worst && worst.g < 0 ? dfmt(worst.d) : "nenhum dia com perda") +
+      kf("Inscritos em " + dfmt(eff.to), noSubs ? "oculto" : fmtInt(s1), s1 != null ? fmtN(s1) : "", "Inscritos do canal no fim do período.") +
+      kf("Inscritos no início", noSubs ? "—" : fmtInt(s0), noBase ? "1º registro, em " + dfmt(first) : "fim de " + dfmt(baseDay), "Inscritos no último dia antes do período. Se o período começa no 1º registro do painel, é o próprio 1º registro.") +
+      kf("Inscritos ganhos", gs == null ? "—" : '<span class="' + (gs >= 0 ? "good" : "bad") + '">' + sgn(gs) + "</span>", s0 ? pct(gs / s0, 2) + (effDays > 1 ? " · " + dec(gs / den, 1) + " por dia" : "") : "", "Diferença líquida: entradas menos saídas de inscritos no período.") +
+      kf("Alcance no período", gv == null ? "—" : '<span class="good">' + sgn(gv, fmtN) + "</span>", gv == null ? "" : fmtInt(gv) + " views" + (effDays > 1 ? " · " + fmtN(gv / den) + " por dia" : ""), "Alcance = visualizações novas do canal inteiro (vídeos e Shorts, antigos e novos) no período.") +
+      kf("Views do canal em " + dfmt(eff.to), fmtN(v1), fmtInt(v1) + " no total") +
+      (best && effDays > 1 ? kf("Melhor dia", '<span class="' + (best.g >= 0 ? "good" : "bad") + '">' + sgn(best.g) + "</span>", dfmt(best.d) + " · inscritos") : "") +
+      (worst && effDays > 1 && worst.g < 0 ? kf("Pior dia", '<span class="bad">' + sgn(worst.g) + "</span>", dfmt(worst.d) + " · inscritos") : "") +
       kf("Vídeos publicados", fmtInt(inWin.length), fmtInt(inWin.filter(function (v) { return !v.short; }).length) + " vídeos · " + fmtInt(inWin.filter(function (v) { return v.short; }).length) + " Shorts") +
       "</div>";
 
-    var note = '<p class="mr-hint">Histórico gravado pelo painel desde ' + dfmt(win.first) + (days <= 1 ? "" : "; o primeiro dia serve de ponto de partida") + ". " +
-      (estCount ? estCount + " dia(s) sem registro foram estimados em linha reta entre os dias vizinhos (marcados com ~ na tabela). " : "") +
-      "A API do YouTube só informa o número de hoje, por isso não há como recuperar dias anteriores ao primeiro registro.</p>";
+    var warns = [];
+    if (partial) warns.push("<b>Período parcial:</b> o painel tem registros de " + dfmt(first) + " a " + dfmt(last) + ", então os números cobrem " + dfmt(eff.from) + " a " + dfmt(eff.to) + " (" + effDays + " de " + reqDays + " dias).");
+    if (eff.to === today && ser[ser.length - 1].at) warns.push("Hoje ainda está em andamento: números até a última atualização, às " + new Date(ser[ser.length - 1].at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) + ".");
+    else if (req.to > last && last < today) warns.push("O último registro é de " + dfmt(last) + ". Clique em <b>↻ Atualizar canal</b> para trazer os números de hoje.");
+    if (noBase && effDays > 1) warns.push("O primeiro dia (" + dfmt(first) + ") é só o ponto de partida: os ganhos contam a partir do dia seguinte.");
+    if (estCount) warns.push(estCount + " dia(s) sem registro foram estimados em linha reta entre os dias vizinhos (marcados com ~ na tabela).");
+    var note = (warns.length ? '<div class="fd-warns">' + warns.map(function (w) { return "<p>" + w + "</p>"; }).join("") + "</div>" : "") +
+      '<p class="mr-hint">Histórico gravado pelo painel desde ' + dfmt(first) + ". A API do YouTube só informa o número de hoje, por isso não dá para recuperar dias anteriores ao primeiro registro.</p>";
 
     var rows = bks.slice().reverse().map(function (b) {
       return "<tr" + (b.full ? "" : ' class="muted-row"') + '><td class="l">' + esc(b.label) + (b.est ? ' <span class="muted" title="Dia sem registro: valor estimado entre os dias vizinhos">~</span>' : "") + (b.full ? "" : ' <span class="muted" title="Período cortado pelo filtro de datas">·</span>') + "</td>" +
@@ -506,41 +556,35 @@ window.InfluencerDash = (function () {
         '<td class="num">' + (b.gainS == null || !b.baseS ? "—" : pct(b.gainS / b.baseS, 2)) + '</td><td class="num">' + (b.endW == null ? "—" : fmtInt(b.endW)) + '</td><td class="num">' + (b.gainW == null ? "—" : sgn(b.gainW)) + "</td>" +
         '<td class="num">' + b.vids.length + '</td><td class="num">' + (b.vids.length ? fmtN(sum(b.vids, function (v) { return v.views; })) : "—") + "</td></tr>";
     }).join("");
+    var gl = ctxMode ? "dia" : GRAN_LABEL[S.gran];
 
-    el.innerHTML = head + controls + qd + kpis +
-      '<div class="mr-f2" style="margin:14px 0 4px"><div><h4 class="mr-sub-h" style="margin-top:0">' + (key === "subs" ? "Inscritos" : "Views do canal") + ' no período</h4><div class="mr-chart" id="fd-dc-line"></div></div>' +
-      '<div><h4 class="mr-sub-h" style="margin-top:0">' + (key === "subs" ? "Inscritos ganhos" : "Alcance (views novas)") + " por " + ({ day: "dia", week: "semana", fortnight: "quinzena", month: "mês" })[S.gran] + '</h4><div class="mr-chart" id="fd-dc-bars"></div></div></div>' +
+    el.innerHTML = head + controls + showing + qd + kpis +
+      '<div class="mr-f2" style="margin:14px 0 4px"><div><h4 class="mr-sub-h" style="margin-top:0">' + (key === "subs" ? "Inscritos" : "Views do canal") + (ctxMode ? " nos 14 dias até " + dshort(eff.to) : " no período") + '</h4><div class="mr-chart" id="fd-dc-line"></div></div>' +
+      '<div><h4 class="mr-sub-h" style="margin-top:0">' + (key === "subs" ? "Inscritos ganhos" : "Alcance (views novas)") + " por " + gl + (ctxMode ? " · período escolhido em destaque" : "") + '</h4><div class="mr-chart" id="fd-dc-bars"></div></div></div>' +
       '<div class="table-scroll fd-dtable"><table class="mr-cmp"><thead><tr><th class="l">Período</th><th>Inscritos no fim</th><th>Ganho de inscritos</th><th>Variação</th><th>Views do canal no fim</th><th>Alcance (views novas)</th><th>Vídeos publicados</th><th>Views desses vídeos</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="8" class="empty">Sem dados no período.</td></tr>') + "</tbody></table></div>" + note;
     updateQdate();
     drawDailyCharts();
   }
-  // Ganho dia a dia da janela (para melhor/pior dia).
-  function bksDaily(ser, win) {
-    var out = [];
-    for (var d = win.from; d <= win.to; d++) {
-      var a = valueAt(ser, d - 1, "subs"), b = valueAt(ser, d, "subs");
-      if (a == null) a = valueAt(ser, win.first, "subs");
-      out.push({ d: d, g: a != null && b != null ? b - a : 0 });
-    }
-    return out;
-  }
+
   function updateQdate() {
     var el = $("fd-qres"); if (!el || !S.dc) return;
     if (!S.qdate) { el.textContent = ""; return; }
-    var d = dn(S.qdate), ser = S.dc.ser, s = valueAt(ser, d, "subs"), v = valueAt(ser, d, "views");
-    if (s == null && v == null) { el.innerHTML = '<span class="bad">Sem registro nessa data (o histórico começa em ' + dfmt(ser[0].d) + ").</span>"; return; }
+    var d = dn(S.qdate), ser = S.dc.ser, last = ser[ser.length - 1];
+    var s = valueAt(ser, d, "subs"), v = valueAt(ser, d, "views");
+    if (s == null && v == null) { el.innerHTML = '<span class="bad">Sem registro nessa data (o histórico vai de ' + dfmt(ser[0].d) + " a " + dfmt(last.d) + ").</span>"; return; }
     var est = ser[d - ser[0].d] && ser[d - ser[0].d].est;
     el.innerHTML = "Em <b>" + dfmt(d) + "</b>: <b>" + (s == null ? "inscritos ocultos" : fmtInt(s) + " inscritos") + "</b> · <b>" + fmtInt(v) + "</b> views no canal" + (est ? ' <span class="muted">(estimado)</span>' : "") +
-      (d < ser[ser.length - 1].d && s != null ? " · de lá até " + dfmt(ser[ser.length - 1].d) + ": <b>" + sgn(ser[ser.length - 1].subs - s) + "</b> inscritos" : "");
+      (d < last.d && s != null && last.subs != null ? " · de lá até " + dfmt(last.d) + ": <b>" + sgn(last.subs - s) + "</b> inscritos" : "");
   }
+
   function drawDailyCharts() {
     var dc = S && S.dc;
-    if (!dc || !$("fd-dc-line")) return;
-    var key = dc.key, win = dc.win, pts = dc.ser.filter(function (p) { return p.d >= win.from && p.d <= win.to && p[key] != null; });
+    if (!dc || !dc.cbks || !$("fd-dc-line")) return;
+    var key = dc.key, cw = dc.chartWin, sel = dc.win, pts = dc.ser.filter(function (p) { return p.d >= cw.from && p.d <= cw.to && p[key] != null; });
     var accC = FlowHud.tok("--accent"), crit = FlowHud.tok("--critical");
     var el = $("fd-dc-line");
-    if (pts.length < 2) { el.innerHTML = '<p class="mr-hint">Precisa de pelo menos dois dias no período para desenhar a linha.</p>'; }
+    if (pts.length < 2) { el.innerHTML = '<p class="mr-hint">Precisa de pelo menos dois dias de histórico para desenhar a linha.</p>'; }
     else {
       var W = Math.max(el.clientWidth || 420, 280), H = 220, mg = { l: 54, r: 10, t: 14, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
       var vals = pts.map(function (p) { return p[key]; }), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
@@ -550,17 +594,18 @@ window.InfluencerDash = (function () {
       var line = pts.map(function (p) { return X(p.d).toFixed(1) + "," + Y(p[key]).toFixed(1); }).join(" ");
       var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Evolução no período"><defs>' + FlowHud.hatch("fddh", accC, 0.4) + "</defs>";
       for (var t = 0; t <= 3; t++) { var yv = lo + (hi - lo) * t / 3; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(yv) + '" y2="' + Y(yv) + '"/><text x="' + (mg.l - 6) + '" y="' + (Y(yv) + 3) + '" text-anchor="end">' + fmtN(yv) + "</text>"; }
+      if (dc.ctxMode) { var x0 = X(Math.max(sel.from, pts[0].d)), x1 = X(Math.min(sel.to, pts[pts.length - 1].d)); s += '<rect x="' + (x0 - 6).toFixed(1) + '" y="' + mg.t + '" width="' + Math.max(x1 - x0 + 12, 12).toFixed(1) + '" height="' + ih + '" fill="' + accC + '" opacity="0.1"/>'; }
       s += '<polygon points="' + X(pts[0].d).toFixed(1) + "," + (mg.t + ih) + " " + line + " " + X(pts[pts.length - 1].d).toFixed(1) + "," + (mg.t + ih) + '" fill="url(#fddh)"/>';
       s += '<polyline class="hud-glow" style="color:' + accC + '" points="' + line + '" fill="none" stroke="' + accC + '" stroke-width="2" stroke-linejoin="round"/>';
-      var cs = window_().start; var ds = brtDay(cs);
+      var ds = brtDay(window_().start);
       if (ds > pts[0].d && ds < pts[pts.length - 1].d) { var xs = X(ds); s += '<line class="med" x1="' + xs + '" x2="' + xs + '" y1="' + mg.t + '" y2="' + (mg.t + ih) + '"/><text x="' + (xs + 4) + '" y="' + (mg.t + 10) + '" style="fill:var(--text-dim)">início do contrato</text>'; }
       s += '<text x="' + mg.l + '" y="' + (H - 8) + '">' + dshort(pts[0].d) + '</text><text x="' + (W - mg.r) + '" y="' + (H - 8) + '" text-anchor="end">' + dshort(pts[pts.length - 1].d) + "</text>";
       pts.forEach(function (p) { s += '<circle cx="' + X(p.d).toFixed(1) + '" cy="' + Y(p[key]).toFixed(1) + '" r="' + (pts.length <= 45 ? 3 : 5) + '" fill="' + (pts.length <= 45 ? (p.est ? "var(--bg)" : accC) : "transparent") + '" stroke="' + accC + '" stroke-width="' + (pts.length <= 45 ? 1.5 : 0) + '"><title>' + esc(dfmt(p.d) + ": " + fmtInt(p[key]) + (key === "subs" ? " inscritos" : " views") + (p.est ? " (estimado)" : "")) + "</title></circle>"; });
       el.innerHTML = s + "</svg>";
     }
-    // barras: ganho por período (positivo verde, negativo vermelho)
-    var be = $("fd-dc-bars"), bks = dc.bks, g = bks.map(function (b) { return key === "subs" ? b.gainS : b.gainW; });
-    if (!bks.length || g.every(function (x) { return x == null; })) { be.innerHTML = ""; return; }
+    // barras: ganho por período (positivo verde, negativo vermelho); no modo "curto" o período escolhido fica em destaque
+    var be = $("fd-dc-bars"), bks = dc.cbks, g = bks.map(function (b) { return key === "subs" ? b.gainS : b.gainW; });
+    if (!bks.length || g.every(function (x) { return x == null; })) { be.innerHTML = '<p class="mr-hint">Sem ganho para mostrar: o primeiro dia de histórico é só o ponto de partida.</p>'; return; }
     var W2 = Math.max(be.clientWidth || 420, 280), H2 = 220, m2 = { l: 54, r: 10, t: 16, b: 26 }, iw2 = W2 - m2.l - m2.r, ih2 = H2 - m2.t - m2.b;
     var mx = Math.max.apply(null, g.map(function (x) { return Math.max(x || 0, 0); }).concat([0])), mn = Math.min.apply(null, g.map(function (x) { return Math.min(x || 0, 0); }).concat([0]));
     if (mx === mn) mx = mn + 1;
@@ -571,8 +616,9 @@ window.InfluencerDash = (function () {
     var step = Math.ceil(bks.length / 8);
     bks.forEach(function (b, i) {
       var v = g[i]; if (v == null) return;
+      var inSel = !dc.ctxMode || (b.e >= sel.from && b.s <= sel.to);
       var x = m2.l + i * bw + bw * 0.15, w = Math.max(2, bw * 0.7), y0 = Y2(0), y1 = Y2(v), top = Math.min(y0, y1), h = Math.max(1.5, Math.abs(y1 - y0));
-      s2 += '<rect x="' + x.toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" fill="url(#' + (v >= 0 ? "fddA" : "fddB") + ')"><title>' + esc(b.label + ": " + sgn(v) + (key === "subs" ? " inscritos" : " views")) + "</title></rect>";
+      s2 += '<rect x="' + x.toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1.5" opacity="' + (inSel ? 1 : 0.35) + '" fill="url(#' + (v >= 0 ? "fddA" : "fddB") + ')"><title>' + esc(b.label + ": " + sgn(v) + (key === "subs" ? " inscritos" : " views")) + "</title></rect>";
       if (bks.length <= 20) s2 += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (v >= 0 ? top - 4 : top + h + 11).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + (key === "subs" ? sgn(v) : sgn(v, fmtN)) + "</text>";
       if (i % step === 0) s2 += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H2 - 8) + '" text-anchor="middle">' + esc(b.label.length > 11 ? b.label.split("–")[0] : b.label) + "</text>";
     });
@@ -675,7 +721,13 @@ window.InfluencerDash = (function () {
         if (k === "edit") { var id = S.id; close(); A.edit(id); return; }
       }
       var rg = e.target.closest("[data-fd-range]");
-      if (rg) { S.range = { preset: rg.dataset.fdRange, from: null, to: null }; renderDaily(); return; }
+      if (rg) {
+        var pid = rg.dataset.fdRange;
+        // "Personalizado" começa com as datas do filtro que estava ativo.
+        var cur = S.range.preset === "custom" ? { from: S.range.from, to: S.range.to } : requestedWindow();
+        S.range = pid === "custom" ? { preset: "custom", from: cur.from, to: cur.to } : { preset: pid, from: null, to: null };
+        renderDaily(); return;
+      }
       var gr = e.target.closest("[data-fd-gran]");
       if (gr) { S.gran = gr.dataset.fdGran; renderDaily(); return; }
       var mt = e.target.closest("[data-fd-metric]");
