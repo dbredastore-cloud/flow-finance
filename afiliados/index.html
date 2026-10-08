@@ -297,12 +297,14 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
+<link rel="stylesheet" href="../assets/influencer-dash.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
 <script src="../assets/market-radar.js"></script>
+<script src="../assets/influencer-dash.js"></script>
 </head>
 <body>
 
@@ -2206,11 +2208,12 @@
         "<td>" + (r.allOk ? '<span class="status ok">entregue</span>' : r.current ? '<span class="status wait">em andamento</span>' : '<span class="status bad">pendente</span>') + "</td></tr>";
     }).join("");
     return '<section class="panel fi-card">' +
-      '<div class="fi-head"><div class="who"><div class="n" style="font-size:16px;">' + starBtn(c.affiliate_email) + esc(a.name || a.email) + "</div>" +
+      '<div class="fi-head"><div class="who"><div class="n" style="font-size:16px;">' + starBtn(c.affiliate_email) +
+        '<button type="button" class="fi-name-btn" data-fi-dash="' + c.id + '" title="Abrir o dashboard completo deste influencer">' + esc(a.name || a.email) + "</button></div>" +
         '<div class="e">' + esc(a.email) + " · contrato " + period + "</div>" +
         '<div class="e">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(target) + " vendas · por mês: " +
           c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div></div>" +
-        '<div class="fi-actions">' + socialsHtml(a) + ' <button class="btn" data-fi-edit="' + c.id + '">Editar contrato</button></div></div>' +
+        '<div class="fi-actions">' + socialsHtml(a) + ' <button class="btn btn-primary" data-fi-dash="' + c.id + '">Abrir dashboard</button> <button class="btn" data-fi-edit="' + c.id + '">Editar contrato</button></div></div>' +
       '<div class="fi-grid">' +
         '<div class="fi-bonus"><div class="kpi-mini-label">Meta do bônus · vendas no contrato</div>' +
           '<div class="fi-big num">' + fmtInt(info.total) + ' <small>/ ' + fmtInt(target) + "</small></div>" +
@@ -2287,8 +2290,23 @@
     renderFlowInf();
   });
   $("fi-list").addEventListener("click", function (e) {
+    var d = e.target.closest("[data-fi-dash]");
+    if (d) { InfluencerDash.open(d.dataset.fiDash); return; }
     var b = e.target.closest("[data-fi-edit]");
     if (b) openContract(b.dataset.fiEdit);
+  });
+
+  // Dashboard do influencer (assets/influencer-dash.js): contrato, vendas e canal vêm daqui; vídeos completos o módulo lê.
+  InfluencerDash.init({
+    sb: sb, toast: toast, channelUrl: channelUrl, edit: openContract,
+    reloadYoutube: loadYoutube,
+    getCtx: function (id) {
+      var c = state.fi.contracts.find(function (x) { return x.id === id; });
+      if (!c) return null;
+      var a = state.byEmail[c.affiliate_email] || { email: c.affiliate_email, name: c.affiliate_email };
+      var info = contractMonths(c);
+      return { a: a, c: c, info: info, channel: info.channel || null, socials: socialsHtml(a), instagram: socialLink("instagram", a.instagram) };
+    }
   });
 
   // Janela do contrato.

@@ -104,11 +104,16 @@ async function classifyShorts(rows: { video_id: string; duration_s: number | nul
 }
 const bestThumb = (t: any) => t?.medium?.url ?? t?.high?.url ?? t?.default?.url ?? null;
 
-async function syncChannel(email: string, url: string, known: any) {
+// Busca mais antiga: `since` (YYYY-MM-DD) faz o sync voltar até essa data (máx. MAX_DEEP vídeos),
+// usado pelo botão "Buscar histórico do contrato" do dashboard do influencer.
+const MAX_DEEP = 500;
+type SyncOpts = { since?: string };
+
+async function syncChannel(email: string, url: string, known: any, opts: SyncOpts = {}) {
   const now = new Date().toISOString();
   const channelId = known?.input_url === url && known?.channel_id ? known.channel_id : await resolveChannelId(url);
 
-  const ch = (await yt("/channels", { part: "snippet,statistics,contentDetails", id: channelId })).items?.[0];
+  const ch = (await yt("/channels", { part: "snippet,statistics,contentDetails,brandingSettings", id: channelId })).items?.[0];
   if (!ch) throw new Error("Canal não encontrado no YouTube");
   const st = ch.statistics ?? {};
   const row = {
@@ -118,14 +123,26 @@ async function syncChannel(email: string, url: string, known: any) {
     channel_created: ch.snippet?.publishedAt ?? null,
     subscribers: st.hiddenSubscriberCount ? null : num(st.subscriberCount), hidden_subs: !!st.hiddenSubscriberCount,
     total_views: num(st.viewCount), video_count: num(st.videoCount), fetched_at: now, error: null,
+    description: String(ch.snippet?.description ?? "").slice(0, 2000) || null,
+    banner_url: ch.brandingSettings?.image?.bannerExternalUrl ?? null,
+    keywords: String(ch.brandingSettings?.channel?.keywords ?? "").slice(0, 500) || null,
   };
 
+  // Foto do dia (fuso de Brasília): permite mostrar o crescimento do canal durante o contrato.
+  const day = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  await sb.from("youtube_channel_snapshots").upsert(
+    { channel_id: channelId, day, subscribers: row.subscribers, total_views: row.total_views, video_count: row.video_count, taken_at: now },
+    { onConflict: "channel_id,day" },
+  );
+
+  const sinceMs = opts.since ? Date.parse(opts.since + "T00:00:00-03:00") : NaN;
+  const limit = Number.isFinite(sinceMs) ? MAX_DEEP : VIDEOS_PER_CHANNEL;
   const uploads = ch.contentDetails?.relatedPlaylists?.uploads;
   let videos = 0;
   if (uploads) {
     const ids: string[] = [];
     let pageToken = "";
-    while (ids.length < VIDEOS_PER_CHANNEL) {
+    while (ids.length < limit) {
       const params: Record<string, string | number> = { part: "contentDetails", playlistId: uploads, maxResults: 50 };
       if (pageToken) params.pageToken = pageToken;
       const pl = await yt("/playlistItems", params)
@@ -133,8 +150,11 @@ async function syncChannel(email: string, url: string, known: any) {
       ids.push(...(pl.items ?? []).map((i: any) => i.contentDetails?.videoId).filter(Boolean));
       pageToken = pl.nextPageToken ?? "";
       if (!pageToken) break;
+      // A lista vem do mais novo para o mais antigo: para quando já passou da data pedida.
+      const lastAt = Date.parse((pl.items ?? []).at(-1)?.contentDetails?.videoPublishedAt ?? "");
+      if (Number.isFinite(sinceMs) && Number.isFinite(lastAt) && lastAt < sinceMs) break;
     }
-    ids.splice(VIDEOS_PER_CHANNEL);
+    ids.splice(limit);
     if (ids.length) {
       const items: any[] = [];
       for (let i = 0; i < ids.length; i += 50) {
@@ -146,6 +166,8 @@ async function syncChannel(email: string, url: string, known: any) {
         published_at: v.snippet?.publishedAt ?? null, duration_s: durationSeconds(v.contentDetails?.duration),
         views: num(v.statistics?.viewCount), likes: num(v.statistics?.likeCount), comments: num(v.statistics?.commentCount),
         thumbnail_url: bestThumb(v.snippet?.thumbnails), fetched_at: now, is_short: null as boolean | null,
+        description: String(v.snippet?.description ?? "").slice(0, 3000) || null,
+        tags: Array.isArray(v.snippet?.tags) ? v.snippet.tags.slice(0, 30).map((t: unknown) => String(t).slice(0, 60)) : null,
       }));
       await classifyShorts(rows);
       if (rows.length) {
@@ -181,26 +203,35 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
   if (!(await authorized(req))) return json({ error: "unauthorized" }, 401);
 
+  let body: any = {};
+  try { body = await req.json(); } catch { /* corpo vazio (cron) */ }
+  // { email, since } = atualizar só um influencer, voltando até a data (histórico do contrato).
+  const only = typeof body?.email === "string" && body.email ? body.email.toLowerCase() : null;
+  const opts: SyncOpts = typeof body?.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.since) ? { since: body.since } : {};
+
   const started = Date.now();
   let result: Record<string, unknown>;
   try {
     const { data: affs, error } = await sb.from("affiliates").select("email, youtube").not("youtube", "is", null);
     if (error) throw error;
-    const wanted = (affs ?? []).filter((a) => (a.youtube ?? "").trim());
+    const all = (affs ?? []).filter((a) => (a.youtube ?? "").trim());
+    const wanted = only ? all.filter((a) => a.email.toLowerCase() === only) : all;
     const { data: existing } = await sb.from("youtube_channels").select("affiliate_email, input_url, channel_id");
     const known = new Map((existing ?? []).map((c) => [c.affiliate_email, c]));
 
     // Link apagado no painel → canal sai do painel do YouTube.
-    const keep = new Set(wanted.map((a) => a.email));
-    const stale = [...known.keys()].filter((e) => !keep.has(e));
-    if (stale.length) await sb.from("youtube_channels").delete().in("affiliate_email", stale);
+    if (!only) {
+      const keep = new Set(all.map((a) => a.email));
+      const stale = [...known.keys()].filter((e) => !keep.has(e));
+      if (stale.length) await sb.from("youtube_channels").delete().in("affiliate_email", stale);
+    }
 
     let ok = 0, videos = 0;
     const errors: Record<string, string> = {};
     for (const a of wanted) {
       const url = a.youtube.trim();
       try {
-        videos += await syncChannel(a.email, url, known.get(a.email));
+        videos += await syncChannel(a.email, url, known.get(a.email), opts);
         ok++;
       } catch (e) {
         const msg = String((e as Error)?.message ?? e);
@@ -216,6 +247,6 @@ Deno.serve(async (req) => {
   } catch (e) {
     result = { ok: false, error: String((e as Error)?.message ?? e) };
   }
-  await sb.from("sync_state").upsert({ key: "youtube_last_run", value: { at: new Date().toISOString(), ...result }, updated_at: new Date().toISOString() });
+  if (!only) await sb.from("sync_state").upsert({ key: "youtube_last_run", value: { at: new Date().toISOString(), ...result }, updated_at: new Date().toISOString() });
   return json(result, result.ok ? 200 : 500);
 });
