@@ -1,2 +1,264 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="robots" content="noindex, nofollow"><title></title></head><body></body></html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
+<title>Flow Tools</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<script src="assets/flow-theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Cores e tokens: assets/flow-theme.css */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(900px 500px at 15% -10%, var(--bg-glow-a), transparent 60%),
+      radial-gradient(700px 500px at 100% 0%, var(--bg-glow-b), transparent 60%),
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 40px 40px;
+  }
+  a { color: var(--accent); }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* ---------- Topo ---------- */
+  header.top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 22px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
+  .brand img { width: 30px; height: 30px; }
+  .brand b { font: 800 20px/1 var(--font-display); letter-spacing: .02em; }
+  .brand b span { color: var(--accent); text-shadow: var(--text-glow); }
+  .ig {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    font-size: 13px; font-weight: 600; color: var(--text-dim);
+    padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--btn-bg);
+  }
+  .ig:hover { color: var(--text); border-color: var(--border-strong); }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 48px 0 40px; max-width: 760px; }
+  .eyebrow {
+    display: inline-block; font: 600 12px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); padding: 7px 12px; border: 1px solid var(--border-strong); border-radius: 999px;
+    background: var(--accent-soft);
+  }
+  h1 {
+    font: 800 clamp(32px, 5.4vw, 56px)/1.08 var(--font-display);
+    margin: 20px 0 16px; letter-spacing: -.01em; text-wrap: balance;
+  }
+  h1 em { font-style: normal; color: var(--accent); text-shadow: var(--text-glow); }
+  .lead { font-size: 17px; color: var(--text-dim); margin: 0; max-width: 620px; }
+
+  /* ---------- Seções ---------- */
+  section { margin-top: 56px; }
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  h2 { font: 700 24px/1.2 var(--font-display); margin: 0; }
+  .sec-head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); backdrop-filter: blur(8px);
+  }
+
+  /* Painéis internos */
+  .panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .panel {
+    display: flex; flex-direction: column; gap: 10px; padding: 22px; text-decoration: none; color: var(--text);
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .panel:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow), var(--glow); }
+  .panel:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .panel .ico {
+    width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border-strong);
+  }
+  .panel h3 { margin: 4px 0 0; font: 700 19px/1.2 var(--font-display); }
+  .panel p { margin: 0; color: var(--text-dim); font-size: 14px; flex: 1; }
+  .panel .path { font: 500 12.5px/1 var(--font-mono); color: var(--text-muted); }
+  .panel .go { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; color: var(--accent); }
+
+  /* Ferramentas */
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tool { display: flex; flex-direction: column; padding: 24px; position: relative; overflow: hidden; }
+  .tool::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tc);
+    box-shadow: 0 0 18px var(--tc);
+  }
+  .tool.pages { --tc: var(--c-pages); }
+  .tool.tracking { --tc: var(--c-tracking); }
+  .tool.spy { --tc: var(--c-spy); }
+  .tool .tag { font: 600 11.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--tc); }
+  .tool h3 { margin: 10px 0 8px; font: 800 24px/1.15 var(--font-display); }
+  .tool > p { margin: 0 0 16px; color: var(--text-dim); font-size: 14.5px; }
+  .tool ul { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 10px; flex: 1; }
+  .tool li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 14px; color: var(--text); }
+  .tool li svg { margin-top: 3px; color: var(--tc); }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 18px; border-radius: 10px; font: 700 14px/1 var(--font-body); text-decoration: none;
+    letter-spacing: .02em; transition: filter .15s, box-shadow .15s, border-color .15s;
+  }
+  .btn-primary { background: var(--btn-grad); color: var(--accent-ink); }
+  .btn-primary:hover { filter: brightness(1.08); box-shadow: var(--glow); }
+  .btn-ghost { background: var(--btn-bg); color: var(--text); border: 1px solid var(--border-strong); }
+  .btn-ghost:hover { border-color: var(--accent); }
+  .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+  /* Contato */
+  .contact { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px; flex-wrap: wrap; }
+  .contact h2 { margin-bottom: 4px; }
+  .contact p { margin: 0; color: var(--text-dim); font-size: 14.5px; }
+  .contact .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 13px;
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+  @media (max-width: 900px) {
+    .panels, .tools { grid-template-columns: 1fr; }
+    .hero { padding-top: 24px; }
+  }
+  @media (max-width: 520px) {
+    .wrap { padding: 0 16px 88px; }
+    .ig span { display: none; }
+    .contact .actions, .contact .btn { width: 100%; }
+  }
+</style>
+<link rel="stylesheet" href="assets/flow-theme.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./" aria-label="Flow Tools">
+      <img src="assets/favicon.svg" alt="">
+      <b>Flow<span>Tools</span></b>
+    </a>
+    <a class="ig" href="https://www.instagram.com/useaflow/" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>
+      <span>@useaflow</span>
+    </a>
+  </header>
+
+  <div class="hero">
+    <span class="eyebrow">Ecossistema Flow</span>
+    <h1>Onde grandes operações de afiliados são <em>construídas</em>.</h1>
+    <p class="lead">Ferramentas para criar páginas, rastrear lucro e descobrir produtos vencedores, e os painéis internos que acompanham tudo isso.</p>
+  </div>
+
+  <section aria-labelledby="h-paineis">
+    <div class="sec-head">
+      <h2 id="h-paineis">Painéis internos</h2>
+      <p>Acesso restrito ao time Flow</p>
+    </div>
+    <div class="panels">
+      <a class="panel card" href="financeiro/">
+        <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>
+        <h3>Financeiro</h3>
+        <p>Receita, despesas e margem por ferramenta, com histórico mensal e alertas de faturamento.</p>
+        <span class="path">/financeiro/</span>
+        <span class="go">Abrir painel <svg width="16" height="16" aria-hidden="true"><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="panel card" href="afiliados/">
+        <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg></span>
+        <h3>Afiliados</h3>
+        <p>Vendas, faturamento e comissões dos afiliados da Kiwify, base de influencers e radar de mercado.</p>
+        <span class="path">/afiliados/</span>
+        <span class="go">Abrir painel <svg width="16" height="16" aria-hidden="true"><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="panel card" href="equipe/">
+        <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+        <h3>Equipe</h3>
+        <p>Gestão de acessos do time: quem entra em cada painel e criação de novos usuários.</p>
+        <span class="path">/equipe/</span>
+        <span class="go">Abrir painel <svg width="16" height="16" aria-hidden="true"><use href="#i-arrow"/></svg></span>
+      </a>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-ferramentas">
+    <div class="sec-head">
+      <h2 id="h-ferramentas">Conheça as ferramentas Flow</h2>
+      <p>Do produto certo à página pronta e ao lucro no bolso</p>
+    </div>
+    <div class="tools">
+      <article class="tool pages card">
+        <span class="tag">Páginas com IA</span>
+        <h3>Flow Pages</h3>
+        <p>Presells e páginas de review prontas para o teu produto em menos de um minuto, para anunciar no Brasil e no exterior.</p>
+        <ul>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Páginas estruturadas pela IA com benefícios, ingredientes e vídeos.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Páginas mais rápidas, que podem baixar o custo por clique no Google Ads.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Topo e fundo de funil numa só ferramenta, com pop-ups e 16 idiomas.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Modelos validados, códigos de rastreio e área de membros.</li>
+        </ul>
+        <a class="btn btn-primary" href="https://paginas.flowpagestool.com/flow-pages-tool-bio/" target="_blank" rel="noopener">Acessar Flow Pages <svg width="16" height="16" aria-hidden="true"><use href="#i-ext"/></svg></a>
+      </article>
+
+      <article class="tool tracking card">
+        <span class="tag">Inteligência e segurança</span>
+        <h3>Flow Tracking</h3>
+        <p>O centro de inteligência e segurança da tua operação: resultados e lucro num só lugar.</p>
+        <ul>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Receita, custos e lucro líquido por campanha em tempo real.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Bloqueio automático de IPs contra cliques fraudulentos.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Conversões rastreadas e enviadas automaticamente ao Google Ads.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Notificação de vendas no celular e mapa de cliques.</li>
+        </ul>
+        <a class="btn btn-primary" href="https://oficialflowtracking.com/flow-tracking/" target="_blank" rel="noopener">Acessar Flow Tracking <svg width="16" height="16" aria-hidden="true"><use href="#i-ext"/></svg></a>
+      </article>
+
+      <article class="tool spy card">
+        <span class="tag">Inteligência de mercado</span>
+        <h3>Flow Spy</h3>
+        <p>Decide em quais produtos investir antes de gastar, com dados reais do mercado.</p>
+        <ul>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Potencial dos produtos, nichos em alta e criativos vencedores dos concorrentes.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Sinais de escala antes de investir pesado.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Dados complexos transformados em decisões práticas.</li>
+          <li><svg width="16" height="16" aria-hidden="true"><use href="#i-check"/></svg>Atualizações contínuas e novas funcionalidades.</li>
+        </ul>
+        <a class="btn btn-primary" href="https://flowspytool.com/flow-spy/" target="_blank" rel="noopener">Acessar Flow Spy <svg width="16" height="16" aria-hidden="true"><use href="#i-ext"/></svg></a>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-contato">
+    <div class="contact card">
+      <div>
+        <h2 id="h-contato">Fale com o time Flow</h2>
+        <p>Tira dúvidas sobre as ferramentas ou recebe suporte se já é usuário.</p>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost" href="https://mais.red/run/33254" target="_blank" rel="noopener">Não sou usuário Flow</a>
+        <a class="btn btn-primary" href="https://mais.red/run/33250" target="_blank" rel="noopener">Sou usuário Flow</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© Flow Tools</span>
+    <a href="https://www.instagram.com/useaflow/" target="_blank" rel="noopener">@useaflow</a>
+  </footer>
+</div>
+</body>
+</html>
