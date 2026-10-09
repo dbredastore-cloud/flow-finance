@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Mesma marca do .brand .mark em flow-theme.css: anel verde com brilho e ponto central. -->
+  <defs>
+    <linearGradient id="ring" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#22e37a"/>
+      <stop offset="0.4" stop-color="#0b3d24"/>
+      <stop offset="0.7" stop-color="#22e37a"/>
+      <stop offset="0.85" stop-color="#eafff3"/>
+      <stop offset="1" stop-color="#22e37a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="31" fill="#030705"/>
+  <circle cx="32" cy="32" r="27" fill="url(#ring)"/>
+  <circle cx="32" cy="32" r="18" fill="#051009"/>
+  <circle cx="32" cy="32" r="8" fill="#22e37a"/>
+</svg>
