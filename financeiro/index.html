@@ -1788,11 +1788,26 @@
 
   // Salva a data da cobrança sem redesenhar a linha: redesenhar enquanto a pessoa ainda digita o ano
   // apagava o campo. Só atualiza o rótulo e mostra "✓ salvo".
+  var moveTimers = {};
+  // Mês (AAAAMM) da data AAAA-MM-DD, ou null se a data for vazia/inválida.
+  function ymOfDate(value) {
+    var mm = /^(\d{4})-(\d{2})-\d{2}$/.exec(value || "");
+    return mm && +mm[2] >= 1 && +mm[2] <= 12 ? ym(+mm[1], +mm[2]) : null;
+  }
+
   async function saveChargeDate(itemId, value, m) {
+    clearTimeout(moveTimers[itemId]);
     var input = document.querySelector('#detail-' + m + ' .exp-date[data-item-id="' + itemId + '"]');
     if (value) {
       var y = parseInt(value.slice(0, 4), 10);
       if (!(y >= 2000 && y <= 2100)) return; // ano ainda incompleto (ex.: 0002) — espera terminar de digitar
+      var target = ymOfDate(value);
+      if (target != null && target !== m) {
+        // A data é de outro mês: o lançamento passa para o mês da data. Espera um instante para a pessoa
+        // terminar de digitar (ao digitar "10" o campo passa por "01" antes).
+        moveTimers[itemId] = setTimeout(function () { moveExpenseToMonth(itemId, value, m); }, 1100);
+        return;
+      }
     }
     var res = await sb.from("monthly_expenses").update({ charged_on: value || null }).eq("id", itemId).select("id");
     if (res.error) { toast("Erro ao salvar a data: " + res.error.message, true); return; }
@@ -1810,6 +1825,42 @@
     var ok = box.querySelector(".charge-ok");
     ok.classList.add("on");
     setTimeout(function () { ok.classList.remove("on"); }, 2200);
+  }
+
+  // Mudou a data da cobrança para outro mês: o lançamento vai para o mês da nova data.
+  async function moveExpenseToMonth(itemId, value, m) {
+    var target = ymOfDate(value);
+    if (target == null || target === m) return;
+    var input = document.querySelector('#detail-' + m + ' .exp-date[data-item-id="' + itemId + '"]');
+    if (input && input.value !== value) return; // a data mudou de novo nesse meio-tempo
+    var cur = await sb.from("monthly_expenses").select("id, tool_id, category_id, split_total, year, month").eq("id", itemId).maybeSingle();
+    if (cur.error || !cur.data) { toast("Não foi possível localizar esta despesa.", true); return; }
+    if (cur.data.year * 100 + cur.data.month === target) { await refreshMonth(m); return; }
+    var res = await sb.from("monthly_expenses").update({ charged_on: value, year: ymY(target), month: ymM(target) }).eq("id", itemId).select("id");
+    if (res.error) { toast("Erro ao mover para outro mês: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
+    invalidateSummaryCache([cur.data.tool_id]);
+    toast("Despesa movida para " + ymFull(target) + ", o mês da data da cobrança.");
+    if (cur.data.split_total != null) await offerSplitMove(cur.data, value, target, m);
+    await refreshMonth(m);
+  }
+  // Despesa rateada: as partes das outras ferramentas têm a mesma cobrança, então oferece mover junto.
+  async function offerSplitMove(item, value, target, m) {
+    var cur = state.categories.find(function (c) { return c.id === item.category_id; });
+    if (!cur) return;
+    var oc = await sb.from("expense_categories").select("id, tool_id, name").neq("tool_id", item.tool_id);
+    if (oc.error) return;
+    var ids = (oc.data || []).filter(function (c) { return c.name.toLowerCase() === cur.name.toLowerCase(); }).map(function (c) { return c.id; });
+    if (!ids.length) return;
+    var ex = await sb.from("monthly_expenses").select("id, tool_id, split_total").eq("year", item.year).eq("month", item.month).in("category_id", ids);
+    if (ex.error) return;
+    var same = (ex.data || []).filter(function (e) { return e.split_total != null && Number(e.split_total) === Number(item.split_total); });
+    if (!same.length) return;
+    var names = same.map(function (e) { var t = state.tools.find(function (x) { return x.id === e.tool_id; }); return t ? t.name : "outra ferramenta"; }).join(", ");
+    if (!window.confirm('"' + cur.name + '" foi rateada com ' + names + ". Mover as partes de lá também para " + ymFull(target) + "?")) return;
+    var up = await sb.from("monthly_expenses").update({ charged_on: value, year: ymY(target), month: ymM(target) }).in("id", same.map(function (e) { return e.id; })).select("id");
+    if (up.error) toast("Moveu aqui, mas falhou nas outras ferramentas: " + up.error.message, true);
+    else { invalidateSummaryCache(same.map(function (e) { return e.tool_id; })); toast("Partes movidas também em " + (up.data || []).length + " ferramenta(s)."); }
   }
 
   // Dia fixo de cobrança da categoria: aparece em todos os meses que não têm data própria.
@@ -1879,11 +1930,14 @@
     }
 
     // Cada "Adicionar" cria um lançamento novo: a mesma categoria pode ter vários no mês.
-    var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(m), month: ymM(m), amount: amount, paid_via: paidVia };
+    // Com data de cobrança de outro mês, o lançamento entra no mês da data.
+    var dest = ymOfDate(chargedOn) || m;
+    var row = { tool_id: state.activeToolId, category_id: categoryId, year: ymY(dest), month: ymM(dest), amount: amount, paid_via: paidVia };
     if (chargedOn) row.charged_on = chargedOn;
     var res = await sb.from("monthly_expenses").insert(row);
     if (res.error) { toast("Erro ao salvar despesa: " + res.error.message, true); return; }
-    toast("Despesa lançada.");
+    invalidateSummaryCache([state.activeToolId]);
+    toast(dest === m ? "Despesa lançada." : "Despesa lançada em " + ymFull(dest) + ", o mês da data da cobrança.");
     await refreshMonth(m);
   }
 
@@ -1931,8 +1985,9 @@
     }
 
     // Lançamento novo em cada ferramenta (não substitui os que já existem: a categoria pode ter vários no mês).
+    var dest = ymOfDate(chargedOn) || m; // data de cobrança de outro mês: o rateio entra no mês da data
     var rows = targets.map(function (t, idx) {
-      var row = { tool_id: t.id, category_id: catIds[idx], year: ymY(m), month: ymM(m), amount: shares[idx], split_total: total, split_parts: targets.length };
+      var row = { tool_id: t.id, category_id: catIds[idx], year: ymY(dest), month: ymM(dest), amount: shares[idx], split_total: total, split_parts: targets.length };
       if (chargedOn) row.charged_on = chargedOn; // a cobrança é uma só no cartão: mesma data em todas as partes
       if (paidVia) row.paid_via = paidVia;
       return row;
@@ -1940,7 +1995,7 @@
     var up = await sb.from("monthly_expenses").insert(rows);
     if (up.error) { toast("Erro ao ratear: " + up.error.message, true); return; }
     invalidateSummaryCache(toolIds);
-    toast("Valor de " + fmtBRL(total) + " rateado entre " + targets.map(function (t) { return t.name; }).join(", ") + ".");
+    toast("Valor de " + fmtBRL(total) + " rateado entre " + targets.map(function (t) { return t.name; }).join(", ") + (dest === m ? "." : " em " + ymFull(dest) + ", o mês da data da cobrança."));
     await refreshMonth(m);
   }
 
