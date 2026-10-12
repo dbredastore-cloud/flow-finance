@@ -455,7 +455,7 @@ window.InfluencerDash = (function () {
   // Valor de partida para medir o ganho do dia d: fim do dia anterior; no 1º registro, ele mesmo.
   function baseAt(ser, d, key) { return d - 1 >= ser[0].d ? valueAt(ser, d - 1, key) : valueAt(ser, ser[0].d, key); }
 
-  var PRESETS = [["today", "Hoje"], ["yesterday", "Ontem"], ["7d", "7 dias"], ["15d", "15 dias"], ["month", "Este mês"], ["lastmonth", "Mês passado"], ["custom", "Personalizado"]];
+  var PRESETS = [["today", "Hoje"], ["yesterday", "Ontem"], ["7d", "7 dias"], ["15d", "15 dias"], ["month", "Este mês"], ["lastmonth", "Mês passado"], ["all", "Todo o período"], ["custom", "Personalizado"]];
   // Janela pedida pelo filtro, sempre a partir de hoje (não do último registro).
   function requestedWindow() {
     var t = todayDn(), r = S.range;
@@ -466,6 +466,7 @@ window.InfluencerDash = (function () {
       case "15d": return { from: t - 14, to: t };
       case "month": return { from: monthStart(t), to: t };
       case "lastmonth": return { from: monthStart(t, -1), to: monthStart(t) - 1 };
+      case "all": return { from: (S.snaps && S.snaps.length) ? Math.min(dn(S.snaps[0].day), t) : t, to: t };
       default:
         var f = r.from != null ? r.from : t - 29, to = r.to != null ? r.to : t;
         return { from: Math.min(f, to), to: Math.max(f, to) };
@@ -473,6 +474,7 @@ window.InfluencerDash = (function () {
   }
   // Setas ‹ ›: período anterior/seguinte do mesmo tamanho. Meses inteiros andam de mês em mês; o resto anda a quantidade de dias da janela.
   function stepInfo(req, first) {
+    if (S.range.preset === "all") return { prevOff: true, nextOff: true, prevTip: "Indisponível em Todo o período", nextTip: "Indisponível em Todo o período" };
     var t = todayDn(), m = monthSpanOf(req, t), n = m ? m.n : req.to - req.from + 1;
     var unit = m ? (n === 1 ? "mês" : n + " meses") : (n === 1 ? "dia" : n + " dias");
     return { prevOff: req.from <= first, nextOff: req.to >= t,
@@ -488,6 +490,7 @@ window.InfluencerDash = (function () {
     return { n: (b.getUTCFullYear() * 12 + b.getUTCMonth()) - (a.getUTCFullYear() * 12 + a.getUTCMonth()) + 1 };
   }
   function stepWindow(dir) {
+    if (S.range.preset === "all") return;
     var req = requestedWindow(), t = todayDn(), m = monthSpanOf(req, t), from, to;
     if (m) { from = monthStart(req.from, dir * m.n); to = monthStart(req.from, dir * m.n + m.n) - 1; }
     else { var len = req.to - req.from + 1; from = req.from + dir * len; to = req.to + dir * len; }
