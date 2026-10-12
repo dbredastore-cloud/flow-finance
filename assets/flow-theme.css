@@ -12,6 +12,7 @@
   --surface: rgba(9, 20, 14, 0.9);
   --surface-2: rgba(34, 227, 122, 0.07);
   --surface-solid: #0a1510;
+  --card-bg: rgba(8, 19, 13, 0.7);
   --border: rgba(34, 227, 122, 0.13);
   --border-strong: rgba(34, 227, 122, 0.28);
   --text: #ecfff5;
@@ -80,6 +81,7 @@
   --surface: #ffffff;
   --surface-2: rgba(8, 115, 63, 0.07);
   --surface-solid: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.76);
   --border: rgba(8, 115, 63, 0.2);
   --border-strong: #688677;
   --text: #0c1f15;
@@ -147,7 +149,14 @@ body::after {
   content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
   background:
     radial-gradient(1100px 520px at 78% -8%, var(--bg-glow-a), transparent 62%),
-    radial-gradient(900px 480px at -12% 108%, var(--bg-glow-b), transparent 60%);
+    radial-gradient(900px 480px at -12% 108%, var(--bg-glow-b), transparent 60%),
+    url("bg-finance-dark.svg") center / cover no-repeat;   /* imagem de fundo: gráficos, eixos e curvas, estilo científico */
+}
+:root[data-theme="light"] body::after {
+  background:
+    radial-gradient(1100px 520px at 78% -8%, var(--bg-glow-a), transparent 62%),
+    radial-gradient(900px 480px at -12% 108%, var(--bg-glow-b), transparent 60%),
+    url("bg-finance-light.svg") center / cover no-repeat;
 }
 /* Grade de fundo que some nas bordas, lembrando o piso das logos. */
 body::before {
@@ -215,6 +224,8 @@ a:hover { text-shadow: var(--link-glow); }
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
+/* Cartões levemente translúcidos: a imagem de fundo aparece atrás dos gráficos e das linhas. */
+.panel, .kpi, .alerts, .login-card { background: var(--card-bg); }
 .panel, .kpi, .alerts, .login-card { position: relative; overflow: hidden; }
 /* Filete de luz no topo dos cartões. */
 .panel::before, .kpi::before, .login-card::before {
