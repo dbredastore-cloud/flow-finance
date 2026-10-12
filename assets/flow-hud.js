@@ -7,38 +7,49 @@ window.FlowHud = (function () {
   function id(prefix) { return prefix + (++seq); }
   function n1(v) { return Math.round(v * 10) / 10; }
 
-  /* Máscara de blocos: barras viram pilhas de segmentos, com frestas finas alinhadas à linha de base.
-     Uso: defs += FlowHud.seg("sg1", W, H, baseY); elemento com mask="url(#sg1)". */
-  function seg(maskId, W, H, baseY, size) {
-    size = size || 6;
-    var off = ((baseY % size) + size) % size;
-    return '<pattern id="' + maskId + 'p" width="10" height="' + size + '" patternUnits="userSpaceOnUse" patternTransform="translate(0 ' + n1(off) + ')">' +
-      '<rect width="10" height="' + size + '" fill="#fff"/><rect width="10" height="1.8" fill="#000"/></pattern>' +
-      '<mask id="' + maskId + '" maskUnits="userSpaceOnUse" x="0" y="0" width="' + W + '" height="' + H + '"><rect width="' + W + '" height="' + H + '" fill="url(#' + maskId + 'p)"/></mask>';
+  /* Estilo minimalista: linhas suaves, áreas em degradê leve, grade fina e barras arredondadas.
+     seg/hatch/ruler existem só por compatibilidade com os gráficos antigos e agora não desenham nada visível. */
+
+  // Máscara neutra (tudo visível): as barras deixam de ser empilhadas em blocos.
+  function seg(maskId, W, H) {
+    return '<mask id="' + maskId + '" maskUnits="userSpaceOnUse" x="0" y="0" width="' + W + '" height="' + H + '"><rect width="' + W + '" height="' + H + '" fill="#fff"/></mask>';
   }
 
-  /* Hachura diagonal (área sob a linha, como nas referências). */
-  function hatch(patId, color, opacity) {
-    return '<pattern id="' + patId + '" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
-      '<line x1="0" y1="0" x2="0" y2="7" stroke="' + color + '" stroke-width="1.3" stroke-opacity="' + (opacity == null ? 0.42 : opacity) + '"/></pattern>';
+  // Sem hachura.
+  function hatch(patId) {
+    return '<pattern id="' + patId + '" width="4" height="4" patternUnits="userSpaceOnUse"/>';
   }
 
-  /* Degradê vertical: cor viva no alto, mais suave embaixo (mantém os blocos visíveis). */
+  /* Degradê vertical suave (barras: cor firme no alto, um pouco mais leve embaixo). */
   function vgrad(gradId, color, topOpacity, bottomOpacity) {
-    return '<linearGradient id="' + gradId + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity="' + (topOpacity == null ? 1 : topOpacity) + '"/>' +
-      '<stop offset="100%" stop-color="' + color + '" stop-opacity="' + (bottomOpacity == null ? 0.45 : bottomOpacity) + '"/></linearGradient>';
+    var top = topOpacity == null ? 1 : topOpacity, bottom = bottomOpacity == null ? 0.55 : bottomOpacity;
+    return '<linearGradient id="' + gradId + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity="' + Math.min(top, 0.95) + '"/>' +
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="' + Math.max(bottom, 0.6) + '"/></linearGradient>';
   }
 
-  /* Régua no eixo: marcas pequenas a cada passo e maiores a cada `majorEvery`. */
-  function ruler(x0, x1, y, count, majorEvery, color) {
-    var out = "", step = count > 0 ? (x1 - x0) / count : 0;
-    for (var i = 0; i <= count; i++) {
-      var x = x0 + step * i, major = majorEvery && i % majorEvery === 0;
-      out += '<line x1="' + n1(x) + '" x2="' + n1(x) + '" y1="' + y + '" y2="' + (y + (major ? 6 : 3.5)) + '" stroke="' + color + '" stroke-opacity="' + (major ? 0.9 : 0.5) + '" stroke-width="1"/>';
+  /* Área sob a linha: a cor some devagar até o fundo (como nos painéis de referência). */
+  function area(gradId, color, topOpacity) {
+    return '<linearGradient id="' + gradId + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + color + '" stop-opacity="' + (topOpacity == null ? 0.2 : topOpacity) + '"/>' +
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient>';
+  }
+
+  /* Curva suave passando pelos pontos [[x, y], …] (Catmull-Rom → Bézier). */
+  function smooth(pts) {
+    if (!pts.length) return "";
+    var d = "M" + n1(pts[0][0]) + "," + n1(pts[0][1]);
+    if (pts.length === 1) return d;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      // A altura dos pontos de controle fica entre os dois pontos vizinhos: a curva não "passa" do valor máximo/mínimo (nem abaixo do zero).
+      var lo = Math.min(p1[1], p2[1]), hi = Math.max(p1[1], p2[1]);
+      var c1y = Math.max(lo, Math.min(hi, p1[1] + (p2[1] - p0[1]) / 6)), c2y = Math.max(lo, Math.min(hi, p2[1] - (p3[1] - p1[1]) / 6));
+      d += " C" + n1(p1[0] + (p2[0] - p0[0]) / 6) + "," + n1(c1y) + " " + n1(p2[0] - (p3[0] - p1[0]) / 6) + "," + n1(c2y) + " " + n1(p2[0]) + "," + n1(p2[1]);
     }
-    return out;
+    return d;
   }
 
+  /* Sem régua no eixo. */
+  function ruler() { return ""; }
   /* Gauge circular: anel de marcas + arco de progresso com brilho + valor no centro.
      opts: { pct 0–100, color, size, label, text } */
   function ring(opts) {
@@ -58,5 +69,5 @@ window.FlowHud = (function () {
     return out + "</svg>";
   }
 
-  return { tok: tok, id: id, seg: seg, hatch: hatch, vgrad: vgrad, ruler: ruler, ring: ring };
+  return { tok: tok, id: id, seg: seg, hatch: hatch, vgrad: vgrad, area: area, smooth: smooth, ruler: ruler, ring: ring };
 })();

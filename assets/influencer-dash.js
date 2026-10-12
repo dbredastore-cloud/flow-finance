@@ -338,7 +338,7 @@ window.InfluencerDash = (function () {
       bodies += '<rect class="mr-vbar' + (v.short ? " short" : "") + '" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="url(#' + (isF ? "fdgF" : "fdgA") + ')"/>';
       tops += '<rect class="hud-glow" style="color:' + col + ';pointer-events:none;opacity:' + (v.short ? 0.55 : 1) + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2" rx="1" fill="' + col + '"/>';
     });
-    s += '<g mask="url(#fdseg)">' + bodies + "</g>" + tops;
+    s += bodies;
     if (medV != null) s += '<line class="med" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(medV) + '" y2="' + Y(medV) + '"/><text x="' + (W - mg.r) + '" y="' + (Y(medV) - 5) + '" text-anchor="end" style="fill:var(--text-dim)">mediana ' + fmtN(medV) + "</text>";
     [0, Math.floor((list.length - 1) / 2), list.length - 1].forEach(function (i, k) {
       if (!list[i]) return;

@@ -146,7 +146,8 @@
 .mr-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .mr-chart text { fill: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px; }
 .mr-chart .ax { stroke: var(--border-strong); stroke-width: 1; }
-.mr-chart .gridl { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+.mr-chart .gridl { stroke: var(--chart-grid); stroke-width: 1; }
+.mr-chart svg rect { rx: 3px; }
 .mr-chart .med { stroke: rgba(var(--accent-rgb), 0.45); stroke-width: 1; stroke-dasharray: 5 5; }
 .mr-chart .quad { fill: var(--text-muted); opacity: .75; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .mr-bub { cursor: pointer; color: var(--accent); fill: rgba(var(--accent-rgb), var(--o, .3)); stroke: var(--accent); stroke-width: 1.2; transition: stroke-width .15s, filter .15s; filter: var(--hud-glow); }

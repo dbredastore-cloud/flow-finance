@@ -1364,7 +1364,7 @@
     var accC = FlowHud.tok("--accent"), mutC = FlowHud.tok("--text-muted"), flowC = FlowHud.tok("--warning");
     var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Views de cada vídeo"><defs>' + FlowHud.seg("vseg", W, H, mg.t + ih) + FlowHud.vgrad("vgT", accC, 1, 0.5) + FlowHud.vgrad("vgO", mutC, 0.95, 0.4) + FlowHud.vgrad("vgF", flowC, 1, 0.5) + "</defs>";
     for (var t = 0; t <= 4; t++) { var yv = max * t / 4; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(yv) + '" y2="' + Y(yv) + '"/><text x="' + (mg.l - 8) + '" y="' + (Y(yv) + 3) + '" text-anchor="end">' + fmtN(yv) + "</text>"; }
-    s += '<line class="ax" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + (H - mg.b) + '" y2="' + (H - mg.b) + '"/>' + FlowHud.ruler(mg.l + bw / 2, W - mg.r - bw / 2, H - mg.b + 1, Math.max(list.length - 1, 1), 5, mutC);
+    s += '<line class="ax" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + (H - mg.b) + '" y2="' + (H - mg.b) + '"/>';
     var bodies = "", tops = "";
     list.forEach(function (v, i) {
       var h = Math.max(1.5, v.views / max * ih), x = mg.l + i * bw + bw * 0.14, w = Math.max(2, bw * 0.72);
@@ -1372,7 +1372,7 @@
       bodies += '<rect class="mr-vbar' + (v.topic ? " topic" : "") + (v.short ? " short" : "") + '" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="url(#' + (isF ? "vgF" : v.topic ? "vgT" : "vgO") + ')"/>';
       tops += '<rect class="hud-glow" style="color:' + col + ';pointer-events:none;opacity:' + (v.short ? 0.55 : 1) + '" x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2" rx="1" fill="' + col + '"/>';
     });
-    s += '<g mask="url(#vseg)">' + bodies + "</g>" + tops;
+    s += bodies;
     if (medV != null) s += '<line class="med" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(medV) + '" y2="' + Y(medV) + '"/><text x="' + (W - mg.r) + '" y="' + (Y(medV) - 5) + '" text-anchor="end" style="fill:var(--text-dim)">mediana ' + fmtN(medV) + "</text>";
     [0, Math.floor((list.length - 1) / 2), list.length - 1].forEach(function (i, k) {
       if (!list[i]) return;
@@ -1381,30 +1381,24 @@
     el.innerHTML = s + "</svg>";
     el._list = list;
   }
+  // Barras arredondadas e lisas, com o valor em cima; na opção "highlight" só a maior fica na cor cheia.
   function barChart(el, labels, values, opts) {
     opts = opts || {};
-    var W = Math.max(el.clientWidth || 420, 280), H = 190, mg = { l: 30, r: 8, t: 14, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
+    var W = Math.max(el.clientWidth || 420, 280), H = 190, mg = { l: 30, r: 8, t: 16, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
     var max = Math.max.apply(null, values.concat([1])), bw = iw / values.length, top = values.indexOf(max);
     var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(opts.label || "") + '">';
     for (var t = 0; t <= 2; t++) { var yv = Math.round(max * t / 2), y = mg.t + ih - yv / max * ih; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + y + '" y2="' + y + '"/><text x="' + (mg.l - 6) + '" y="' + (y + 3) + '" text-anchor="end">' + yv + "</text>"; }
     var accC = FlowHud.tok("--accent");
-    // Matriz de pontos (um ponto por unidade), como nos painéis de referência; o dia mais cheio fica em destaque.
-    var d = Math.max(3.5, Math.min(bw * 0.62, ih / max - 2.4, 15));
     values.forEach(function (v, i) {
-      var cx = mg.l + i * bw + bw / 2, isTop = !opts.highlight || i === top, baseY = mg.t + ih, topY = baseY;
-      for (var k = 0; k < v; k++) {
-        var cy = baseY - d / 2 - 2 - k * (d + 2.4);
-        topY = cy - d / 2;
-        s += '<circle class="mr-dot' + (isTop ? "" : " soft") + (k === v - 1 ? " hud-glow" : "") + '" style="color:' + accC + '" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + (d / 2).toFixed(1) + '"/>';
-      }
-      if (!v) s += '<line x1="' + (cx - d / 2).toFixed(1) + '" x2="' + (cx + d / 2).toFixed(1) + '" y1="' + (baseY - 1.5) + '" y2="' + (baseY - 1.5) + '" style="stroke:var(--border-strong)" stroke-width="2" stroke-linecap="round"/>';
-      else s += '<text x="' + cx.toFixed(1) + '" y="' + (topY - 6).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + v + "</text>";
-      s += '<title>' + esc(labels[i] + ": " + v) + "</title>";
-      s += '<text x="' + cx.toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(labels[i]) + "</text>";
+      var cx = mg.l + i * bw + bw / 2, w = Math.max(4, Math.min(bw * 0.55, 26)), h = v ? Math.max(3, v / max * ih) : 0, isTop = !opts.highlight || i === top;
+      if (v) {
+        s += '<rect x="' + (cx - w / 2).toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4" fill="' + accC + '" fill-opacity="' + (isTop ? 0.9 : 0.35) + '"><title>' + esc(labels[i] + ": " + v) + "</title></rect>";
+        s += '<text x="' + cx.toFixed(1) + '" y="' + (mg.t + ih - h - 6).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim)">' + v + "</text>";
+      } else s += '<line x1="' + (cx - w / 2).toFixed(1) + '" x2="' + (cx + w / 2).toFixed(1) + '" y1="' + (mg.t + ih - 1) + '" y2="' + (mg.t + ih - 1) + '" style="stroke:var(--chart-grid-strong)" stroke-width="2" stroke-linecap="round"/>';
+      s += '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(labels[i]) + "</text>";
     });
     el.innerHTML = s + "</svg>";
-  }
-  function drawFullWeekly(weekly) {
+  }  function drawFullWeekly(weekly) {
     var labels = weekly.map(function (_, i) { return i === weekly.length - 1 ? "atual" : "-" + (weekly.length - 1 - i); });
     barChart($("mr-full-weekly"), labels, weekly, { label: "Vídeos por semana" });
   }

@@ -68,12 +68,21 @@
   .secret .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
 
   ol.steps { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8; color: var(--text-dim); }
+  #app { display: flex; min-height: 100vh; }
+  aside.sidebar { position: sticky; top: 0; height: 100vh; flex-shrink: 0; }
+  .eq-body { flex: 1; min-width: 0; }
+  .eq-top { max-width: 980px; margin: 0 auto; padding: 26px 24px 0; }
+  .eq-top h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-family: var(--font-display); }
+  .eq-top p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
+  @media (max-width: 768px) { #app { flex-direction: column; } aside.sidebar { position: static; height: auto; } }
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; transition: all .2s; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; z-index: 99; pointer-events: none; max-width: 90vw; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/flow-nav.css">
 <script src="../assets/flow-theme.js"></script>
+<script src="../assets/flow-nav.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
 </head>
@@ -101,12 +110,21 @@
 </div>
 
 <div id="app" hidden>
-  <header class="topbar">
-    <h1>Equipe</h1>
-    <a class="btn btn-sm" href="../financeiro/">Financeiro</a>
-    <a class="btn btn-sm" href="../afiliados/">Afiliados</a>
-    <div class="sp"><span id="user-email"></span><button class="btn btn-sm" id="logout-btn" type="button">Sair</button></div>
-  </header>
+  <aside class="sidebar fnav">
+    <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Equipe</small></div></div>
+    <nav class="fnav-menu" aria-label="Menu">
+      <div class="fnav-group">Painéis Flow</div>
+      <a class="fnav-item" href="../financeiro/"><i data-ic="wallet"></i><span>Financeiro</span></a>
+      <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item active" href="./" aria-current="page"><i data-ic="shield"></i><span>Equipe</span></a>
+    </nav>
+    <div class="sidebar-foot fnav-foot">
+      <div class="fnav-user"><span class="fnav-avatar" id="user-avatar">·</span><span class="fnav-email note" id="user-email"></span></div>
+      <button class="fnav-item fnav-logout" id="logout-btn" type="button"><i data-ic="logout"></i><span>Sair</span></button>
+    </div>
+  </aside>
+  <div class="eq-body">
+    <header class="eq-top"><h1>Equipe</h1><p>Quem tem acesso aos painéis e as contas de login.</p></header>
   <main>
     <section class="panel">
       <h2>Quem tem acesso</h2>
@@ -157,6 +175,7 @@
       <p class="hint" style="margin:10px 0 0">Esta tela continua criando contas normalmente com o cadastro público desligado, e quem já tem conta continua entrando.</p>
     </section>
   </main>
+  </div>
 </div>
 <div id="toast" role="status"></div>
 

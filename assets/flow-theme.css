@@ -278,11 +278,10 @@ input:disabled { opacity: .6; }
 
 /* ---------- Tooltip dos gráficos ---------- */
 .tooltip, #tooltip {
-  background: var(--tip-bg); border: 1px solid var(--border-strong); color: var(--text);
-  backdrop-filter: blur(8px); box-shadow: 0 0 24px -6px rgba(var(--accent-rgb), 0.55);
-  border-radius: 10px;
+  background: var(--surface-solid); border: 1px solid var(--border); color: var(--text);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45); border-radius: 12px; padding: 10px 12px;
 }
-.tooltip .t-title, #tooltip .t-month { font-family: var(--font-display); letter-spacing: 0.05em; color: var(--accent); }
+.tooltip .t-title, #tooltip .t-month { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
 
 /* ---------- Toast ---------- */
 #toast { box-shadow: var(--glow); font-weight: 700; }
@@ -302,7 +301,7 @@ input:disabled { opacity: .6; }
 }
 
 /* ---------- Gráficos (classes usadas pelo SVG) ---------- */
-.fx-bar { transform-box: fill-box; transform-origin: bottom; animation: fxGrow .7s cubic-bezier(.2, .8, .2, 1) both; transition: filter .15s ease, opacity .15s ease; }
+.fx-bar { transform-box: fill-box; transform-origin: bottom; animation: fxGrow .55s cubic-bezier(.2, .8, .2, 1) both; transition: opacity .15s ease; }
 @keyframes fxGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .fx-line { stroke-dasharray: var(--len, 3000); stroke-dashoffset: var(--len, 3000); animation: fxDraw 1.2s ease-out forwards; }
 @keyframes fxDraw { to { stroke-dashoffset: 0; } }

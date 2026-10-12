@@ -1,45 +1,33 @@
-/* Kit visual HUD (futurista) — gráficos e barras de /financeiro/ e /afiliados/ (ver assets/flow-hud.js).
-   Brilho neon só no modo escuro; no claro vira contorno limpo, mantendo contraste. */
+/* Kit visual dos gráficos de /financeiro/ e /afiliados/ (ver assets/flow-hud.js).
+   Estilo minimalista: linhas suaves, grade fina, sem brilho, moldura ou pulso. */
 
 :root, :root[data-theme="dark"] {
-  --hud-glow: drop-shadow(0 0 5px currentColor);
-  --hud-glow-strong: drop-shadow(0 0 10px currentColor);
-  --hud-frame: rgba(var(--accent-rgb), 0.6);
-  --hud-seg: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px);
-  --hud-track-glow: drop-shadow(0 0 5px rgba(var(--accent-rgb), 0.45));
+  --chart-grid: rgba(180, 205, 192, 0.11);
+  --chart-grid-strong: rgba(180, 205, 192, 0.28);
 }
 :root[data-theme="light"] {
-  --hud-glow: none;
-  --hud-glow-strong: none;
-  --hud-frame: rgba(var(--accent-rgb), 0.75);
-  --hud-seg: repeating-linear-gradient(90deg, #000 0 7px, transparent 7px 9px);
-  --hud-track-glow: none;
+  --chart-grid: rgba(12, 31, 21, 0.09);
+  --chart-grid-strong: rgba(12, 31, 21, 0.26);
 }
 
-.hud-glow { filter: var(--hud-glow); }
-.hud-glow-strong { filter: var(--hud-glow-strong); }
-
-/* Colchetes de canto nos gráficos (moldura de painel de controle). */
+/* Sem brilho neon, moldura de canto nem pulso (os gráficos antigos ainda usam as classes). */
+.hud-glow, .hud-glow-strong { filter: none; }
 .chart-wrap, .mr-chart { position: relative; }
-.chart-wrap::before, .chart-wrap::after, .mr-chart::before, .mr-chart::after {
-  content: ""; position: absolute; width: 14px; height: 14px; border: 2px solid var(--hud-frame); opacity: .75; pointer-events: none; z-index: 1;
-}
-.chart-wrap::before, .mr-chart::before { top: -6px; left: -6px; border-right: none; border-bottom: none; }
-.chart-wrap::after, .mr-chart::after { bottom: -6px; right: -6px; border-left: none; border-top: none; }
+.hud-pulse { display: none; }
 
-/* Pulso no último ponto das linhas. */
-.hud-pulse { transform-box: fill-box; transform-origin: center; animation: hudPulse 2.2s ease-out infinite; }
-@keyframes hudPulse { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(2.1); opacity: 0; } }
+/* Texto dos eixos e barras arredondadas. */
+.chart-wrap svg text, .mr-chart svg text { font-family: var(--font-mono); }
+.fx-bar, .mr-vbar { rx: 4px; ry: 4px; }
+.mr-dot { filter: none; }
 
-/* Barras horizontais em blocos (progresso, ranking, metas). */
-.bar-track, .goal-track, .mr-bar { filter: var(--hud-track-glow); }
+/* Barras de progresso: preenchimento liso e arredondado. */
+.bar-track, .goal-track, .mr-bar { filter: none; border-radius: 999px; }
 .bar-fill, .goal-fill, .mr-bar i {
-  -webkit-mask-image: var(--hud-seg); mask-image: var(--hud-seg);
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.35), var(--accent)) !important; box-shadow: none !important;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.55), var(--accent)) !important; box-shadow: none !important;
 }
-.mr-score.mid .mr-bar i { background: linear-gradient(90deg, rgba(var(--warning-rgb), 0.35), var(--warning)) !important; }
-.mr-score.low .mr-bar i { background: linear-gradient(90deg, rgba(var(--critical-rgb), 0.35), var(--critical)) !important; }
-
+.mr-score.mid .mr-bar i { background: linear-gradient(90deg, rgba(var(--warning-rgb), 0.55), var(--warning)) !important; }
+.mr-score.low .mr-bar i { background: linear-gradient(90deg, rgba(var(--critical-rgb), 0.55), var(--critical)) !important; }
 /* Gauges em anel. */
 .hud-ring { display: block; overflow: visible; }
 .hud-ring-v { font-family: var(--font-mono); font-size: 15px; font-weight: 600; fill: var(--text); }

@@ -201,7 +201,7 @@
   .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
   .panel-head h3 { font-size: 14px; margin: 0; font-weight: 700; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-dim); }
-  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+  .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 
   .chart-wrap { position: relative; }
   #tooltip {
@@ -488,9 +488,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
+<link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/customer-health.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
+<script src="../assets/flow-nav.js"></script>
 <script src="../assets/customer-health.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -556,17 +558,24 @@
 </div>
 
 <div id="app">
-  <aside class="sidebar">
-    <div class="brand"><span class="mark"></span><span>Flow Financeiro</span></div>
-    <button class="tool-btn home-btn" id="home-btn" type="button">⌂ Home</button>
-    <nav class="tool-list" id="tool-list"></nav>
-    <button class="tool-btn health-btn" id="health-btn">⚡ Flow Health</button>
-    <button class="tool-btn clients-btn" id="clients-btn" type="button">♥ Saúde dos clientes</button>
-    <a class="tool-btn" href="../afiliados/" style="text-decoration:none; border-top:1px solid var(--border); border-radius:0; padding-top:14px;">Afiliados →</a>
-    <a class="tool-btn" href="../equipe/" style="text-decoration:none; border-radius:0;">Equipe →</a>
-    <div class="sidebar-foot">
-      <div class="note" id="user-email"></div>
-      <button class="btn btn-ghost" id="logout-btn" style="justify-content:flex-start; padding:6px 8px;">Sair</button>
+  <aside class="sidebar fnav">
+    <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Financeiro</small></div></div>
+    <nav class="fnav-menu" aria-label="Menu">
+      <div class="fnav-group">Visão geral</div>
+      <button class="fnav-item" id="home-btn" type="button"><i data-ic="home"></i><span>Home</span></button>
+      <div class="fnav-group">Ferramentas</div>
+      <div class="fnav-tools" id="tool-list"></div>
+      <div class="fnav-group">Análises</div>
+      <button class="fnav-item" id="health-btn" type="button"><i data-ic="pulse"></i><span>Flow Health</span></button>
+      <button class="fnav-item" id="clients-btn" type="button"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
+      <div class="fnav-group">Painéis Flow</div>
+      <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
+      <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item" href="../equipe/"><i data-ic="shield"></i><span>Equipe</span></a>
+    </nav>
+    <div class="sidebar-foot fnav-foot">
+      <div class="fnav-user"><span class="fnav-avatar" id="user-avatar">·</span><span class="fnav-email note" id="user-email"></span></div>
+      <button class="fnav-item fnav-logout" id="logout-btn" type="button"><i data-ic="logout"></i><span>Sair</span></button>
     </div>
   </aside>
 
@@ -1438,8 +1447,10 @@
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
-      b.className = "tool-btn" + (state.view === "tool" && t.id === state.activeToolId ? " active" : "");
-      b.textContent = t.name;
+      b.type = "button";
+      b.className = "fnav-item" + (state.view === "tool" && t.id === state.activeToolId ? " active" : "");
+      b.innerHTML = '<span class="fnav-dot" style="background:' + toolColor(t, state.tools.indexOf(t)) + '"></span><span></span>';
+      b.lastChild.textContent = t.name;
       b.addEventListener("click", function () { selectTool(t.id); });
       list.appendChild(b);
     });
@@ -2165,9 +2176,9 @@
   function chartColors() {
     var cs = getComputedStyle(document.documentElement);
     var tok = function (k) { return cs.getPropertyValue(k).trim(); };
-    return { grid: tok("--grid"), muted: tok("--text-muted"), fat: tok("--accent"), desp: tok("--accent-2"), liq: tok("--accent-3"), dot: tok("--dot-fill"), surface: tok("--surface-solid") };
+    return { grid: tok("--chart-grid"), gridStrong: tok("--chart-grid-strong"), muted: tok("--text-muted"), fat: tok("--accent"), desp: tok("--accent-2"), liq: tok("--accent-3"), dot: tok("--dot-fill"), surface: tok("--surface-solid") };
   }
-  function dotHtml(c) { return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' + c + ';box-shadow:0 0 8px ' + c + '"></span>'; }
+  function dotHtml(c) { return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' + c + '"></span>'; }
   function svgMessage(svg, W, H, text) {
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.innerHTML = '<text x="' + (W / 2) + '" y="' + (H / 2) + '" text-anchor="middle" font-size="13" fill="' + chartColors().muted + '">' + escHtml(text) + "</text>";
@@ -2185,8 +2196,8 @@
     return String(Math.round(v));
   }
 
-  // Faturamento × despesas × líquido. Até 3 meses: barras agrupadas; acima disso: linhas suaves
-  // (linha neon com brilho, área em degradê sob o faturamento, mira com pontos destacados no hover).
+  // Faturamento × despesas × líquido, no estilo minimalista: linhas suaves de 2px, área em degradê leve sob cada
+  // série, grade fina e marcador só no último ponto (e no hover). Com 1 ou 2 meses: barras arredondadas agrupadas.
   // cfg: { svgId, tipId, rows: [ym], get(ym) -> { fat, desp, liq } | null }
   function drawMoneyChart(cfg) {
     var svg = document.getElementById(cfg.svgId), tooltip = document.getElementById(cfg.tipId);
@@ -2194,7 +2205,7 @@
     var rows = cfg.rows || [], n = rows.length;
     // A escala acompanha a largura da tela (no celular o texto continua legível).
     var cw = svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0;
-    var W = cw ? Math.max(340, Math.min(760, Math.round(cw))) : 760, H = W < 500 ? 240 : 260, padL = 50, padR = 14, padT = 18, padB = 28;
+    var W = cw ? Math.max(340, Math.min(760, Math.round(cw))) : 760, H = W < 500 ? 230 : 250, padL = 46, padR = 12, padT = 12, padB = 26;
     var plotW = W - padL - padR, plotH = H - padT - padB;
     var data = rows.map(function (k) { return cfg.get(k); });
     var vals = [];
@@ -2208,54 +2219,42 @@
     if (maxV === minV) maxV = minV + 1;
     var pad = (maxV - minV) * 0.08;
     maxV += pad; if (minV < 0) minV -= pad;
-    var bars = n <= 3;
+    var bars = n <= 2;
     var slot = plotW / n;
     function x(i) { return bars ? padL + slot * (i + 0.5) : (n === 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1)); }
     function y(v) { return padT + plotH - ((v - minV) / (maxV - minV)) * plotH; }
 
     var keys = ["fat", "desp", "liq"];
     var colorOf = { fat: C.fat, desp: C.desp, liq: C.liq };
-    // Estilo HUD: barras em blocos (máscara), degradê, área hachurada e brilho neon (ver assets/flow-hud.*).
-    var html =
-      "<defs>" +
-        '<linearGradient id="a' + uid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0.35"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
-        '<linearGradient id="x' + uid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + C.fat + '" stop-opacity="0"/><stop offset="50%" stop-color="' + C.fat + '" stop-opacity="0.9"/><stop offset="100%" stop-color="' + C.fat + '" stop-opacity="0"/></linearGradient>' +
-        FlowHud.seg("sg" + uid, W, H, y(0)) + FlowHud.hatch("ht" + uid, C.fat, 0.4) +
-        keys.map(function (k) { return FlowHud.vgrad("bg" + uid + k, colorOf[k], 1, 0.5); }).join("") +
-      "</defs>";
+    var html = "<defs>" + keys.map(function (k) { return FlowHud.area("a" + uid + k, colorOf[k], 0.14); }).join("") + "</defs>";
 
+    // Grade fina e rótulos pequenos (sem linhas verticais).
     for (var g = 0; g <= 4; g++) {
       var gv = minV + ((maxV - minV) * g) / 4, gy = y(gv);
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '" stroke-dasharray="2 5"/>' +
-        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '"/>' +
+        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
     }
     var every = Math.ceil(n / Math.max(3, Math.floor(plotW / (labels[0] && labels[0].indexOf("/") >= 0 ? 46 : 34))));
     for (var mi = 0; mi < n; mi++) {
-      if (!bars && n <= 14) html += '<line x1="' + x(mi) + '" x2="' + x(mi) + '" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="' + C.grid + '" stroke-opacity="0.5"/>';
-      if (mi % every === 0) html += '<text x="' + x(mi) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[mi] + "</text>";
+      if (mi % every === 0) html += '<text x="' + x(mi) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[mi] + "</text>";
     }
-    html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.fat + '" stroke-opacity="0.4"/>';
-
-    // Régua sob o eixo X (marcas a cada mês, maiores nos meses rotulados).
-    html += FlowHud.ruler(bars ? padL + slot / 2 : padL, bars ? padL + plotW - slot / 2 : padL + plotW, padT + plotH + 1, Math.max(n - 1, 1), every, C.muted);
+    if (minV < 0) html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.gridStrong + '"/>';
 
     if (bars) {
-      var bw = Math.max(10, Math.min(46, slot * 0.2)), gap = 6, caps = "", barsHtml = "";
-      html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + C.fat + '" opacity="0"/>';
+      var bw = Math.max(12, Math.min(40, slot * 0.14)), gap = 8, barsHtml = "";
+      html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" rx="8" fill="' + C.muted + '" opacity="0"/>';
       data.forEach(function (d, i) {
         if (!d) return;
         keys.forEach(function (key, ki) {
           var v = d[key];
           if (v == null) return;
           var bx = x(i) + (ki - 1) * (bw + gap) - bw / 2;
-          var top = v >= 0 ? y(v) : y(0), h = Math.max(1, Math.abs(y(v) - y(0)));
-          barsHtml += '<rect class="fx-bar" x="' + bx + '" y="' + top + '" width="' + bw + '" height="' + h + '" fill="url(#bg' + uid + key + ')"/>';
-          // Tampa neon na ponta da barra.
-          caps += '<rect class="hud-glow" style="color:' + colorOf[key] + '" x="' + bx + '" y="' + (v >= 0 ? top : top + h - 2) + '" width="' + bw + '" height="2" rx="1" fill="' + colorOf[key] + '"/>';
-          caps += '<text x="' + (bx + bw / 2) + '" y="' + (v >= 0 ? top - 6 : top + h + 12) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtShort(v) + "</text>";
+          var top = v >= 0 ? y(v) : y(0), h = Math.max(3, Math.abs(y(v) - y(0)));
+          barsHtml += '<rect class="fx-bar" x="' + bx + '" y="' + top + '" width="' + bw + '" height="' + h + '" rx="5" fill="' + colorOf[key] + '" fill-opacity="0.9"/>' +
+            '<text x="' + (bx + bw / 2) + '" y="' + (v >= 0 ? top - 6 : top + h + 12) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtShort(v) + "</text>";
         });
       });
-      html += '<g mask="url(#sg' + uid + ')">' + barsHtml + "</g>" + caps;
+      html += barsHtml;
     } else {
       // Trechos contínuos (meses sem dado interrompem a linha).
       var series = { fat: [], desp: [], liq: [] };
@@ -2266,41 +2265,35 @@
         if (cur.length) out.push(cur);
         return out;
       };
-      runs(series.fat).forEach(function (pts) {
-        if (pts.length < 2) return;
-        var area = smoothPath(pts) + " L" + pts[pts.length - 1][0] + "," + y(0) + " L" + pts[0][0] + "," + y(0) + " Z";
-        html += '<path class="fx-area" d="' + area + '" fill="url(#a' + uid + ')"/><path class="fx-area" d="' + area + '" fill="url(#ht' + uid + ')"/>';
-      });
+      var base = y(Math.max(minV, 0));
       keys.forEach(function (key) {
-        var dash = key === "desp" ? "5 4" : "";
         runs(series[key]).forEach(function (pts) {
           if (pts.length < 2) return;
-          html += '<path class="fx-line hud-glow" style="color:' + colorOf[key] + '" d="' + smoothPath(pts) + '" fill="none" stroke="' + colorOf[key] + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"' + (dash ? ' data-dash="' + dash + '"' : "") + "/>";
+          html += '<path class="fx-area" d="' + FlowHud.smooth(pts) + " L" + pts[pts.length - 1][0] + "," + base + " L" + pts[0][0] + "," + base + ' Z" fill="url(#a' + uid + key + ')"/>';
+        });
+      });
+      keys.forEach(function (key) {
+        runs(series[key]).forEach(function (pts) {
+          if (pts.length < 2) return;
+          html += '<path class="fx-line" d="' + FlowHud.smooth(pts) + '" fill="none" stroke="' + colorOf[key] + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
         });
         var lastI = -1;
         series[key].forEach(function (v, i) {
           if (v === null) return;
           lastI = i;
-          html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="2.6" fill="' + C.dot + '" stroke="' + colorOf[key] + '" stroke-width="1.6"/>';
+          html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="0" fill="' + colorOf[key] + '" stroke="' + C.dot + '" stroke-width="2"/>';
         });
-        // Halo pulsando no último ponto (valor mais recente).
-        if (lastI >= 0) html += '<circle class="hud-pulse" cx="' + x(lastI) + '" cy="' + y(series[key][lastI]) + '" r="5" fill="none" stroke="' + colorOf[key] + '" stroke-width="1.4"/>';
+        if (lastI >= 0) html += '<circle class="fx-end" cx="' + x(lastI) + '" cy="' + y(series[key][lastI]) + '" r="3.5" fill="' + colorOf[key] + '" stroke="' + C.dot + '" stroke-width="2"/>';
       });
-      html += '<line id="c' + uid + '" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="url(#x' + uid + ')" stroke-width="1.5" class="fx-scan" opacity="0"/>';
+      html += '<line id="c' + uid + '" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="' + C.gridStrong + '" stroke-dasharray="3 3" class="fx-scan" opacity="0"/>';
     }
     html += '<rect id="h' + uid + '" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.innerHTML = html;
 
-    // Animação de "desenho": cada linha anima o próprio comprimento; a tracejada
-    // (despesas) recebe o tracejado só depois que termina de desenhar.
+    // Animação de "desenho": cada linha anima o próprio comprimento.
     svg.querySelectorAll(".fx-line").forEach(function (p) {
-      var len = Math.ceil(p.getTotalLength()) + 2;
-      p.style.setProperty("--len", len);
-      var dash = p.getAttribute("data-dash");
-      if (dash) p.addEventListener("animationend", function () {
-        p.classList.remove("fx-line"); p.style.strokeDasharray = dash; p.style.strokeDashoffset = "0";
-      }, { once: true });
+      p.style.setProperty("--len", Math.ceil(p.getTotalLength()) + 2);
     });
 
     var hit = svg.querySelector("#h" + uid), cross = svg.querySelector("#c" + uid), band = svg.querySelector("#b" + uid);
@@ -2310,12 +2303,8 @@
       var i = bars ? Math.floor((relX - padL) / slot) : Math.round(((relX - padL) / plotW) * (n - 1));
       i = Math.max(0, Math.min(n - 1, i));
       if (cross) { cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", "1"); }
-      if (band) { band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.07"); }
-      svg.querySelectorAll(".fx-dot").forEach(function (c) {
-        var on = c.getAttribute("data-i") == i;
-        c.setAttribute("r", on ? "5" : "2.6");
-        c.setAttribute("fill", on ? c.getAttribute("stroke") : C.dot);
-      });
+      if (band) { band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.08"); }
+      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", c.getAttribute("data-i") == i ? "4.5" : "0"); });
       var d = data[i];
       tooltip.innerHTML = '<div class="t-month">' + ymFull(rows[i]) + "</div>" +
         '<div class="t-row"><span class="l">' + dotHtml(C.fat) + 'Faturamento</span><span class="num">' + mv(d, "fat") + "</span></div>" +
@@ -2331,52 +2320,48 @@
       if (cross) cross.setAttribute("opacity", "0");
       if (band) band.setAttribute("opacity", "0");
       tooltip.style.display = "none";
-      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "2.6"); c.setAttribute("fill", C.dot); });
+      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "0"); });
     });
   }
 
-  // Barras empilhadas por mês, uma cor por ferramenta.
+  // Barras empilhadas por mês, uma cor por ferramenta (cantos arredondados, sem efeitos).
   // cfg: { svgId, tipId, rows: [ym], series: [{ name, color, get(ym) -> número }], empty }
   function drawStackedChart(cfg) {
     var svg = document.getElementById(cfg.svgId), tooltip = document.getElementById(cfg.tipId);
     if (!svg) return;
     var rows = cfg.rows || [], n = rows.length;
     var cw = svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0;
-    var W = cw ? Math.max(320, Math.min(520, Math.round(cw))) : 520, H = 240, padL = 44, padR = 10, padT = 14, padB = 28;   // viewBox ≈ largura real: texto legível
+    var W = cw ? Math.max(320, Math.min(520, Math.round(cw))) : 520, H = 230, padL = 42, padR = 8, padT = 12, padB = 26;   // viewBox ≈ largura real: texto legível
     var plotW = W - padL - padR, plotH = H - padT - padB;
     var totals = rows.map(function (k) { return cfg.series.reduce(function (s, se) { return s + Math.max(0, Number(se.get(k)) || 0); }, 0); });
     var maxT = totals.length ? Math.max.apply(null, totals) : 0;
     if (!n || !(maxT > 0)) { svgMessage(svg, W, H, cfg.empty || "Sem lançamentos neste período"); if (tooltip) tooltip.style.display = "none"; return; }
 
     var C = chartColors(), uid = "s" + (++chartSeq), labels = axisLabels(rows);
-    var maxV = maxT * 1.08, slot = plotW / n, bw = Math.max(3, Math.min(40, slot * 0.68));
+    var maxV = maxT * 1.08, slot = plotW / n, bw = Math.max(4, Math.min(30, slot * 0.6));
     function y(v) { return padT + plotH - (v / maxV) * plotH; }
-    // Estilo HUD: cada série vira um bloco segmentado em degradê; a ponta da pilha ganha uma tampa neon.
-    var html = "<defs>" + FlowHud.seg("sg" + uid, W, H, y(0)) + cfg.series.map(function (se, si) { return FlowHud.vgrad("sr" + uid + si, se.color, 1, 0.6); }).join("") + "</defs>";
+    var html = "";
     for (var g = 0; g <= 4; g++) {
       var gv = (maxV * g) / 4, gy = y(gv);
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '" stroke-dasharray="2 5"/>' +
-        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '"/>' +
+        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
     }
     var multi = labels[0] && labels[0].indexOf("/") >= 0;
     var every = Math.ceil(n / Math.max(3, Math.floor(plotW / (multi ? 46 : 30))));
-    html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + C.fat + '" opacity="0"/>';
-    var stacks = "", capsHtml = "", labelsHtml = "";
+    html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" rx="8" fill="' + C.muted + '" opacity="0"/>';
+    var stacks = "", labelsHtml = "";
     rows.forEach(function (k, i) {
-      var cx = padL + slot * (i + 0.5), acc = 0, lastSe = null;
-      cfg.series.forEach(function (se, si) {
-        var v = Math.max(0, Number(se.get(k)) || 0);
-        if (!v) return;
-        var h = (v / maxV) * plotH;
-        stacks += '<rect class="fx-bar" x="' + (cx - bw / 2) + '" y="' + (y(acc + v)) + '" width="' + bw + '" height="' + Math.max(1, h) + '" fill="url(#sr' + uid + si + ')"/>';
-        acc += v; lastSe = se;
+      var cx = padL + slot * (i + 0.5), acc = 0;
+      var parts = cfg.series.map(function (se) { return { se: se, v: Math.max(0, Number(se.get(k)) || 0) }; }).filter(function (p) { return p.v > 0; });
+      parts.forEach(function (p, pi) {
+        var h = (p.v / maxV) * plotH, top = y(acc + p.v), isTop = pi === parts.length - 1;
+        // Só a ponta da pilha tem canto arredondado; o resto fica reto e encostado.
+        stacks += '<path class="fx-bar" d="' + roundedBar(cx - bw / 2, top, bw, Math.max(1, h), isTop ? Math.min(5, bw / 2) : 0) + '" fill="' + p.se.color + '" fill-opacity="0.92"/>';
+        acc += p.v;
       });
-      if (lastSe) capsHtml += '<rect class="hud-glow" style="color:' + lastSe.color + '" x="' + (cx - bw / 2) + '" y="' + y(acc) + '" width="' + bw + '" height="2" rx="1" fill="' + lastSe.color + '"/>';
-      if (i % every === 0) labelsHtml += '<text x="' + cx + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[i] + "</text>";
+      if (i % every === 0) labelsHtml += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[i] + "</text>";
     });
-    html += '<g mask="url(#sg' + uid + ')">' + stacks + "</g>" + capsHtml + labelsHtml;
-    html += FlowHud.ruler(padL + slot / 2, padL + plotW - slot / 2, padT + plotH + 1, Math.max(n - 1, 1), every, C.muted);
-    html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.muted + '" stroke-opacity="0.5"/>';
+    html += stacks + labelsHtml;
     html += '<rect id="h' + uid + '" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.innerHTML = html;
@@ -2386,7 +2371,7 @@
       var rect = svg.getBoundingClientRect();
       var relX = ((evt.clientX - rect.left) / rect.width) * W;
       var i = Math.max(0, Math.min(n - 1, Math.floor((relX - padL) / slot)));
-      band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.07");
+      band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.08");
       var k = rows[i];
       tooltip.innerHTML = '<div class="t-month">' + ymFull(k) + "</div>" +
         cfg.series.map(function (se) { return '<div class="t-row"><span class="l">' + dotHtml(se.color) + escHtml(se.name) + '</span><span class="num">' + fmtBRL(Number(se.get(k)) || 0) + "</span></div>"; }).join("") +
@@ -2398,6 +2383,11 @@
       tooltip.style.top = "6px";
     });
     hit.addEventListener("mouseleave", function () { band.setAttribute("opacity", "0"); tooltip.style.display = "none"; });
+  }
+  // Barra com os cantos de cima arredondados (r = 0 deixa reta).
+  function roundedBar(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h);
+    return "M" + x + "," + (y + h) + " L" + x + "," + (y + r) + " Q" + x + "," + y + " " + (x + r) + "," + y + " L" + (x + w - r) + "," + y + " Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + " L" + (x + w) + "," + (y + h) + " Z";
   }
 
   function renderChart() {
@@ -3047,7 +3037,7 @@
     var html = "<defs>" + FlowHud.seg("hsg", W, H, baseY) + C.map(function (c, i) { return FlowHud.vgrad("hg" + i, c[1], 1, 0.5); }).join("") + "</defs>";
     for (var v = 0; v <= maxV + 1e-9; v += step) {
       var gy = baseY - (v / maxV) * plotH;
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + tok("--grid") + '" stroke-dasharray="' + (v ? "2 5" : "0") + '"/>' +
+      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + tok("--chart-grid") + '"/>' +
         '<text x="' + (padL - 8) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="' + muted + '" font-family="' + mono + '">' + fmtInt(v) + "</text>";
     }
     html += '<rect id="hscan" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" fill="' + tok("--accent") + '" opacity="0"/>';
@@ -3057,13 +3047,12 @@
       C.forEach(function (c, j) {
         var val = d[c[0]], hgt = (val / maxV) * plotH;
         if (hgt > 0) {
-          hbars += '<rect class="fx-bar hbar" data-i="' + i + '" style="animation-delay:' + (i * 30 + j * 60) + 'ms" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="' + hgt + '" fill="url(#hg' + j + ')"/>';
-          hcaps += '<rect class="hud-glow" style="color:' + c[1] + '" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="2" rx="1" fill="' + c[1] + '"/>';
+          hbars += '<rect class="fx-bar hbar" data-i="' + i + '" style="animation-delay:' + (i * 30 + j * 60) + 'ms" x="' + (x0 + j * (bw + 2)) + '" y="' + (baseY - hgt) + '" width="' + bw + '" height="' + hgt + '" rx="3" fill="' + c[1] + '" fill-opacity="0.92"/>';
         }
       });
       hlabels += '<text x="' + (padL + slot * i + slot / 2) + '" y="' + (H - 9) + '" text-anchor="middle" font-size="9" fill="' + muted + '" font-family="' + mono + '">' + MONTHS[i].toUpperCase() + "</text>";
     });
-    html += '<g mask="url(#hsg)">' + hbars + "</g>" + hcaps + hlabels + FlowHud.ruler(padL + slot / 2, padL + plotW - slot / 2, baseY + 1, 11, 1, muted);
+    html += hbars + hlabels;
     html += '<rect id="hhit" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
     svg.innerHTML = html;
     var hit = svg.querySelector("#hhit"), scan = svg.querySelector("#hscan");

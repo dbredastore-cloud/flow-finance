@@ -260,13 +260,13 @@
     var max = Math.max.apply(null, vals.concat([1])), bw = iw / 12, base = mg.t + ih;
     var acc = tok("--accent"), warn = tok("--warning"), mut = tok("--text-muted");
     var s = '<svg viewBox="0 0 ' + W + " " + H + '" style="width:100%;height:auto;display:block" role="img" aria-label="Vencimentos por semana"><defs>' + FlowHud.seg("exseg", W, H, base) + FlowHud.vgrad("exg", acc, 1, 0.45) + FlowHud.vgrad("exw", warn, 1, 0.45) + "</defs>";
-    for (var t = 0; t <= 4; t++) { var v = max * t / 4, y = base - v / max * ih; s += '<line x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" style="stroke:var(--grid)" stroke-dasharray="2 5"/><text x="' + (mg.l - 8) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" style="fill:var(--text-muted);font-family:var(--font-mono);font-size:9px">' + fmtInt(Math.round(v)) + "</text>"; }
+    for (var t = 0; t <= 4; t++) { var v = max * t / 4, y = base - v / max * ih; s += '<line x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" style="stroke:var(--chart-grid)"/><text x="' + (mg.l - 8) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" style="fill:var(--text-muted);font-family:var(--font-mono);font-size:9px">' + fmtInt(Math.round(v)) + "</text>"; }
     var bodies = "", caps = "", labels = "";
     vals.forEach(function (n, k) {
       var h = n ? Math.max(2, n / max * ih) : 0, x = mg.l + k * bw + bw * 0.16, w = bw * 0.68, c = k < 4 ? warn : acc;
       if (h) {
-        bodies += '<rect x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="url(#' + (k < 4 ? "exw" : "exg") + ')"><title>' + (k === 0 ? "esta semana" : "daqui a " + k + " semana(s)") + ": " + fmtInt(n) + " vencimento(s)</title></rect>";
-        caps += '<rect class="hud-glow" style="color:' + c + '" x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="2" rx="1" fill="' + c + '"/><text x="' + (x + w / 2).toFixed(1) + '" y="' + (base - h - 6).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim);font-family:var(--font-mono);font-size:10px">' + fmtInt(n) + "</text>";
+        bodies += '<rect x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4" fill="url(#' + (k < 4 ? "exw" : "exg") + ')"><title>' + (k === 0 ? "esta semana" : "daqui a " + k + " semana(s)") + ": " + fmtInt(n) + " vencimento(s)</title></rect>";
+        caps += '<rect class="hud-glow" style="color:' + c + '" x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + w.toFixed(1) + '" height="0"/><text x="' + (x + w / 2).toFixed(1) + '" y="' + (base - h - 6).toFixed(1) + '" text-anchor="middle" style="fill:var(--text-dim);font-family:var(--font-mono);font-size:10px">' + fmtInt(n) + "</text>";
       }
       labels += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" style="fill:var(--text-muted);font-family:var(--font-mono);font-size:9px">' + (k === 0 ? "esta sem." : "+" + k) + "</text>";
     });
