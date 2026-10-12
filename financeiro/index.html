@@ -399,8 +399,21 @@
   .tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; }
   .tooltip .t-row .l { color: var(--text-dim); }
   .health-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  .sec-label { margin: 2px 2px 10px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
-  #health-fin { margin-bottom: 18px; }
+  .sec-label { margin: 18px 2px 10px; display: flex; align-items: center; gap: 12px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+  .sec-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  #health-view > .sec-label:first-of-type { margin-top: 6px; }
+  /* Flow Health: três blocos alinhados (resumo financeiro, metas, saúde da base), linhas sempre cheias e tiles do mesmo tamanho. */
+  #health-fin, #health-kpis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin-bottom: 8px; }
+  #health-fin .kpi, #health-kpis .kpi { min-height: 98px; padding: 14px 16px; }
+  #health-fin .kpi .value, #health-kpis .kpi .value { font-size: 21px; }
+  #health-fin .kpi:nth-child(-n+4) { grid-column: span 3; }       /* 4 em cima… */
+  #health-fin .kpi:nth-child(n+5) { grid-column: span 4; }        /* …3 embaixo */
+  #health-kpis .kpi { grid-column: span 2; }                      /* 6 numa linha */
+  #health-view .goal-grid { margin-bottom: 8px; }
+  @media (max-width: 1500px) { #health-kpis .kpi { grid-column: span 4; } }
+  @media (max-width: 1250px) { #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5) { grid-column: span 4; } #health-fin .kpi:last-child { grid-column: span 12; } }
+  @media (max-width: 860px) { #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5) { grid-column: span 6; } #health-fin .kpi:last-child { grid-column: span 12; } #health-kpis .kpi { grid-column: span 6; } }
+  @media (max-width: 560px) { #health-fin .kpi, #health-kpis .kpi, #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5), #health-fin .kpi:last-child { grid-column: span 12; } }
   .health-filter button { border-radius: 999px; padding: 6px 14px; }
   .health-filter button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
   .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -626,10 +639,12 @@
       <div class="health-filter" id="health-filter"></div>
       <div class="sec-label" id="health-fin-label">Resumo financeiro do ano</div>
       <div class="kpi-row home-kpis" id="health-fin"></div>
+      <div class="sec-label">Metas do ano</div>
       <div class="goal-grid">
         <div class="goal-card panel" id="goal-users"></div>
         <div class="goal-card panel" id="goal-revenue"></div>
       </div>
+      <div class="sec-label">Saúde da base de clientes</div>
       <div class="kpi-row health-kpis" id="health-kpis"></div>
       <section class="panel">
         <div class="panel-head">
