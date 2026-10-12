@@ -331,6 +331,61 @@
   .exp-add { background: none; border: 1px dashed var(--border-strong); border-radius: 999px; padding: 1px 9px; font-family: inherit; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
   .exp-add:hover { color: var(--accent); border-color: var(--accent); }
 
+  /* ---------- Despesas do mês: linha fina de leitura + editor sob o lápis ---------- */
+  .expense-line { display: block; padding: 0; border-bottom: 1px solid var(--row-line); transition: background .15s ease; }
+  .expense-line:first-child { padding-top: 0; }
+  .expense-line.search-hidden { display: none; }
+  .expense-line:hover { background: rgba(var(--accent-rgb), 0.04); }
+  .expense-line.is-editing { background: rgba(var(--accent-rgb), 0.06); box-shadow: inset 3px 0 0 var(--accent); }
+  .exp-view { display: grid; grid-template-columns: minmax(0, 1fr) 82px 112px 24px 110px auto; align-items: center; gap: 4px 12px; min-height: 40px; padding: 6px 8px; }
+  .exp-main { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .exp-name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+  .exp-group { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; letter-spacing: .04em; color: var(--text-muted); border: 1px solid var(--border); white-space: nowrap; }
+  .exp-date-v { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .exp-date-v small { font-size: 9.5px; color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; }
+  .exp-date-v.none { color: var(--text-muted); font-style: italic; font-family: inherit; }
+  .exp-pay-v { justify-self: start; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .exp-pay-v.pay-cartao { background: rgba(var(--accent-rgb), .13); color: var(--accent); }
+  .exp-pay-v.pay-biancode { background: rgba(55, 200, 255, .14); color: var(--accent-3); }
+  .exp-pay-v.pay-none { color: var(--text-muted); border: 1px dashed var(--border-strong); font-weight: 500; }
+  .exp-note-v { position: relative; width: 22px; text-align: center; font-size: 13px; cursor: help; }
+  .exp-note-v.empty { cursor: default; }
+  .exp-note-v:not(.empty)::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; width: max-content; max-width: min(300px, 70vw); padding: 8px 10px; border-radius: 9px; font-size: 12px; line-height: 1.45; text-align: left; white-space: pre-wrap; background: var(--surface-solid); color: var(--text); border: 1px solid var(--border-strong); box-shadow: 0 10px 28px -10px rgba(0,0,0,.5); opacity: 0; pointer-events: none; transform: translateY(4px); transition: opacity .14s, transform .14s; }
+  .exp-note-v:not(.empty):hover::after, .exp-note-v:not(.empty):focus-visible::after { opacity: 1; transform: none; }
+  .exp-amount-v { text-align: right; font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .exp-acts { display: inline-flex; gap: 2px; }
+  .exp-edit { background: none; border: 1px solid transparent; color: var(--text-muted); cursor: pointer; padding: 3px 8px; border-radius: 7px; font-size: 14px; line-height: 1; }
+  .exp-edit:hover, .exp-edit[aria-expanded="true"] { color: var(--accent); background: rgba(var(--accent-rgb), .12); border-color: rgba(var(--accent-rgb), .35); }
+  .exp-edit-panel { padding: 4px 12px 14px 12px; border-top: 1px dashed var(--border); }
+  .ed-grid { display: grid; grid-template-columns: 150px 180px auto; gap: 12px 16px; align-items: start; margin: 10px 0 12px; }
+  .ed-f { display: flex; flex-direction: column; gap: 5px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+  .ed-f small { text-transform: none; letter-spacing: 0; }
+  .ed-f input, .ed-f textarea { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-family: inherit; font-size: 13px; text-transform: none; letter-spacing: 0; }
+  .ed-f input.exp-amount { text-align: right; }
+  .ed-f textarea { resize: vertical; min-height: 54px; }
+  .ed-wide { grid-column: 1 / -1; }
+  .ed-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .ed-bar .btn { width: auto; padding: 7px 16px; }
+  .ed-sep { flex: 1; min-width: 8px; }
+  .ed-bar .cat-group { width: auto; }
+  .ed-bar .cat-rename, .ed-bar .exp-pin { background: none; border: 1px dashed var(--border-strong); border-radius: 999px; padding: 2px 10px; font-family: inherit; font-size: 11.5px; color: var(--text-muted); cursor: pointer; opacity: 1; }
+  .ed-bar .cat-rename:hover, .ed-bar .exp-pin:hover { color: var(--accent); border-color: var(--accent); background: none; }
+  /* Pesquisa nas despesas do mês */
+  .exp-search { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--field-bg); transition: border-color .15s, box-shadow .15s; }
+  .exp-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .14); }
+  .exp-search-ic { font-size: 17px; color: var(--text-muted); }
+  .exp-search input { flex: 1; min-width: 0; padding: 9px 0; border: 0; background: transparent; color: var(--text); font-family: inherit; font-size: 13px; outline: none; box-shadow: none; }
+  .exp-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .exp-count b { color: var(--text); font-family: var(--font-mono, monospace); font-weight: 600; }
+  /* Coluna estreita (tela média ou celular): nome numa linha e data · pagamento · valor na de baixo. */
+  .detail-col { container-type: inline-size; }
+  @container (max-width: 620px) {
+    .exp-view { grid-template-columns: auto auto auto minmax(0, 1fr) auto; row-gap: 2px; }
+    .exp-main { grid-column: 1 / -1; }
+    .exp-note-v.empty { display: none; }
+    .ed-grid { grid-template-columns: 1fr 1fr; }
+  }
+
   /* Comentário da despesa: 💬 apagado = sem comentário; aceso = tem, e o texto vira tooltip. */
   .exp-note { position: relative; background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 6px; font-size: 13px; line-height: 1; opacity: .4; filter: grayscale(1); }
   .exp-note:hover, .exp-note:focus-visible { opacity: 1; background: var(--surface-2); }
@@ -1404,17 +1459,66 @@
     if (btn) { btn.textContent = expSortDirLabel(s); btn.hidden = s.key === "default"; }
   }
 
+  /* Pesquisa nas despesas do mês: texto (categoria, grupo, comentário, forma de pagamento) e valor (12,50 · 12.50 · 1.234,56). */
+  state.expQuery = "";
+  function searchText(parts) { return normText(parts.join(" ")); }
+  function normText(s) { return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function amountForms(n) {
+    var f = (Number(n) || 0).toFixed(2), br = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(Number(n) || 0);
+    return f + " " + f.replace(".", ",") + " " + br + " " + Math.round(Number(n) || 0);
+  }
   function applyPayFilter(m) {
     var wrap = document.getElementById("detail-" + m);
     if (!wrap) return;
-    var f = state.payFilter, shown = 0;
-    wrap.querySelectorAll(".expense-line").forEach(function (line) {
+    var f = state.payFilter, shown = 0, total = 0, lines = wrap.querySelectorAll(".expense-line");
+    var q = normText(state.expQuery).replace(/r\$\s*/g, "").trim();
+    lines.forEach(function (line) {
       var hide = f !== "all" && line.dataset.pay !== f;
+      var miss = !!q && line.dataset.search.indexOf(q) < 0;
       line.classList.toggle("pay-hidden", hide);
-      if (!hide) shown++;
+      line.classList.toggle("search-hidden", miss);
+      if (!hide && !miss) { shown++; total += Number(line.dataset.amount) || 0; }
     });
     var empty = wrap.querySelector(".pay-empty");
-    if (empty) empty.hidden = shown > 0 || !wrap.querySelector(".expense-line");
+    if (empty) {
+      empty.hidden = shown > 0 || !lines.length;
+      empty.textContent = q ? "Nenhuma despesa encontrada para “" + state.expQuery.trim() + "” neste mês." : "Nenhuma despesa nesta forma de pagamento neste mês.";
+    }
+    var cnt = document.getElementById("exp-count-" + m);
+    if (cnt) cnt.innerHTML = lines.length ? (q || f !== "all" ? "<b>" + shown + "</b> de " + lines.length + " · total <b>" + escHtml(fmtBRL(total)) + "</b>" : "<b>" + lines.length + "</b> lançamento" + (lines.length === 1 ? "" : "s")) : "";
+  }
+
+  // Salva tudo do editor de uma vez (valor, data, forma de pagamento e comentário). Data em outro mês move o lançamento para esse mês.
+  async function saveExpenseEdit(item, m, line) {
+    var panel = line.querySelector(".exp-edit-panel");
+    var amount = parseFloat(panel.querySelector(".exp-amount").value);
+    if (isNaN(amount) || amount < 0) { toast("Valor inválido.", true); return; }
+    var date = panel.querySelector(".exp-date").value || "";
+    if (date && !(parseInt(date.slice(0, 4), 10) >= 2000 && parseInt(date.slice(0, 4), 10) <= 2100)) { toast("Data inválida: confira o ano.", true); return; }
+    var pay = panel.dataset.pay === "cartao" || panel.dataset.pay === "biancode" ? panel.dataset.pay : null;
+    var note = panel.querySelector(".ed-note").value.trim().slice(0, 500) || null;
+    // Data que veio do dia fixo da categoria e não foi mexida continua sendo "dia fixo" (não vira data gravada).
+    var chargedOn = date === panel.dataset.initialDate && !item.charged_on ? null : (date || null);
+    var amountChanged = Math.abs(amount - (Number(item.amount) || 0)) > 0.0049;
+    var patch = { amount: amount, paid_via: pay, note: note, charged_on: chargedOn };
+    if (amountChanged) { patch.split_total = null; patch.split_parts = null; } // ajustar a parte na mão deixa de ser rateio igual
+    var target = ymOfDate(chargedOn), moved = target != null && target !== m;
+    if (moved) { patch.year = ymY(target); patch.month = ymM(target); }
+    var btn = panel.querySelector(".ed-save");
+    btn.disabled = true; btn.textContent = "Salvando…";
+    var res = await sb.from("monthly_expenses").update(patch).eq("id", item.id).select("id");
+    btn.disabled = false; btn.textContent = "Salvar alterações";
+    if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
+    if (!res.data || !res.data.length) { toast("Sem permissão para alterar esta despesa.", true); return; }
+    invalidateSummaryCache([state.activeToolId]);
+    toast(moved ? "Despesa salva e movida para " + ymFull(target) + ", o mês da data da cobrança." : "Despesa atualizada.");
+    var splitRef = { tool_id: state.activeToolId, category_id: item.category_id, split_total: item.split_total, year: ymY(m), month: ymM(m) };
+    if (item.split_total != null && !amountChanged) {
+      if (moved) await offerSplitMove(splitRef, chargedOn, target, m);
+      else if (pay && pay !== item.paid_via) await offerSplitPay(item, pay, m);
+    }
+    await refreshMonth(m);
+    loadSummary(state.activeToolId, state.range).then(renderPayStrip).catch(function () {});
   }
   // Total do período por forma de pagamento (faixa acima da tabela de meses).
   function renderPayStrip() {
@@ -1623,25 +1727,44 @@
     var perCat = {}, seenCat = {};
     items.forEach(function (i) { perCat[i.category_id] = (perCat[i.category_id] || 0) + 1; });
 
+    // Cada lançamento aparece como uma linha fina só de leitura; o lápis ✎ abre o editor embaixo dela.
     var expLines = items.map(function (item) {
       var catName = item.category_name || "?";
       var chg = chargeInfo(item, m);
       var nth = (seenCat[item.category_id] = (seenCat[item.category_id] || 0) + 1);
-      return '<div class="expense-line' + (nth > 1 ? " is-repeat" : "") + '" data-item-id="' + escHtml(item.id) + '" data-pay="' + (item.paid_via || "none") + '" data-name="' + escHtml(catName.toLowerCase()) + '" data-group="' + escHtml(groupOf(item.category_id).toLowerCase()) + '" data-idx="' + items.indexOf(item) + '">' +
-        '<span class="cat-name"><span class="cat-title">' + escHtml(catName) +
-          (perCat[item.category_id] > 1 ? '<span class="multi-tag" title="Esta categoria tem ' + perCat[item.category_id] + ' lançamentos neste mês, cada um com valor, data e forma de pagamento próprios.">' + nth + " de " + perCat[item.category_id] + "</span>" : "") +
-          (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. Este campo é a parte desta ferramenta.">rateado · total ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
-          '</span>' +
-          '<span class="charge-row"><span class="pay-toggle" role="group" aria-label="Forma de pagamento de ' + escHtml(catName) + '">' + payBtn(item, "cartao") + payBtn(item, "biancode") + '</span><label class="charge-wrap' + (chg.fixedDay ? " is-fixed" : "") + '" title="' + escHtml(chargeTitle(chg)) + '"><span class="charge-lbl">' + chargeLabel(chg) + '</span>' +
-            '<input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '" aria-label="Data da cobrança de ' + escHtml(catName) + '"><span class="charge-ok" aria-live="polite">✓ salvo</span></label>' +
-          '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌</button>' + noteBtn(item) +
-            '<button type="button" class="exp-add" data-cat-id="' + escHtml(item.category_id) + '" title="Adicionar outro lançamento desta categoria neste mês (outro valor e outra data)">+ outro valor</button></span>' +
-        '</span>' +
-        '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎</button>' +
-        '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(groupOf(item.category_id)) + "</select>" +
-        '<input type="number" step="0.01" class="num exp-amount" data-item-id="' + item.id + '" value="' + Number(item.amount).toFixed(2) + '">' +
-        '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir só este lançamento (a categoria e os outros lançamentos continuam)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button>' +
-        noteEditor(item) +
+      var group = groupOf(item.category_id), pv = item.paid_via || "none", amountNum = Number(item.amount) || 0;
+      var dateTxt = chg.value ? chg.value.slice(8, 10) + "/" + chg.value.slice(5, 7) : "";
+      var search = searchText([catName, group, item.note || "", pv !== "none" ? PAY_LABEL[pv] : "sem classificar", item.split_total ? "rateado rateio" : "", dateTxt, chg.value || "", amountForms(amountNum)]);
+      return '<div class="expense-line' + (nth > 1 ? " is-repeat" : "") + '" data-item-id="' + escHtml(item.id) + '" data-pay="' + pv + '" data-amount="' + amountNum + '" data-search="' + escHtml(search) + '" data-name="' + escHtml(catName.toLowerCase()) + '" data-group="' + escHtml(group.toLowerCase()) + '" data-idx="' + items.indexOf(item) + '">' +
+        '<div class="exp-view">' +
+          '<span class="exp-main"><span class="exp-name">' + escHtml(catName) + '</span>' +
+            (perCat[item.category_id] > 1 ? '<span class="multi-tag" title="Esta categoria tem ' + perCat[item.category_id] + ' lançamentos neste mês, cada um com valor, data e forma de pagamento próprios.">' + nth + " de " + perCat[item.category_id] + "</span>" : "") +
+            (item.split_total ? '<span class="split-tag" title="Valor cheio de ' + escHtml(fmtBRL(Number(item.split_total))) + ' rateado em ' + escHtml(item.split_parts || 3) + ' partes iguais entre ferramentas neste mês. O valor ao lado é a parte desta ferramenta.">rateado · ' + escHtml(fmtBRL(Number(item.split_total))) + ' ÷ ' + escHtml(item.split_parts || 3) + '</span>' : "") +
+            '<span class="exp-group">' + escHtml(group) + "</span></span>" +
+          '<span class="exp-date-v' + (chg.value ? "" : " none") + '" title="' + escHtml(chg.value ? chargeTitle(chg) : "Sem data de cobrança") + '">' + (chg.value ? "📅 " + dateTxt + (chg.fixedDay ? ' <small>fixo</small>' : "") : "sem data") + "</span>" +
+          '<span class="exp-pay-v pay-' + pv + '">' + (pv === "none" ? "sem classificar" : PAY_LABEL[pv]) + "</span>" +
+          (item.note ? '<span class="exp-note-v" data-tip="' + escHtml(item.note) + '" tabindex="0" aria-label="Comentário: ' + escHtml(item.note) + '">💬</span>' : '<span class="exp-note-v empty"></span>') +
+          '<span class="exp-amount-v num">' + escHtml(fmtBRL(amountNum)) + "</span>" +
+          '<span class="exp-acts"><button type="button" class="exp-edit" data-item-id="' + escHtml(item.id) + '" title="Editar esta despesa" aria-label="Editar ' + escHtml(catName) + '" aria-expanded="false">✎</button>' +
+            '<button type="button" class="exp-del" data-item-id="' + escHtml(item.id) + '" title="Excluir só este lançamento (a categoria e os outros lançamentos continuam)" aria-label="Excluir despesa ' + escHtml(catName) + ' de ' + escHtml(ymFull(m)) + '">✕</button></span>' +
+        '</div>' +
+        '<div class="exp-edit-panel" hidden data-pay="' + (item.paid_via || "") + '" data-initial-date="' + escHtml(chg.value) + '">' +
+          '<div class="ed-grid">' +
+            '<label class="ed-f"><span>Valor (R$)</span><input type="number" step="0.01" class="num exp-amount" value="' + amountNum.toFixed(2) + '"></label>' +
+            '<label class="ed-f"><span>Data da cobrança' + (chg.fixedDay ? ' <small>(dia fixo ' + chg.fixedDay + ')</small>' : "") + '</span><input type="date" class="exp-date" data-item-id="' + escHtml(item.id) + '" value="' + escHtml(chg.value) + '"></label>' +
+            '<div class="ed-f"><span>Forma de pagamento</span><span class="pay-toggle ed-pay-toggle" role="group" aria-label="Forma de pagamento de ' + escHtml(catName) + '">' +
+              ["cartao", "biancode"].map(function (v) { return '<button type="button" class="pay-opt ed-pay' + (item.paid_via === v ? " on" : "") + '" data-v="' + v + '" aria-pressed="' + (item.paid_via === v) + '">' + PAY_LABEL[v] + "</button>"; }).join("") + "</span></div>" +
+            '<label class="ed-f ed-wide"><span>Comentário</span><textarea class="ed-note" maxlength="500" rows="2" placeholder="Ex.: reajuste, cobrança em duplicidade, motivo…">' + escHtml(item.note || "") + "</textarea></label>" +
+          "</div>" +
+          '<div class="ed-bar">' +
+            '<button type="button" class="btn btn-primary ed-save">Salvar alterações</button><button type="button" class="btn btn-ghost ed-cancel">Cancelar</button>' +
+            '<span class="ed-sep"></span>' +
+            '<button type="button" class="exp-add" data-cat-id="' + escHtml(item.category_id) + '" title="Adicionar outro lançamento desta categoria neste mês (outro valor e outra data)">+ outro valor</button>' +
+            '<button type="button" class="exp-pin" data-cat-id="' + escHtml(item.category_id) + '" data-item-id="' + escHtml(item.id) + '" title="Fixar o dia desta data como dia de cobrança de todos os meses" aria-label="Fixar dia de cobrança de ' + escHtml(catName) + '">📌 fixar dia</button>' +
+            '<select class="cat-group" data-cat-id="' + escHtml(item.category_id) + '" title="Grupo da categoria (vale para todos os meses)" aria-label="Grupo de ' + escHtml(catName) + '">' + groupOptions(group) + "</select>" +
+            '<button type="button" class="cat-rename" data-cat-id="' + escHtml(item.category_id) + '" title="Renomear categoria (vale para todos os meses)" aria-label="Renomear categoria ' + escHtml(catName) + '">✎ renomear</button>' +
+          "</div>" +
+        "</div>" +
         '</div>';
     }).join("");
 
@@ -1653,6 +1776,7 @@
       '<div class="detail-grid">' +
         '<div class="detail-col">' +
           "<h4>Despesas — " + ymFull(m) + "</h4>" +
+          '<div class="exp-search"><span class="exp-search-ic" aria-hidden="true">⌕</span><input type="search" id="exp-q-' + m + '" placeholder="Pesquisar um valor, categoria, data ou comentário neste mês…" aria-label="Pesquisar nas despesas de ' + escHtml(ymFull(m)) + '" value="' + escHtml(state.expQuery || "") + '" autocomplete="off"><span class="exp-count" id="exp-count-' + m + '" aria-live="polite"></span></div>' +
           '<div class="pay-filter" id="pay-chips-' + m + '" role="group" aria-label="Filtrar por forma de pagamento"></div>' +
           '<div class="exp-sort"><label for="exp-sort-key-' + m + '">Ordenar por</label>' +
             '<select id="exp-sort-key-' + m + '">' + EXP_SORTS.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + "</option>"; }).join("") + "</select>" +
@@ -1682,7 +1806,7 @@
               '<option value="Outros">Outros</option>' +
             "</select>" +
           "</div>" +
-          '<div class="detail-actions"><span class="save-hint">Os valores existentes salvam ao sair do campo.</span></div>' +
+          '<div class="detail-actions"><span class="save-hint">Clique no lápis ✎ de uma linha para editar; as mudanças só são gravadas em "Salvar alterações".</span></div>' +
         "</div>" +
         '<div class="detail-col">' +
           "<h4>Receita — " + ymFull(m) + "</h4>" +
@@ -1698,9 +1822,6 @@
         "</div>" +
       "</div>";
 
-    wrap.querySelectorAll(".exp-amount").forEach(function (input) {
-      input.addEventListener("change", function () { saveExpenseAmount(this.dataset.itemId, this.value, m); });
-    });
     wrap.querySelectorAll(".exp-add").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var sel = document.getElementById("new-cat-select-" + m), amount = document.getElementById("new-cat-amount-" + m);
@@ -1710,29 +1831,32 @@
         toast("Digite o valor e a data do novo lançamento e clique em Adicionar.");
       });
     });
+    // Editor da despesa: o lápis abre/fecha o painel; "Salvar alterações" grava valor, data, forma de pagamento e comentário.
     wrap.querySelectorAll(".expense-line").forEach(function (line) {
       var item = items.find(function (i) { return String(i.id) === line.dataset.itemId; });
-      var editor = line.querySelector(".note-edit"), ta = editor.querySelector("textarea"), count = editor.querySelector(".note-count");
-      var tick = function () { count.textContent = ta.value.length + "/500"; };
-      ta.addEventListener("input", tick);
-      line.querySelector(".exp-note").addEventListener("click", function () {
-        editor.hidden = !editor.hidden;
-        if (!editor.hidden) { ta.value = item.note || ""; tick(); ta.focus(); }
+      var panel = line.querySelector(".exp-edit-panel"), editBtn = line.querySelector(".exp-edit");
+      function setOpen(on) {
+        panel.hidden = !on; line.classList.toggle("is-editing", on); editBtn.setAttribute("aria-expanded", on);
+        if (on) { var a = panel.querySelector(".exp-amount"); a.focus(); a.select(); }
+      }
+      editBtn.addEventListener("click", function () { setOpen(panel.hidden); });
+      panel.querySelector(".ed-cancel").addEventListener("click", function () { setOpen(false); });
+      panel.querySelector(".ed-save").addEventListener("click", function () { saveExpenseEdit(item, m, line); });
+      panel.querySelectorAll(".ed-pay").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var on = panel.dataset.pay !== b.dataset.v;           // clicar de novo tira a classificação
+          panel.dataset.pay = on ? b.dataset.v : "";
+          panel.querySelectorAll(".ed-pay").forEach(function (x) { var sel = on && x === b; x.classList.toggle("on", sel); x.setAttribute("aria-pressed", sel); });
+        });
       });
-      editor.querySelector(".note-save").addEventListener("click", function () { saveNote(item, ta.value, m, items, line); });
-      editor.querySelector(".note-cancel").addEventListener("click", function () { editor.hidden = true; });
-      editor.querySelector(".note-remove").addEventListener("click", function () { saveNote(item, "", m, items, line); });
-      ta.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") editor.hidden = true;
-        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveNote(item, ta.value, m, items, line); }
+      panel.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { setOpen(false); editBtn.focus(); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey || e.target.tagName === "INPUT")) { e.preventDefault(); saveExpenseEdit(item, m, line); }
       });
     });
-    wrap.querySelectorAll(".expense-line .pay-opt").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var item = items.find(function (i) { return String(i.id) === btn.dataset.itemId; });
-        if (item) setPaidVia(item, btn.dataset.v, m, items);
-      });
-    });
+    var qInput = document.getElementById("exp-q-" + m);
+    qInput.addEventListener("input", function () { state.expQuery = this.value; applyPayFilter(m); });
+    qInput.addEventListener("keydown", function (e) { if (e.key === "Escape") { this.value = ""; state.expQuery = ""; applyPayFilter(m); } });
     wrap.querySelectorAll("#new-pay-" + m + " .pay-opt").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var box = btn.parentElement;
@@ -1760,9 +1884,6 @@
       applyExpSort(m);
     });
     applyExpSort(m);
-    wrap.querySelectorAll(".exp-date").forEach(function (input) {
-      input.addEventListener("change", function () { saveChargeDate(this.dataset.itemId, this.value, m); });
-    });
     wrap.querySelectorAll(".exp-pin").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var input = wrap.querySelector('.exp-date[data-item-id="' + btn.dataset.itemId + '"]');
