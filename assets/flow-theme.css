@@ -239,7 +239,10 @@ a:hover { text-shadow: var(--link-glow); }
 /* ---------- KPIs ---------- */
 .kpi { transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .kpi:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow), 0 0 28px -10px rgba(var(--accent-rgb), 0.6); }
-.kpi .label { color: var(--text-muted); letter-spacing: 0.1em; font-size: 11px; }
+/* Títulos dos widgets: maiores, mais fortes e com um marcador de cor para se destacarem do valor. */
+.kpi .label { display: flex; align-items: center; gap: 8px; color: var(--text-dim); letter-spacing: 0.07em; font-size: 12.5px; font-weight: 700; line-height: 1.25; margin-bottom: 4px; }
+.kpi .label::before { content: ""; flex: none; width: 3px; height: 13px; border-radius: 2px; background: var(--accent); }
+.goal-label { color: var(--text-dim) !important; font-size: 12.5px !important; font-weight: 700 !important; letter-spacing: 0.07em !important; }
 .kpi .value { font-size: 23px; font-weight: 600; color: var(--text); text-shadow: var(--text-glow); }
 .kpi .value.good { color: var(--accent); text-shadow: var(--good-glow); }
 .kpi .value.bad { color: var(--critical); text-shadow: var(--bad-glow); }

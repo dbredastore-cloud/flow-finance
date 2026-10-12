@@ -403,17 +403,27 @@
   .sec-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   #health-view > .sec-label:first-of-type { margin-top: 6px; }
   /* Flow Health: três blocos alinhados (resumo financeiro, metas, saúde da base), linhas sempre cheias e tiles do mesmo tamanho. */
-  #health-fin, #health-kpis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin-bottom: 8px; }
-  #health-fin .kpi, #health-kpis .kpi { min-height: 98px; padding: 14px 16px; }
+  #health-fin, #health-kpis, #home-kpis { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; margin-bottom: 8px; }
+  #health-fin .kpi, #health-kpis .kpi, #home-kpis .kpi { min-height: 98px; padding: 14px 16px; }
   #health-fin .kpi .value, #health-kpis .kpi .value { font-size: 21px; }
-  #health-fin .kpi:nth-child(-n+4) { grid-column: span 3; }       /* 4 em cima… */
-  #health-fin .kpi:nth-child(n+5) { grid-column: span 4; }        /* …3 embaixo */
+  /* Resumo (Home e Flow Health): os 7 cartões ficam numa linha só em telas largas; o valor encolhe junto com o cartão. */
+  #home-kpis .kpi, #health-fin .kpi { container-type: inline-size; }
+  #home-kpis .kpi .value, #health-fin .kpi .value { font-size: clamp(13px, 8.2cqw, 21px); white-space: nowrap; }
+  #home-kpis .kpi.has-ring, #health-fin .kpi.has-ring { padding-right: 62px; }
+  #home-kpis .kpi .kpi-ring svg, #health-fin .kpi .kpi-ring svg { width: 46px; height: 46px; }
+  #home-kpis .kpi .kpi-ring, #health-fin .kpi .kpi-ring { right: 10px; }
+  #health-fin .kpi, #home-kpis .kpi { grid-column: span 12; }
+  @media (min-width: 1400px) { #health-fin, #home-kpis { grid-template-columns: repeat(7, minmax(0, 1fr)); } #health-fin .kpi, #home-kpis .kpi { grid-column: span 1 !important; } }
+  @media (min-width: 861px) and (max-width: 1399px) {
+    #health-fin .kpi, #home-kpis .kpi { grid-column: span 4; }                       /* 3 por linha, a última ocupa a linha toda */
+    #health-fin .kpi:last-child, #home-kpis .kpi:last-child { grid-column: span 12; }
+  }
+  @media (min-width: 561px) and (max-width: 860px) { #health-fin .kpi, #home-kpis .kpi { grid-column: span 6; } #health-fin .kpi:last-child, #home-kpis .kpi:last-child { grid-column: span 12; } }
   #health-kpis .kpi { grid-column: span 2; }                      /* 6 numa linha */
   #health-view .goal-grid { margin-bottom: 8px; }
   @media (max-width: 1500px) { #health-kpis .kpi { grid-column: span 4; } }
-  @media (max-width: 1250px) { #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5) { grid-column: span 4; } #health-fin .kpi:last-child { grid-column: span 12; } }
-  @media (max-width: 860px) { #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5) { grid-column: span 6; } #health-fin .kpi:last-child { grid-column: span 12; } #health-kpis .kpi { grid-column: span 6; } }
-  @media (max-width: 560px) { #health-fin .kpi, #health-kpis .kpi, #health-fin .kpi:nth-child(-n+4), #health-fin .kpi:nth-child(n+5), #health-fin .kpi:last-child { grid-column: span 12; } }
+  @media (max-width: 860px) { #health-kpis .kpi { grid-column: span 6; } }
+  @media (max-width: 560px) { #health-kpis .kpi { grid-column: span 12; } }
   .health-filter button { border-radius: 999px; padding: 6px 14px; }
   .health-filter button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
   .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
