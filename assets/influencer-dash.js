@@ -471,6 +471,32 @@ window.InfluencerDash = (function () {
         return { from: Math.min(f, to), to: Math.max(f, to) };
     }
   }
+  // Setas ‹ ›: período anterior/seguinte do mesmo tamanho. Meses inteiros andam de mês em mês; o resto anda a quantidade de dias da janela.
+  function stepInfo(req, first) {
+    var t = todayDn(), m = monthSpanOf(req, t), n = m ? m.n : req.to - req.from + 1;
+    var unit = m ? (n === 1 ? "mês" : n + " meses") : (n === 1 ? "dia" : n + " dias");
+    return { prevOff: req.from <= first, nextOff: req.to >= t,
+      prevTip: req.from <= first ? "Não há registro antes de " + dfmt(first) : (m && n === 1 ? "Mês anterior" : n === 1 ? "Dia anterior" : "Voltar " + unit),
+      nextTip: req.to >= t ? "Não há dados no futuro" : (m && n === 1 ? "Próximo mês" : n === 1 ? "Próximo dia" : "Avançar " + unit) };
+  }
+  // Se a janela é de meses inteiros (ou o mês atual até hoje), devolve quantos meses.
+  function monthSpanOf(req, t) {
+    var a = new Date(req.from * DAY), b = new Date(req.to * DAY);
+    if (a.getUTCDate() !== 1) return null;
+    var endOfMonth = req.to === monthStart(req.to, 1) - 1;
+    if (!endOfMonth && req.to !== t) return null;
+    return { n: (b.getUTCFullYear() * 12 + b.getUTCMonth()) - (a.getUTCFullYear() * 12 + a.getUTCMonth()) + 1 };
+  }
+  function stepWindow(dir) {
+    var req = requestedWindow(), t = todayDn(), m = monthSpanOf(req, t), from, to;
+    if (m) { from = monthStart(req.from, dir * m.n); to = monthStart(req.from, dir * m.n + m.n) - 1; }
+    else { var len = req.to - req.from + 1; from = req.from + dir * len; to = req.to + dir * len; }
+    if (to > t) to = t;
+    if (from > to) from = to;
+    S.range = { preset: "custom", from: from, to: to };
+    renderDaily();
+  }
+
   // Parte da janela que tem registro.
   function effWindow(ser, req) {
     var from = Math.max(req.from, ser[0].d), to = Math.min(req.to, ser[ser.length - 1].d);
@@ -523,7 +549,10 @@ window.InfluencerDash = (function () {
 
     function chip(attr, val, label, on, dis, tip) { return '<button type="button" class="pay-chip' + (on ? " on" : "") + '" ' + attr + '="' + val + '" aria-pressed="' + on + '"' + (dis ? ' disabled title="' + esc(tip) + '"' : "") + ">" + label + "</button>"; }
     var custom = S.range.preset === "custom";
+    var span = stepInfo(req, first);
     var controls = '<div class="mr-tools fd-dctl"><span class="fd-dlbl">Período</span>' +
+      '<button type="button" class="pay-chip fd-step" data-fd-step="-1" aria-label="Período anterior" title="' + esc(span.prevTip) + '"' + (span.prevOff ? " disabled" : "") + '>‹</button>' +
+      '<button type="button" class="pay-chip fd-step" data-fd-step="1" aria-label="Próximo período" title="' + esc(span.nextTip) + '"' + (span.nextOff ? " disabled" : "") + '>›</button>' +
       PRESETS.map(function (p) { return chip("data-fd-range", p[0], p[1], S.range.preset === p[0]); }).join("") +
       (custom ? '<label class="fd-date">de <input type="date" id="fd-from" value="' + dstr(req.from) + '" min="' + dstr(first) + '" max="' + dstr(today) + '"></label>' +
         '<label class="fd-date">até <input type="date" id="fd-to" value="' + dstr(req.to) + '" min="' + dstr(first) + '" max="' + dstr(today) + '"></label>' : "") + "</div>" +
@@ -765,6 +794,8 @@ window.InfluencerDash = (function () {
         S.range = pid === "custom" ? { preset: "custom", from: cur.from, to: cur.to } : { preset: pid, from: null, to: null };
         renderDaily(); return;
       }
+      var st = e.target.closest("[data-fd-step]");
+      if (st) { if (!st.disabled) stepWindow(Number(st.dataset.fdStep)); return; }
       var gr = e.target.closest("[data-fd-gran]");
       if (gr) { S.gran = gr.dataset.fdGran; renderDaily(); return; }
       var mt = e.target.closest("[data-fd-metric]");

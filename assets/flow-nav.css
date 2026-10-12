@@ -66,3 +66,12 @@ aside.fnav .fnav-logout:hover .fnav-ic { color: var(--critical); }
   aside.fnav .fnav-item.active::before { display: none; }
   aside.fnav .fnav-item.active { box-shadow: inset 0 -2px 0 var(--accent); }
 }
+
+/* Setas ‹ › do filtro de período: voltam/avançam o mesmo tamanho de período (um mês, três meses, um ano…). */
+.period-nav { display: inline-flex; align-items: center; gap: 6px; }
+.period-step { width: 30px; height: 30px; padding: 0 !important; display: inline-grid; place-items: center; border-radius: 50% !important; font-size: 17px; line-height: 1; cursor: pointer;
+  color: var(--text-dim); background: var(--surface); border: 1px solid var(--border-strong); transition: background .15s, color .15s, border-color .15s; }
+.period-step:hover:not(:disabled) { color: var(--text); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.1); }
+.period-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.period-step:disabled { opacity: .35; cursor: not-allowed; }
+.period-nav .period-label { min-width: 118px; text-align: center; }

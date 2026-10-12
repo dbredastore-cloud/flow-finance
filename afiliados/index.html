@@ -379,7 +379,7 @@
         <label>De <input type="month" id="f-from"></label>
         <label>Até <input type="month" id="f-to"></label>
       </span>
-      <span class="period-label" id="period-label"></span>
+      <span class="period-nav"><button type="button" class="period-step" id="period-prev" aria-label="Período anterior">‹</button><span class="period-label" id="period-label"></span><button type="button" class="period-step" id="period-next" aria-label="Próximo período">›</button></span>
       <div class="ms" id="f-product">
         <button type="button" class="ms-btn" id="f-product-btn" aria-haspopup="true" aria-expanded="false">
           <span id="f-product-label">Todos os produtos</span><span class="ms-caret">▾</span>
@@ -697,7 +697,44 @@
         : MONTHS[a.getMonth()] + "/" + a.getFullYear() + " – " + MONTHS[b.getMonth()] + "/" + b.getFullYear();
     }
     $("period-label").textContent = txt;
+    updatePeriodSteps();
   }
+  // Meses (índice ano*12+mês) que o filtro cobre, sem o corte em "hoje".
+  function periodMonthSpan() {
+    var now = new Date(), cur = now.getFullYear() * 12 + now.getMonth(), p = state.period;
+    switch (p.id) {
+      case "lastmonth": return [cur - 1, cur - 1];
+      case "last3": return [cur - 3, cur - 1];
+      case "year": return [now.getFullYear() * 12, now.getFullYear() * 12 + 11];
+      case "lastyear": return [(now.getFullYear() - 1) * 12, now.getFullYear() * 12 - 1];
+      case "all": return null;
+      case "custom":
+        var a = parseMonthInput(p.from) || { y: now.getFullYear(), m: now.getMonth() }, b = parseMonthInput(p.to) || a, x = a.y * 12 + a.m, y = b.y * 12 + b.m;
+        return [Math.min(x, y), Math.max(x, y)];
+      default: return [cur, cur];
+    }
+  }
+  function monthIdxToInput(i) { return Math.floor(i / 12) + "-" + String((i % 12) + 1).padStart(2, "0"); }
+  // Anda para o período anterior/seguinte de mesmo tamanho (1 mês → mês vizinho; 12 meses → ano vizinho).
+  function stepPeriod(dir) {
+    var sp = periodMonthSpan();
+    if (!sp) return;
+    var n = sp[1] - sp[0] + 1;
+    setPeriod("custom", monthIdxToInput(sp[0] + dir * n), monthIdxToInput(sp[1] + dir * n));
+  }
+  function updatePeriodSteps() {
+    var sp = periodMonthSpan(), prev = $("period-prev"), next = $("period-next");
+    if (!prev || !next) return;
+    var now = new Date(), cur = now.getFullYear() * 12 + now.getMonth();
+    prev.disabled = !sp; next.disabled = !sp || sp[1] >= cur;   // não há venda no futuro
+    var n = sp ? sp[1] - sp[0] + 1 : 0;
+    prev.title = !sp ? "Indisponível em \"Todo o período\"" : n === 1 ? "Mês anterior" : n === 12 ? "Ano anterior" : "Voltar " + n + " meses";
+    next.title = !sp ? "Indisponível em \"Todo o período\"" : sp[1] >= cur ? "Não há vendas no futuro" : n === 1 ? "Próximo mês" : n === 12 ? "Próximo ano" : "Avançar " + n + " meses";
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("#period-prev, #period-next");
+    if (b && !b.disabled) stepPeriod(b.id === "period-next" ? 1 : -1);
+  });
   function setPeriod(id, from, to) {
     var p = { id: id };
     if (id === "custom") {

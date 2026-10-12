@@ -595,7 +595,7 @@
           <label>De <input type="month" id="period-from"></label>
           <label>Até <input type="month" id="period-to"></label>
         </div>
-        <span class="period-label" id="period-label"></span>
+        <span class="period-nav"><button type="button" class="period-step" id="period-prev" aria-label="Período anterior">‹</button><span class="period-label" id="period-label"></span><button type="button" class="period-step" id="period-next" aria-label="Próximo período">›</button></span>
       </div>
     </div>
 
@@ -912,7 +912,31 @@
     else if (p.id === "all") txt = "";
     else txt = state.range.from === state.range.to ? ymFull(state.range.from) : ymShort(state.range.from) + " – " + ymShort(state.range.to);
     document.getElementById("period-label").textContent = txt;
+    updatePeriodSteps();
   }
+  // Setas ‹ ›: andam para o período anterior/seguinte do mesmo tamanho (1 mês → mês vizinho; 12 meses → ano vizinho).
+  function periodSpan() {
+    if (state.period.id === "all") return null;
+    var r = periodRange(state.period);
+    return { from: r.from, to: r.to, n: (ymY(r.to) * 12 + ymM(r.to)) - (ymY(r.from) * 12 + ymM(r.from)) + 1 };
+  }
+  function stepPeriod(dir) {
+    var sp = periodSpan();
+    if (!sp) return;
+    setPeriod("custom", ymAdd(sp.from, dir * sp.n), ymAdd(sp.to, dir * sp.n));
+  }
+  function updatePeriodSteps() {
+    var sp = periodSpan(), prev = document.getElementById("period-prev"), next = document.getElementById("period-next");
+    if (!prev || !next) return;
+    prev.disabled = next.disabled = !sp;
+    var n = sp ? sp.n : 0;
+    prev.title = !sp ? "Indisponível em \"Todo o período\"" : n === 1 ? "Mês anterior" : n === 12 ? "Ano anterior" : "Voltar " + n + " meses";
+    next.title = !sp ? "Indisponível em \"Todo o período\"" : n === 1 ? "Próximo mês" : n === 12 ? "Próximo ano" : "Avançar " + n + " meses";
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("#period-prev, #period-next");
+    if (b && !b.disabled) stepPeriod(b.id === "period-next" ? 1 : -1);
+  });
   function currentRows() { return state.view === "home" && state.home ? state.home.rows : state.rows; }
 
   function setPeriod(id, from, to) {
