@@ -399,6 +399,8 @@
   .tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; }
   .tooltip .t-row .l { color: var(--text-dim); }
   .health-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .sec-label { margin: 2px 2px 10px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+  #health-fin { margin-bottom: 18px; }
   .health-filter button { border-radius: 999px; padding: 6px 14px; }
   .health-filter button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
   .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -622,6 +624,8 @@
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
+      <div class="sec-label" id="health-fin-label">Resumo financeiro do ano</div>
+      <div class="kpi-row home-kpis" id="health-fin"></div>
       <div class="goal-grid">
         <div class="goal-card panel" id="goal-users"></div>
         <div class="goal-card panel" id="goal-revenue"></div>
@@ -2733,6 +2737,7 @@
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
 
   async function openHealth() {
+    state.healthFin = {}; // recarrega o resumo financeiro (as despesas podem ter mudado desde a última vez)
     setHealthMode(true);
     document.getElementById("year-label").textContent = state.activeYear;
     var cached = finCache.health && finCache.health[state.activeYear];
@@ -2837,6 +2842,7 @@
     document.getElementById("health-filter").innerHTML =
       '<button class="btn' + (f === "all" ? " on" : "") + '" data-ht="all">Todas as ferramentas</button>' +
       all.map(function (r) { return '<button class="btn' + (f === r.tool_id ? " on" : "") + '" data-ht="' + r.tool_id + '">' + escHtml(r.tool) + "</button>"; }).join("");
+    renderHealthFin();
     renderGoals(combine(all), h);
     var t = combine(healthRows());
     renderHealthKpis(t);
@@ -2927,6 +2933,43 @@
     toast("Meta atualizada.");
     await loadHealth();
   });
+
+  // Resumo financeiro do ano: os mesmos números da Home (faturamento, despesas, líquido, margem, ticket médio, novos usuários
+  // e custo por novo usuário), para as ferramentas escolhidas no filtro do Flow Health.
+  state.healthFin = {};
+  function renderHealthFin() {
+    var year = state.activeYear, el = document.getElementById("health-fin"), d = state.healthFin[year];
+    if (!d) {
+      el.innerHTML = '<p class="hint-text" style="grid-column:1/-1;margin:0">Carregando o resumo financeiro…</p>';
+      state.healthFin[year] = "loading";
+      loadHome({ from: ym(year, 1), to: ym(year, 12) }).then(function (data) {
+        state.healthFin[year] = data;
+        if (state.view === "health" && state.activeYear === year) renderHealthFin();
+      }).catch(function (e) {
+        delete state.healthFin[year];
+        el.innerHTML = '<p class="hint-text" style="grid-column:1/-1;margin:0">Não foi possível carregar o resumo financeiro: ' + escHtml(e && e.message ? e.message : e) + '</p>';
+      });
+      return;
+    }
+    if (d === "loading") return;
+    var rows = healthRows(), tot = { fat: 0, desp: 0, novos: 0 };
+    rows.forEach(function (r) {
+      var p = d.perTool[r.tool_id];
+      if (!p) return;
+      Object.keys(p.byYm).forEach(function (k) { var c = p.byYm[k]; tot.fat += c.fat; tot.desp += c.desp; tot.novos += c.novos; });
+    });
+    var liq = tot.fat - tot.desp, margem = tot.fat > 0 ? liq / tot.fat : null, custoNovo = tot.novos > 0 ? tot.desp / tot.novos : null;
+    var who = rows.length === 1 ? rows[0].tool : "as ferramentas do Flow Health";
+    document.getElementById("health-fin-label").textContent = "Resumo financeiro de " + year + " · " + (rows.length === 1 ? rows[0].tool : "todas as ferramentas");
+    el.innerHTML =
+      kpiTile("Faturamento (ano)", fmtBRL(tot.fat), null, "Soma do faturamento de " + who + " em todos os meses de " + year + " (mesma conta do faturamento da Home).") +
+      kpiTile("Despesas (ano)", fmtBRL(tot.desp), null, "Soma de todas as despesas lançadas em " + who + " em " + year + ".") +
+      kpiTile("Líquido (ano)", fmtBRL(liq), liq >= 0 ? "good" : "bad", "Faturamento − Despesas do ano.") +
+      kpiTile("Margem líquida", fmtPct(margem), margem !== null ? (margem >= 0 ? "good" : "bad") : null, "Líquido ÷ Faturamento do ano, em percentual.", marginRing(margem)) +
+      kpiTile("Ticket médio (geral)", fmtBRL(ticketOf(tot.fat, tot.novos)), null, TICKET_TIP + " Aqui para " + who + " no ano.") +
+      kpiTile("Novos usuários", fmtInt(tot.novos), null, "Soma dos novos usuários de " + who + " no ano (mesma conta da Home).") +
+      kpiTile("Custo por novo usuário", fmtBRL(custoNovo), null, "Despesas do ano ÷ Novos usuários do ano.");
+  }
 
   function hKpi(label, value, sub, tip, cls) {
     return '<div class="kpi"><div class="label"' + (tip ? ' title="' + escHtml(tip) + '"' : "") + ">" + label + '</div><div class="value num ' + (cls || "") + '">' + value + "</div>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
