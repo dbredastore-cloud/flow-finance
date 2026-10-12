@@ -75,8 +75,15 @@ window.InfluencerDash = (function () {
     return out;
   }
 
+  function nc() { return !!(S && S.ctx && S.ctx.noContract); }
+  // Sem contrato (tela YouTube): a "janela" vai do vídeo mais antigo que temos até hoje.
   function window_() {
-    var c = S.ctx.c, now = new Date();
+    var now = new Date();
+    if (nc()) {
+      var ms = (S.videos || []).map(function (v) { return Date.parse(v.published_at); }).filter(isFinite);
+      return { start: ms.length ? Math.min.apply(null, ms) : now.getTime() - 30 * DAY, end: now.getTime(), ended: false };
+    }
+    var c = S.ctx.c;
     var start = new Date(c.start_date + "T00:00:00"), end = c.end_date ? new Date(c.end_date + "T23:59:59") : null;
     return { start: start.getTime(), end: (end && end < now ? end : now).getTime(), ended: !!(end && end < now) };
   }
@@ -95,7 +102,8 @@ window.InfluencerDash = (function () {
     var oldest = vids.length ? vids[vids.length - 1].ms : null;
     var ch = S.ctx.channel ? S.ctx.channel.c : null;
     // Pode faltar vídeo antigo: o sync normal guarda só os 100 últimos envios.
-    var incomplete = !!(ch && vids.length && oldest > w.start && (ch.video_count == null || vids.length < ch.video_count));
+    var incomplete = nc() ? !!(ch && vids.length && ch.video_count != null && vids.length < ch.video_count)
+      : !!(ch && vids.length && oldest > w.start && (ch.video_count == null || vids.length < ch.video_count));
     return { w: w, vids: vids, inC: inC, oldest: oldest, incomplete: incomplete, c: c, ch: ch };
   }
   function agg(list) {
@@ -114,11 +122,20 @@ window.InfluencerDash = (function () {
     document.body.appendChild(el);
     bind();
   }
-  async function open(contractId) {
-    ensureShell();
+  // Dashboard de um canal sem olhar contrato (tela YouTube): mesmos dados do canal, sem a parte comercial do contrato.
+  function openChannel(email) {
+    var ctx = A.getChannelCtx(email);
+    if (!ctx) return Promise.resolve();
+    return start(null, ctx);
+  }
+  function open(contractId) {
     var ctx = A.getCtx(contractId);
-    if (!ctx) return;
-    S = { id: contractId, ctx: ctx, videos: null, snaps: [], scope: "contract", type: "all", text: "", sort: { key: "date", dir: -1 }, open: null, busy: false,
+    if (!ctx) return Promise.resolve();
+    return start(contractId, ctx);
+  }
+  async function start(contractId, ctx) {
+    ensureShell();
+    S = { id: contractId, email: ctx.a.email, ctx: ctx, videos: null, snaps: [], scope: ctx.noContract ? "all" : "contract", type: "all", text: "", sort: { key: "date", dir: -1 }, open: null, busy: false,
       range: { preset: "7d", from: null, to: null }, gran: "day", metric: "subs", qdate: "", dc: null };
     $("fd-full").hidden = false; document.body.classList.add("mr-noscroll"); $("fd-full").scrollTop = 0;
     renderBar();
@@ -149,11 +166,13 @@ window.InfluencerDash = (function () {
   function renderBar() {
     var a = S.ctx.a, ch = S.ctx.channel && S.ctx.channel.c;
     $("fd-title").textContent = a.name || a.email;
+    $("fd-back").textContent = nc() ? "← Voltar ao YouTube" : "← Voltar aos contratos";
     $("fd-acts").innerHTML =
       (ch ? '<button class="btn" type="button" data-fd="refresh" title="Relê o canal e os últimos 100 vídeos no YouTube (cerca de 5 unidades da cota)">↻ Atualizar canal</button>' +
-        '<button class="btn" type="button" data-fd="deep" title="Volta no tempo até o início do contrato (até 500 vídeos; poucas unidades da cota)">⏪ Buscar histórico do contrato</button>' +
+        (nc() ? '<button class="btn" type="button" data-fd="deep" title="Volta 12 meses no tempo (até 500 vídeos; poucas unidades da cota)">⏪ Buscar 12 meses de histórico</button>'
+          : '<button class="btn" type="button" data-fd="deep" title="Volta no tempo até o início do contrato (até 500 vídeos; poucas unidades da cota)">⏪ Buscar histórico do contrato</button>') +
         '<button class="btn" type="button" data-fd="csv">Exportar vídeos (CSV)</button>' : "") +
-      '<button class="btn" type="button" data-fd="edit">Editar contrato</button>' +
+      (nc() ? "" : '<button class="btn" type="button" data-fd="edit">Editar contrato</button>') +
       (ch ? '<a class="btn btn-primary" href="' + esc(A.channelUrl(ch)) + '" target="_blank" rel="noopener noreferrer">Abrir no YouTube ↗</a>' : "");
   }
 
@@ -161,28 +180,33 @@ window.InfluencerDash = (function () {
   function render() {
     if (!S) return;
     renderBar();
-    var m = build(), c = m.c, a = S.ctx.a, info = S.ctx.info, ch = m.ch;
-    var months = info.months, tot = months.reduce(function (t, r) {
+    var m = build(), c = m.c, a = S.ctx.a, info = S.ctx.info, ch = m.ch, noC = nc();
+    var months = noC ? pseudoMonths(m) : info.months, tot = noC ? { amount: 0, net: 0, commission: 0, fixed: 0, bonus: 0, count: 0 } : months.reduce(function (t, r) {
       t.amount += r.amount; t.net += r.net; t.commission += r.commission; t.fixed += r.fixed; t.bonus += r.bonus; t.count += r.count; return t;
     }, { amount: 0, net: 0, commission: 0, fixed: 0, bonus: 0, count: 0 });
     var cost = tot.commission + tot.fixed + tot.bonus, result = tot.net - tot.fixed - tot.bonus;
-    var period = new Date(c.start_date + "T12:00:00").toLocaleDateString("pt-BR") + (c.end_date ? " a " + new Date(c.end_date + "T12:00:00").toLocaleDateString("pt-BR") : " · sem data de fim");
+    var period = noC ? "" : new Date(c.start_date + "T12:00:00").toLocaleDateString("pt-BR") + (c.end_date ? " a " + new Date(c.end_date + "T12:00:00").toLocaleDateString("pt-BR") : " · sem data de fim");
     var body = "";
 
     /* herói */
     var thumb = ch && ch.thumbnail_url ? '<img class="mr-av lg" src="' + esc(ch.thumbnail_url) + '" alt="" referrerpolicy="no-referrer">' : '<span class="mr-av lg ph">YT</span>';
     body += '<section class="mr-fsec mr-fhero">' + thumb +
-      '<div class="mr-fhero-main"><h2>' + esc(a.name || a.email) + '<span class="mr-badge ' + (m.w.ended ? "k" : "p") + '">' + (m.w.ended ? "contrato encerrado" : "contrato vigente") + "</span></h2>" +
-      '<div class="sub">' + esc(a.email) + " · contrato " + period + "</div>" +
+      '<div class="mr-fhero-main"><h2>' + esc(a.name || a.email) + (noC ? "" : '<span class="mr-badge ' + (m.w.ended ? "k" : "p") + '">' + (m.w.ended ? "contrato encerrado" : "contrato vigente") + "</span>") + "</h2>" +
+      '<div class="sub">' + esc(a.email) + (noC ? "" : " · contrato " + period) + "</div>" +
       '<div class="sub">' + (ch ? esc(ch.title || "") + (ch.handle ? " · " + esc(ch.handle) : "") + (ch.country ? " · " + esc(ch.country) : "") +
         (ch.channel_created ? " · no YouTube desde " + new Date(ch.channel_created).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "") : "Canal do YouTube não cadastrado na ficha do influencer") + "</div>" +
-      '<div class="sub">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(c.bonus_sales_target) + " vendas · por mês: " +
-        c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div>" +
+      (noC ? "" : '<div class="sub">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(c.bonus_sales_target) + " vendas · por mês: " +
+        c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div>") +
       '<div class="sub">' + S.ctx.socials + (ch && ch.fetched_at ? ' · dados do YouTube lidos em ' + new Date(ch.fetched_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "") + "</div></div></section>";
 
     /* resultado comercial */
     var vf = m.inC.filter(function (v) { return v.fx.length; });
-    body += '<section class="mr-fsec"><h3>Resultado do contrato <small class="muted">vendas das ferramentas Flow na vigência</small></h3><div class="mr-fkpis">' +
+    if (noC) {
+      var sl = S.ctx.sales || {};
+      body += '<section class="mr-fsec"><h3>Vendas do influencer <small class="muted">' + esc(sl.label || "período do filtro da tela YouTube") + '</small></h3><div class="mr-fkpis">' +
+        kf("Vendas", fmtInt(sl.count || 0), "todas as ferramentas e produtos") + kf("Faturamento", fmtBRL(sl.amount || 0), "valor cobrado do cliente") +
+        kf("Comissão", fmtBRL(sl.commission || 0), "paga ao influencer") + "</div></section>";
+    } else body += '<section class="mr-fsec"><h3>Resultado do contrato <small class="muted">vendas das ferramentas Flow na vigência</small></h3><div class="mr-fkpis">' +
       kf("Vendas", fmtInt(tot.count), "ferramentas Flow") + kf("Faturamento", fmtBRL(tot.amount), "valor cobrado do cliente") +
       kf("Comissão paga", fmtBRL(tot.commission), c.commission_pct + "% combinado") + kf("Fixo + bônus", fmtBRL(tot.fixed + tot.bonus), months.length + " mês(es) de contrato") +
       kf("Custo total", fmtBRL(cost), "fixo + comissão + bônus") +
@@ -199,7 +223,10 @@ window.InfluencerDash = (function () {
     }
 
     /* aviso de histórico incompleto */
-    if (m.incomplete) {
+    if (m.incomplete && noC) {
+      body += '<div class="mr-fnote"><b>Só os vídeos mais recentes.</b> Temos ' + fmtInt(m.vids.length) + " dos " + fmtInt(ch.video_count) + " envios do canal (de " + fmtDate(m.oldest) +
+        ' em diante). Clique em <b>⏪ Buscar 12 meses de histórico</b> para trazer mais vídeos (poucas unidades da cota do YouTube).</div>';
+    } else if (m.incomplete) {
       body += '<div class="mr-fnote"><b>Histórico possivelmente incompleto.</b> Só temos os vídeos de ' + fmtDate(m.oldest) + " em diante, e o contrato começou em " + fmtDate(m.w.start) +
         '. Clique em <b>⏪ Buscar histórico do contrato</b> para trazer tudo desde o início (poucas unidades da cota do YouTube).</div>';
     }
@@ -218,12 +245,12 @@ window.InfluencerDash = (function () {
 
     /* vigência */
     var A_ = agg(m.inC), longs = m.inC.filter(function (v) { return !v.short; }), shorts = m.inC.filter(function (v) { return v.short; });
-    var metaTotal = months.length * (c.youtube_per_month || 0);
+    var metaTotal = noC ? 0 : months.length * (c.youtube_per_month || 0);
     var best = m.inC.slice().sort(function (x, y) { return y.views - x.views; })[0];
     var fAgg = agg(vf), rest = agg(m.inC.filter(function (v) { return !v.fx.length; }));
-    body += '<section class="mr-fsec"><h3>Na vigência do contrato <small class="muted">' + fmtDate(m.w.start) + " a " + fmtDate(m.w.end) + "</small></h3><div class=\"mr-fkpis\">" +
+    body += '<section class="mr-fsec"><h3>' + (noC ? "Vídeos baixados" : "Na vigência do contrato") + ' <small class="muted">' + fmtDate(m.w.start) + " a " + fmtDate(m.w.end) + "</small></h3><div class=\"mr-fkpis\">" +
       kf("Vídeos publicados", fmtInt(A_.n), fmtInt(longs.length) + " vídeos · " + fmtInt(shorts.length) + " Shorts") +
-      kf("Meta do YouTube", fmtInt(longs.length) + " / " + fmtInt(metaTotal), c.youtube_per_month + " por mês × " + months.length + " mês(es)", "Vídeos longos publicados (Shorts não contam) contra a meta mensal do contrato.") +
+      (noC ? "" : kf("Meta do YouTube", fmtInt(longs.length) + " / " + fmtInt(metaTotal), c.youtube_per_month + " por mês × " + months.length + " mês(es)", "Vídeos longos publicados (Shorts não contam) contra a meta mensal do contrato.")) +
       kf("Views nesses vídeos", fmtN(A_.views), fmtInt(A_.views) + " no total", "Views de hoje dos vídeos publicados na vigência.") +
       kf("Média de views", fmtN(A_.avg), "por vídeo publicado") + kf("Mediana de views", fmtN(A_.med), "não distorce com vídeo viral") +
       kf("Curtidas", fmtN(A_.likes), fmtN(A_.n ? A_.likes / A_.n : null) + " por vídeo") + kf("Comentários", fmtN(A_.comments), fmtN(A_.n ? A_.comments / A_.n : null) + " por vídeo") +
@@ -231,19 +258,21 @@ window.InfluencerDash = (function () {
       kf("Mais visto", best ? fmtN(best.views) : "—", best ? esc(String(best.title).slice(0, 38)) : "sem vídeos") +
       kf("Mencionam a Flow", fmtInt(vf.length) + " de " + fmtInt(A_.n), vf.length ? fmtN(fAgg.views) + " views nesses vídeos" : "nenhuma menção", "Vídeos com FlowPages, FlowTracking ou FlowSpy escrito no título ou na descrição.") +
       kf("Com menção × sem", fAgg.avg && rest.avg ? dec(fAgg.avg / rest.avg) + "×" : "—", "views médias dos que citam a Flow ÷ dos demais") +
-      kf("Views por venda", tot.count ? fmtInt(A_.views / tot.count) : "—", "views da vigência ÷ vendas Flow") +
+      (noC ? "" : kf("Views por venda", tot.count ? fmtInt(A_.views / tot.count) : "—", "views da vigência ÷ vendas Flow")) +
       "</div></section>";
 
     /* gráficos */
-    body += '<section class="mr-fsec"><h3>Views de cada vídeo na vigência</h3>' + (m.inC.length ?
+    body += '<section class="mr-fsec"><h3>Views de cada vídeo' + (noC ? "" : " na vigência") + '</h3>' + (m.inC.length ?
       '<p class="mr-hint">Do mais antigo (esquerda) ao mais novo. Amarelo: menciona a Flow; verde: vídeo; barras mais claras são Shorts. A linha pontilhada é a mediana. Clique numa barra para abrir o vídeo.</p><div class="mr-chart" id="fd-views"></div>' :
       '<div class="mr-fnote">Nenhum vídeo publicado na vigência entre os dados que temos.</div>') + "</section>";
-    body += '<div class="fd-f3"><section class="mr-fsec"><h3>Vídeos por mês × meta</h3><p class="mr-hint">Verde: longos; cinza: Shorts; linha: meta mensal.</p><div class="mr-chart" id="fd-months"></div></section>' +
+    if (noC) body += '<div class="mr-f2"><section class="mr-fsec"><h3>Vídeos por mês</h3><p class="mr-hint">Verde: longos; cinza: Shorts.</p><div class="mr-chart" id="fd-months"></div></section>' +
+      '<section class="mr-fsec"><h3>Dia da semana que publica</h3><p class="mr-hint">Vídeos por dia da semana (horário de Brasília).</p><div class="mr-chart" id="fd-dow"></div></section></div>';
+    else body += '<div class="fd-f3"><section class="mr-fsec"><h3>Vídeos por mês × meta</h3><p class="mr-hint">Verde: longos; cinza: Shorts; linha: meta mensal.</p><div class="mr-chart" id="fd-months"></div></section>' +
       '<section class="mr-fsec"><h3>Vendas Flow por mês</h3><p class="mr-hint">Vendas das ferramentas Flow por mês de contrato.</p><div class="mr-chart" id="fd-sales"></div></section>' +
       '<section class="mr-fsec"><h3>Dia da semana que publica</h3><p class="mr-hint">Vídeos da vigência por dia (horário de Brasília).</p><div class="mr-chart" id="fd-dow"></div></section></div>';
 
     /* entregas por mês */
-    body += '<section class="mr-fsec"><h3>Entregas por mês</h3><div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Mês</th><th>Vídeos</th><th>Shorts</th><th>Citam a Flow</th><th>Meta vídeos</th><th>Stories</th><th>Reels</th><th>Vendas Flow</th><th>Custo</th></tr></thead><tbody>' +
+    if (!noC) body += '<section class="mr-fsec"><h3>Entregas por mês</h3><div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Mês</th><th>Vídeos</th><th>Shorts</th><th>Citam a Flow</th><th>Meta vídeos</th><th>Stories</th><th>Reels</th><th>Vendas Flow</th><th>Custo</th></tr></thead><tbody>' +
       months.slice().reverse().map(function (r) {
         var mv = monthVids(m, r), okV = mv.longs.length >= c.youtube_per_month;
         return "<tr" + (r.current ? ' class="fi-current"' : "") + '><td class="l">' + MONTHS[r.month - 1] + "/" + String(r.year).slice(2) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
@@ -262,14 +291,22 @@ window.InfluencerDash = (function () {
 
     /* instagram */
     body += instaSection();
-    if (c.notes) body += '<section class="mr-fsec"><h3>Observações do contrato</h3><p style="margin:0;white-space:pre-wrap;color:var(--text-dim)">' + esc(c.notes) + "</p></section>";
+    if (!noC && c.notes) body += '<section class="mr-fsec"><h3>Observações do contrato</h3><p style="margin:0;white-space:pre-wrap;color:var(--text-dim)">' + esc(c.notes) + "</p></section>";
     body += '<p class="mr-hint" style="text-align:center">Dados da YouTube Data API: estatísticas públicas do canal e dos vídeos. As views são as de hoje (não por período). "Menciona a Flow" é lido de título e descrição; o que é falado dentro do vídeo não é detectado.</p>';
     $("fd-body").innerHTML = body;
 
     if (m.inC.length) drawViews(m);
-    drawMonths(m); drawSales(); drawDow(m);
+    drawMonths(m); if (!noC) drawSales(); drawDow(m);
     renderDaily();
     renderTools(); renderTable();
+  }
+
+  // Sem contrato: os meses do vídeo mais antigo até hoje (no máximo os últimos 24).
+  function pseudoMonths(m) {
+    var now = new Date(), out = [], first = m.oldest ? new Date(m.oldest) : now;
+    var startIdx = Math.max(first.getFullYear() * 12 + first.getMonth(), now.getFullYear() * 12 + now.getMonth() - 23), endIdx = now.getFullYear() * 12 + now.getMonth();
+    for (var i = startIdx; i <= endIdx; i++) out.push({ year: Math.floor(i / 12), month: (i % 12) + 1, current: i === endIdx });
+    return out;
   }
 
   function monthVids(m, r) {
@@ -300,9 +337,9 @@ window.InfluencerDash = (function () {
     if (descMissing) return head + '<div class="mr-fnote">As descrições dos vídeos ainda não foram baixadas. Clique em <b>↻ Atualizar canal</b> para ler as descrições e achar as menções.</div></section>';
     var per = '<div class="mr-fkpis" style="margin-bottom:14px">' + names.map(function (n) {
       var list = vf.filter(function (v) { return v.fx.some(function (x) { return x.n === n; }); });
-      return kf(n, list.length + (list.length === 1 ? " vídeo" : " vídeos"), list.length ? fmtN(sum(list, function (v) { return v.views; })) + " views" : "sem menção na vigência");
+      return kf(n, list.length + (list.length === 1 ? " vídeo" : " vídeos"), list.length ? fmtN(sum(list, function (v) { return v.views; })) + " views" : (nc() ? "sem menção" : "sem menção na vigência"));
     }).join("") + "</div>";
-    if (!vf.length) return head + per + '<p class="mr-hint">Nenhum vídeo da vigência escreve FlowPages, FlowTracking ou FlowSpy no título ou na descrição.</p></section>';
+    if (!vf.length) return head + per + '<p class="mr-hint">Nenhum vídeo ' + (nc() ? 'baixado' : 'da vigência') + ' escreve FlowPages, FlowTracking ou FlowSpy no título ou na descrição.</p></section>';
     return head + per + '<div class="mr-flowlist">' + vf.map(function (v) {
       var chips = v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "Escrito na descrição" : "Escrito no título") + (x.l ? ", dentro de um link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + " <small>" + (x.w === "d" ? "descrição" : "título") + "</small></span>"; }).join("");
       var ex = v.fx.map(function (x) { return '<p class="mr-flowx"><span>' + (x.w === "d" ? "Na descrição" : "No título") + ":</span> " + hlFlow(x.x) + "</p>"; }).join("");
@@ -369,10 +406,10 @@ window.InfluencerDash = (function () {
     el.innerHTML = s + "</svg>";
   }
   function drawMonths(m) {
-    var months = S.ctx.info.months, labels = months.map(function (r) { return MONTHS[r.month - 1] + "/" + String(r.year).slice(2); });
+    var months = nc() ? pseudoMonths(m) : S.ctx.info.months, labels = months.map(function (r) { return MONTHS[r.month - 1] + "/" + String(r.year).slice(2); });
     var longs = [], shorts = [];
     months.forEach(function (r) { var mv = monthVids(m, r); longs.push(mv.longs.length); shorts.push(mv.shorts.length); });
-    stackedMonths($("fd-months"), labels, longs, shorts, S.ctx.c.youtube_per_month || 0, "vídeos");
+    stackedMonths($("fd-months"), labels, longs, shorts, nc() ? 0 : (S.ctx.c.youtube_per_month || 0), "vídeos");
   }
   function drawSales() {
     var months = S.ctx.info.months, labels = months.map(function (r) { return MONTHS[r.month - 1] + "/" + String(r.year).slice(2); });
@@ -597,7 +634,7 @@ window.InfluencerDash = (function () {
       if (dc.ctxMode) { var x0 = X(Math.max(sel.from, pts[0].d)), x1 = X(Math.min(sel.to, pts[pts.length - 1].d)); s += '<rect x="' + (x0 - 6).toFixed(1) + '" y="' + mg.t + '" width="' + Math.max(x1 - x0 + 12, 12).toFixed(1) + '" height="' + ih + '" fill="' + accC + '" opacity="0.1"/>'; }
       s += '<polygon points="' + X(pts[0].d).toFixed(1) + "," + (mg.t + ih) + " " + line + " " + X(pts[pts.length - 1].d).toFixed(1) + "," + (mg.t + ih) + '" fill="url(#fddh)"/>';
       s += '<polyline class="hud-glow" style="color:' + accC + '" points="' + line + '" fill="none" stroke="' + accC + '" stroke-width="2" stroke-linejoin="round"/>';
-      var ds = brtDay(window_().start);
+      var ds = nc() ? -1 : brtDay(window_().start);
       if (ds > pts[0].d && ds < pts[pts.length - 1].d) { var xs = X(ds); s += '<line class="med" x1="' + xs + '" x2="' + xs + '" y1="' + mg.t + '" y2="' + (mg.t + ih) + '"/><text x="' + (xs + 4) + '" y="' + (mg.t + 10) + '" style="fill:var(--text-dim)">início do contrato</text>'; }
       s += '<text x="' + mg.l + '" y="' + (H - 8) + '">' + dshort(pts[0].d) + '</text><text x="' + (W - mg.r) + '" y="' + (H - 8) + '" text-anchor="end">' + dshort(pts[pts.length - 1].d) + "</text>";
       pts.forEach(function (p) { s += '<circle cx="' + X(p.d).toFixed(1) + '" cy="' + Y(p[key]).toFixed(1) + '" r="' + (pts.length <= 45 ? 3 : 5) + '" fill="' + (pts.length <= 45 ? (p.est ? "var(--bg)" : accC) : "transparent") + '" stroke="' + accC + '" stroke-width="' + (pts.length <= 45 ? 1.5 : 0) + '"><title>' + esc(dfmt(p.d) + ": " + fmtInt(p[key]) + (key === "subs" ? " inscritos" : " views") + (p.est ? " (estimado)" : "")) + "</title></circle>"; });
@@ -631,9 +668,9 @@ window.InfluencerDash = (function () {
   function renderTools() {
     var f = S;
     $("fd-tools").innerHTML = '<input type="search" id="fd-q" placeholder="Buscar no título ou na descrição…" aria-label="Buscar nos vídeos" value="' + esc(f.text) + '">' +
-      '<button type="button" class="pay-chip' + (f.scope === "contract" ? " on" : "") + '" data-fd-scope="contract" aria-pressed="' + (f.scope === "contract") + '">Na vigência</button>' +
+      (nc() ? '' : '<button type="button" class="pay-chip' + (f.scope === "contract" ? " on" : "") + '" data-fd-scope="contract" aria-pressed="' + (f.scope === "contract") + '">Na vigência</button>' +
       '<button type="button" class="pay-chip' + (f.scope === "all" ? " on" : "") + '" data-fd-scope="all" aria-pressed="' + (f.scope === "all") + '">Todos os baixados</button>' +
-      '<span class="muted" style="margin:0 4px">|</span>' +
+      '<span class="muted" style="margin:0 4px">|</span>') +
       FILTERS.map(function (x) { return '<button type="button" class="pay-chip' + (f.type === x[0] ? " on" : "") + '" data-fd-type="' + x[0] + '" aria-pressed="' + (f.type === x[0]) + '">' + x[1] + "</button>"; }).join("");
   }
   function renderTable() {
@@ -691,20 +728,20 @@ window.InfluencerDash = (function () {
   }
   async function syncNow(deep) {
     if (!S || S.busy) return;
-    var my = S, c = my.ctx.c;
+    var my = S, c = my.ctx.c || {};
     var btn = document.querySelector('[data-fd="' + (deep ? "deep" : "refresh") + '"]');
     my.busy = true; if (btn) { btn.disabled = true; btn.textContent = "Atualizando…"; }
     var body = { email: my.ctx.a.email };
-    if (deep) body.since = c.start_date;
+    if (deep) body.since = my.ctx.noContract ? new Date(Date.now() - 365 * DAY).toISOString().slice(0, 10) : c.start_date;
     var res = await A.sb.functions.invoke("youtube-sync", { body: body }), data = res.data || {};
     if (res.error && !data.error) { try { data = await res.error.context.json(); } catch (e) { data = { error: res.error.message }; } }
     my.busy = false;
     if (!data.ok) { A.toast("Erro ao atualizar o YouTube: " + (data.error || "desconhecido"), true); renderBar(); return; }
     if (data.failed) { A.toast("O YouTube recusou a leitura: " + Object.keys(data.errors || {}).map(function (k) { return data.errors[k]; })[0], true); renderBar(); return; }
-    A.toast((deep ? "Histórico do contrato carregado: " : "Canal atualizado: ") + fmtInt(data.videos) + " vídeos lidos.");
+    A.toast((deep ? (my.ctx.noContract ? "Histórico de 12 meses carregado: " : "Histórico do contrato carregado: ") : "Canal atualizado: ") + fmtInt(data.videos) + " vídeos lidos.");
     try { await A.reloadYoutube(); } catch (e) {}
     if (S !== my) return;
-    var ctx = A.getCtx(my.id); if (ctx) my.ctx = ctx;
+    var ctx = my.ctx.noContract ? A.getChannelCtx(my.email) : A.getCtx(my.id); if (ctx) my.ctx = ctx;
     await load();
   }
 
@@ -777,13 +814,14 @@ window.InfluencerDash = (function () {
     window.addEventListener("resize", function () {
       if (!S || !S.videos || $("fd-full").hidden) return;
       clearTimeout(rt);
-      rt = setTimeout(function () { var m = build(); if (m.inC.length && $("fd-views")) drawViews(m); if ($("fd-months")) { drawMonths(m); drawSales(); drawDow(m); drawDailyCharts(); } }, 150);
+      rt = setTimeout(function () { var m = build(); if (m.inC.length && $("fd-views")) drawViews(m); if ($("fd-months")) { drawMonths(m); if ($("fd-sales")) drawSales(); drawDow(m); drawDailyCharts(); } }, 150);
     });
   }
 
   return {
     init: function (deps) { A = deps; },
     open: function (id) { return open(id); },
+    openChannel: function (email) { return openChannel(email); },
     close: close
   };
 })();

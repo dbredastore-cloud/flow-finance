@@ -193,6 +193,8 @@
   table.prod-sub { width: 100%; }
   table.prod-sub thead th { background: var(--surface); position: sticky; top: 0; z-index: 1; }
   table.prod-sub tr.total-row td { font-weight: 700; border-top: 1px solid var(--border-strong); background: var(--surface); }
+  .yt-open { margin-left: 8px; padding: 2px 9px; border-radius: 999px; font: 600 10.5px/1.6 var(--font-mono, monospace); letter-spacing: .04em; cursor: pointer; color: var(--accent); background: transparent; border: 1px solid rgba(var(--accent-rgb), 0.4); white-space: nowrap; }
+  .yt-open:hover { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); }
   tr.clickable-yt { cursor: pointer; }
   tr.clickable-yt:hover, tr.clickable-yt.open { background: var(--surface-2); }
   tr.yt-detail > td { padding: 0; background: var(--surface-2); }
@@ -1650,7 +1652,7 @@
       var open = state.yt.open === c.affiliate_email;
       var head = '<td class="l"><div style="display:flex;align-items:center;gap:10px;">' +
         (c.thumbnail_url ? '<img src="' + esc(c.thumbnail_url) + '" alt="" width="34" height="34" style="border-radius:50%;flex-shrink:0;" loading="lazy" referrerpolicy="no-referrer">' : '<span class="soc" style="width:34px;height:34px;border-radius:50%;">YT</span>') +
-        '<div class="who"><div class="n"><a href="' + esc(channelUrl(c)) + '" target="_blank" rel="noopener" data-stop>' + esc(c.title || c.input_url) + '</a></div><div class="e">' + esc(a.name || c.affiliate_email) + (c.handle ? " · " + esc(c.handle) : "") + "</div></div></div></td>";
+        '<div class="who"><div class="n"><a href="' + esc(channelUrl(c)) + '" target="_blank" rel="noopener" data-stop>' + esc(c.title || c.input_url) + '</a> <button type="button" class="yt-open" data-yt-dash="' + esc(c.affiliate_email) + '" data-stop title="Abrir os dados completos deste canal">⤢ Abrir dados</button></div><div class="e">' + esc(a.name || c.affiliate_email) + (c.handle ? " · " + esc(c.handle) : "") + "</div></div></div></td>";
       if (c.error && !c.channel_id) {
         return '<tr class="yt-row">' + head + '<td colspan="' + (cols - 1) + '" class="l" style="color:var(--critical); white-space:normal;">Não foi possível ler este canal: ' + esc(c.error) + ". Confira o link na ficha do influencer.</td></tr>";
       }
@@ -1765,6 +1767,8 @@
     renderYoutube();
   });
   $("yt-body").addEventListener("click", function (e) {
+    var dashBtn = e.target.closest("[data-yt-dash]");
+    if (dashBtn) { InfluencerDash.openChannel(dashBtn.dataset.ytDash); return; }
     var typeBtn = e.target.closest("[data-ytype]");
     if (typeBtn) { state.yt.detailType = typeBtn.dataset.ytype; renderYoutube(); return; }
     if (e.target.closest("[data-stop], a")) return;
@@ -2307,6 +2311,14 @@
   // Dashboard do influencer (assets/influencer-dash.js): contrato, vendas e canal vêm daqui; vídeos completos o módulo lê.
   InfluencerDash.init({
     sb: sb, toast: toast, channelUrl: channelUrl, edit: openContract,
+    getChannelCtx: function (email) {
+      var x = (state.yt.channels || []).find(function (y) { return y.c.affiliate_email === email; });
+      if (!x) return null;
+      var a = state.byEmail[email] || { email: email, name: x.c.title || email };
+      var st = (state.stats || {})[email];
+      return { a: a, c: null, info: null, noContract: true, channel: x, socials: socialsHtml(a), instagram: socialLink("instagram", a.instagram),
+        sales: { count: st ? st.count : 0, amount: st ? st.amount : 0, commission: st ? st.commission : 0, label: ($("period-label").textContent || "") } };
+    },
     reloadYoutube: loadYoutube,
     getCtx: function (id) {
       var c = state.fi.contracts.find(function (x) { return x.id === id; });
