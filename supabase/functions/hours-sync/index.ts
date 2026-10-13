@@ -1,4 +1,4 @@
-// Lê a planilha de controle de horas (Google Sheets "controle-horas-flow") e guarda uma foto dela em
+// Lê a planilha de controle de horas (Google Sheets "Controle de horas Flow") e guarda uma foto dela em
 // dev_hours_snapshot, que o menu "Horas de desenvolvimento" do painel mostra.
 //
 // Chamado pelo pg_cron a cada 30 minutos (header x-cron-secret) ou pelo botão "Atualizar agora" do painel (JWT de admin).
@@ -9,7 +9,8 @@
 // Secret opcional: HOURS_SHEET_ID (padrão: a planilha atual).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
-const SHEET_ID = (Deno.env.get("HOURS_SHEET_ID") ?? "1zmsSQGtXRoUihpVr8h3V7LGOhKZ0s22a1XsOuJ6OS3o").trim();
+const SHEET_ID = (Deno.env.get("HOURS_SHEET_ID") ?? "1VlxW4oVio7Q92dzL_6jRfzvaTmXFRminyR7IzbJlu9E").trim();
+const SHEET_TITLE = "Controle de horas Flow";
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -104,12 +105,23 @@ async function readSheet() {
     const r = entregas[i];
     const demand = (r[3] ?? "").trim(), project = (r[4] ?? "").trim();
     if (!demand || !project) continue;
-    deliveries.push({ sprint: (r[0] ?? "").trim(), demand, project, hours: num(r[5] ?? ""), trello: (r[6] ?? "").trim() || null });
+    deliveries.push({ sprint: (r[0] ?? "").trim(), demand, project, hours: num(r[5] ?? ""), trello: (r[6] ?? "").trim() || null, value: num(r[7] ?? "") });
   }
   if (!contract.length && !deliveries.length) throw new Fail("sheet", "Não encontrei os dados nas abas Contrato e Entregas. A estrutura da planilha mudou?");
 
-  const projects = [...new Set(deliveries.map((d) => d.project))];
-  return { year, contract, sprints: sp, deliveries, projects };
+  // Projetos (ferramentas): lista cadastrada no quadro "Projetos" da aba Contrato + os que aparecem nas entregas.
+  const projects: string[] = [];
+  const ph = contrato.findIndex((r) => norm(r[0] ?? "") === "projetos");
+  for (let i = ph + 1; ph >= 0 && i < contrato.length; i++) {
+    const name = (contrato[i][0] ?? "").trim();
+    if (!name || /^como usar/i.test(norm(name))) break;
+    projects.push(name);
+  }
+  for (const d of deliveries) if (!projects.includes(d.project)) projects.push(d.project);
+
+  // Valor médio por hora: valor lançado ÷ horas lançadas (a planilha usa a média ponderada dos contratos).
+  const hours = deliveries.reduce((s, d) => s + d.hours, 0), value = deliveries.reduce((s, d) => s + d.value, 0);
+  return { year, contract, sprints: sp, deliveries, projects, rate: hours ? value / hours : 0, value };
 }
 
 async function authorized(req: Request) {
@@ -135,7 +147,7 @@ Deno.serve(async (req) => {
   try {
     const data = await readSheet();
     const { error } = await sb.from("dev_hours_snapshot").upsert({
-      id: 1, sheet_id: SHEET_ID, sheet_title: "controle-horas-flow", data, source: "sheet", synced_at: new Date().toISOString(),
+      id: 1, sheet_id: SHEET_ID, sheet_title: SHEET_TITLE, data, source: "sheet", synced_at: new Date().toISOString(),
     }, { onConflict: "id" });
     if (error) throw error;
     const hours = data.deliveries.reduce((s, d) => s + d.hours, 0);

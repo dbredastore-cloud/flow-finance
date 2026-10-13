@@ -1,14 +1,15 @@
 /* Horas de desenvolvimento: quanto foi gasto em cada ferramenta a cada mês, contra as horas contratadas.
-   Dados: foto da planilha "controle-horas-flow" (tabela dev_hours_snapshot), atualizada sozinha pela função hours-sync.
+   Dados: foto da planilha "Controle de horas Flow" (tabela dev_hours_snapshot), atualizada sozinha pela função hours-sync.
    Usa o kit visual do painel (flow-theme.css) e as classes de dev-hours.css. */
 window.DevHours = (function () {
   "use strict";
   var A = null, S = { snap: null, month: "all", tool: "all", q: "", loading: false };
-  var TOOL_COLOR = { "Flow Tracking": "var(--c-tracking)", "Flow Pages": "var(--c-pages)", "Flow Spy": "var(--c-spy)" };
+  var TOOL_COLOR = { "Flow Tracking": "var(--c-tracking)", "Flow Pages": "var(--c-pages)", "Flow Spy": "var(--c-spy)", "Flow Safe": "var(--warning)" };
   var FALLBACK = ["var(--accent)", "var(--accent-3)", "var(--warning)", "var(--accent-2)"];
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function nf(v, d) { return v == null || isNaN(v) ? "—" : new Intl.NumberFormat("pt-BR", { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 1 : d }).format(v); }
+  function brl(v) { return v == null || isNaN(v) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
   function pct(v) { return v == null || !isFinite(v) ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
   function color(p, i) { return TOOL_COLOR[p] || FALLBACK[i % FALLBACK.length]; }
   function fmtDate(iso) { return iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "—"; }
@@ -68,6 +69,7 @@ window.DevHours = (function () {
       kpi("Horas gastas", nf(m.tot.spent), "soma de todas as demandas lançadas") +
       kpi("Saldo de horas", nf(m.tot.balance), "disponível menos gasto", m.tot.balance < 0 ? "bad" : "good") +
       kpi("Consumo do total", pct(m.tot.use), "das horas disponíveis") +
+      (snap.data && snap.data.rate ? kpi("Valor das horas gastas", brl(m.tot.spent * snap.data.rate), "média de " + brl(snap.data.rate) + " por hora") : "") +
       P.map(function (p, i) { return kpi(esc(p), nf(m.tot.by[p] || 0), m.tot.spent ? pct((m.tot.by[p] || 0) / m.tot.spent) + " das horas gastas" : "sem horas lançadas"); }).join("") + "</div>";
 
     var table = '<section class="panel"><div class="panel-head"><h3>Horas por ferramenta em cada mês</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
@@ -94,7 +96,7 @@ window.DevHours = (function () {
       }).join("") : '<tr><td colspan="' + (P.length + 4) + '" class="empty">Nenhuma sprint cadastrada na planilha.</td></tr>') + "</tbody></table></div></section>";
 
     var deliv = '<section class="panel"><div class="panel-head"><h3>Demandas lançadas</h3><span class="muted" id="dh-count"></span></div><div class="mr-tools dh-tools" id="dh-tools"></div>' +
-      '<div class="table-scroll"><table class="dh-table dh-deliv"><thead><tr><th class="l">Sprint</th><th class="l">Demanda</th><th class="l">Ferramenta</th><th>Horas</th><th class="l">Trello</th></tr></thead><tbody id="dh-body"></tbody></table></div></section>';
+      '<div class="table-scroll"><table class="dh-table dh-deliv"><thead><tr><th class="l">Sprint</th><th class="l">Demanda</th><th class="l">Ferramenta</th><th>Horas</th><th>Valor</th><th class="l">Trello</th></tr></thead><tbody id="dh-body"></tbody></table></div></section>';
 
     root.innerHTML = head + kpis + table + charts + sprints + deliv;
     drawChart(m); drawShare(m); renderTools(m); renderDeliveries(m);
@@ -154,9 +156,9 @@ window.DevHours = (function () {
     var sum = list.reduce(function (s, x) { return s + x.hours; }, 0);
     body.innerHTML = list.length ? list.map(function (x) {
       var i = Math.max(0, P.indexOf(x.project));
-      return '<tr><td class="l">' + esc(x.sprint) + '</td><td class="l dh-demand">' + esc(x.demand) + '</td><td class="l"><span class="dh-chip" style="--c:' + color(x.project, i) + '">' + esc(x.project) + '</span></td><td class="num"><b>' + nf(x.hours) + '</b></td><td class="l">' +
+      return '<tr><td class="l">' + esc(x.sprint) + '</td><td class="l dh-demand">' + esc(x.demand) + '</td><td class="l"><span class="dh-chip" style="--c:' + color(x.project, i) + '">' + esc(x.project) + '</span></td><td class="num"><b>' + nf(x.hours) + '</b></td><td class="num">' + (x.value ? brl(x.value) : "—") + '</td><td class="l">' +
         (x.trello && /^https:\/\//.test(x.trello) ? '<a href="' + esc(x.trello) + '" target="_blank" rel="noopener noreferrer">Abrir no Trello ↗</a>' : '<span class="muted">—</span>') + "</td></tr>";
-    }).join("") : '<tr><td colspan="5" class="empty">Nenhuma demanda com esses filtros.</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty">Nenhuma demanda com esses filtros.</td></tr>';
     var c = document.getElementById("dh-count");
     if (c) c.innerHTML = list.length + " de " + m.deliveries.length + " demandas · <b>" + nf(sum) + " h</b>";
   }
