@@ -119,9 +119,22 @@ async function readSheet() {
   }
   for (const d of deliveries) if (!projects.includes(d.project)) projects.push(d.project);
 
-  // Valor médio por hora: valor lançado ÷ horas lançadas (a planilha usa a média ponderada dos contratos).
+  // Contratos e valor médio por hora: quadro "Contratos e valor médio por hora" da aba Contrato
+  // (colunas: Contrato, Horas por mês, Valor pago, Horas do contrato, Valor por hora, Valor mensal; a última linha é o total/média).
+  const contracts: { name: string; hoursMonth: number; paid: number | null; hours: number | null; rate: number; monthly: number }[] = [];
+  let avg: { hoursMonth: number; paid: number | null; rate: number; monthly: number } | null = null;
+  const kh = contrato.findIndex((r) => norm(r[0] ?? "").startsWith("contratos e valor"));
+  for (let i = kh + 2; kh >= 0 && i < contrato.length; i++) {
+    const name = (contrato[i][0] ?? "").trim();
+    if (!name || !(contrato[i][1] ?? "").trim()) break;
+    const opt = (s: string) => ((s ?? "").trim() ? num(s) : null);
+    if (/^total|media/.test(norm(name))) { avg = { hoursMonth: num(contrato[i][1]), paid: opt(contrato[i][2]), rate: num(contrato[i][4]), monthly: num(contrato[i][5]) }; break; }
+    contracts.push({ name, hoursMonth: num(contrato[i][1]), paid: opt(contrato[i][2]), hours: opt(contrato[i][3]), rate: num(contrato[i][4]), monthly: num(contrato[i][5]) });
+  }
+
+  // Valor médio por hora: o da planilha (média ponderada dos contratos); sem o quadro, valor lançado ÷ horas lançadas.
   const hours = deliveries.reduce((s, d) => s + d.hours, 0), value = deliveries.reduce((s, d) => s + d.value, 0);
-  return { year, contract, sprints: sp, deliveries, projects, rate: hours ? value / hours : 0, value };
+  return { year, contract, sprints: sp, deliveries, projects, contracts, contractAvg: avg, rate: avg?.rate || (hours ? value / hours : 0), value };
 }
 
 async function authorized(req: Request) {
