@@ -6,7 +6,11 @@
 .dh-sub.muted { color: var(--text-muted); }
 .dh-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .dh-acts .btn { width: auto; padding: 7px 14px; text-decoration: none; }
-.dh-kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin: 0; }
+/* duas linhas: totais em cima, uma por ferramenta embaixo; cada linha divide a largura em partes iguais */
+#hours-view .dh-kpis { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 14px; margin: 0; }
+#hours-view .dh-kpis .kpi { min-width: 0; height: 100%; min-height: 108px; }
+@media (max-width: 1000px) { #hours-view .dh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { #hours-view .dh-kpis { grid-template-columns: 1fr; } }
 .dh-kpis .kpi .value.good { color: var(--accent); }
 .dh-kpis .kpi .value.bad { color: var(--critical); }
 .dh-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }

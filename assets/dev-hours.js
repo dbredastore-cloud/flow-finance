@@ -64,12 +64,13 @@ window.DevHours = (function () {
       '<div class="dh-acts"><button class="btn" type="button" data-dh="sync" id="dh-sync">↻ Atualizar agora</button><a class="btn" href="' + url + '" target="_blank" rel="noopener noreferrer">Abrir a planilha ↗</a></div></div>' +
       '<div id="dh-alert"></div>';
 
-    var kpis = '<div class="kpi-row dh-kpis">' +
+    var kpis = '<div class="kpi-row dh-kpis" style="--n:' + (snap.data && snap.data.rate ? 5 : 4) + '">' +
       kpi("Horas disponíveis", nf(m.tot.avail), nf(m.tot.contracted) + " contratadas" + (m.tot.carry ? " + " + nf(m.tot.carry) + " de saldo anterior" : "")) +
       kpi("Horas gastas", nf(m.tot.spent), "soma de todas as demandas lançadas") +
       kpi("Saldo de horas", nf(m.tot.balance), "disponível menos gasto", m.tot.balance < 0 ? "bad" : "good") +
       kpi("Consumo do total", pct(m.tot.use), "das horas disponíveis") +
       (snap.data && snap.data.rate ? kpi("Valor das horas gastas", brl(m.tot.spent * snap.data.rate), "média de " + brl(snap.data.rate) + " por hora") : "") +
+      '</div><div class="kpi-row dh-kpis" style="--n:' + Math.max(P.length, 1) + '">' +
       P.map(function (p, i) { return kpi(esc(p), nf(m.tot.by[p] || 0), m.tot.spent ? pct((m.tot.by[p] || 0) / m.tot.spent) + " das horas gastas" : "sem horas lançadas"); }).join("") + "</div>";
 
     var table = '<section class="panel"><div class="panel-head"><h3>Horas por ferramenta em cada mês</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
