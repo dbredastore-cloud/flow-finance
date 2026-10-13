@@ -20,6 +20,11 @@
 .dh-table th.l, .dh-table td.l { text-align: left; }
 .dh-table td.bad { color: var(--critical); }
 .dh-table tr.dh-total td { font-weight: 700; border-top: 1px solid var(--border-strong); }
+/* rodapé da tabela de contratos: linha de total/média em destaque */
+.dh-table tfoot td { padding-top: 14px; padding-bottom: 14px; font-weight: 700; font-size: 14px; color: var(--text); background: color-mix(in oklab, var(--accent) 12%, var(--bg-card, transparent)); border-top: 2px solid var(--accent); border-bottom: 1px solid var(--border-strong); }
+.dh-table tfoot td:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; box-shadow: inset 3px 0 0 var(--accent); text-transform: uppercase; letter-spacing: .04em; font-size: 12.5px; }
+.dh-table tfoot td:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+.dh-table tfoot td.num { color: var(--accent); }
 .dh-table td.dh-demand { white-space: normal; min-width: 280px; }
 .dh-dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; vertical-align: 0; }
 .dh-use { display: inline-block; width: 54px; height: 6px; margin-right: 6px; border-radius: 999px; background: var(--track-bg); vertical-align: 1px; overflow: hidden; }

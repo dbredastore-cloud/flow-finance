@@ -79,7 +79,7 @@ window.DevHours = (function () {
       var h = function (v) { return v == null ? "—" : nf(v); };
       var sumMonthly = CT.reduce(function (s, c) { return s + (c.monthly || 0); }, 0);
       var rateMax = Math.max.apply(null, CT.map(function (c) { return c.rate; }).concat([AV ? AV.rate : 0, 1]));
-      contractSec = '<section class="panel"><div class="panel-head"><h3>Contratos e valor da hora</h3></div>' +
+      contractSec = '<section class="panel"><div class="panel-head"><h3>Contratos e valor por hora</h3></div>' +
         '<div class="kpi-row dh-kpis" style="--n:4">' +
         kpi("Horas contratadas por mês", nf(AV ? AV.hoursMonth : CT.reduce(function (s, c) { return s + c.hoursMonth; }, 0)), "soma dos " + CT.length + " contratos") +
         kpi("Total contratado no período", nf(m.tot.contracted), m.rows.length + " meses · " + nf(m.tot.avail) + " h com o saldo anterior") +
@@ -89,9 +89,9 @@ window.DevHours = (function () {
         CT.map(function (c) {
           return '<tr><td class="l">' + esc(c.name) + '</td><td class="num">' + nf(c.hoursMonth) + '</td><td class="num">' + h(c.hours) + '</td><td class="num">' + money(c.paid) + '</td><td class="num"><b>' + brl(c.rate) + '</b></td><td class="num">' + money(c.monthly) + '</td>' +
             '<td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (c.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr>';
-        }).join("") +
-        (AV ? '<tr class="dh-total"><td class="l">Total / média ponderada</td><td class="num">' + nf(AV.hoursMonth) + '</td><td class="num">—</td><td class="num">' + money(AV.paid) + '</td><td class="num">' + brl(AV.rate) + '</td><td class="num">' + money(AV.monthly || sumMonthly) + '</td><td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (AV.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr>' : "") +
-        "</tbody></table></div></section>";
+        }).join("") + "</tbody>" +
+        (AV ? '<tfoot><tr class="dh-foot"><td class="l">Total / média ponderada</td><td class="num">' + nf(AV.hoursMonth) + '</td><td class="num">—</td><td class="num">' + money(AV.paid) + '</td><td class="num">' + brl(AV.rate) + '</td><td class="num">' + money(AV.monthly || sumMonthly) + '</td><td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (AV.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr></tfoot>' : "") +
+        "</table></div></section>";
     }
 
     var table = '<section class="panel"><div class="panel-head"><h3>Horas por ferramenta em cada mês</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
@@ -120,7 +120,7 @@ window.DevHours = (function () {
     var deliv = '<section class="panel"><div class="panel-head"><h3>Demandas lançadas</h3><span class="muted" id="dh-count"></span></div><div class="mr-tools dh-tools" id="dh-tools"></div>' +
       '<div class="table-scroll"><table class="dh-table dh-deliv"><thead><tr><th class="l">Sprint</th><th class="l">Demanda</th><th class="l">Ferramenta</th><th>Horas</th><th>Valor</th><th class="l">Trello</th></tr></thead><tbody id="dh-body"></tbody></table></div></section>';
 
-    root.innerHTML = head + kpis + contractSec + table + charts + sprints + deliv;
+    root.innerHTML = head + contractSec + kpis + table + charts + sprints + deliv;
     drawChart(m); drawShare(m); renderTools(m); renderDeliveries(m);
   }
 
