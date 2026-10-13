@@ -4,8 +4,9 @@
 // criar/excluir contas e trocar senhas, coisa que o navegador não pode fazer sozinho.
 // Funciona com o cadastro público desligado: criar conta pelo painel não depende dele.
 //
-// Ações: list · create · grant · revoke · delete_user · reset_password
+// Ações: list · create (envia o acesso por e-mail pelo Gmail da Flow) · grant · revoke · delete_user · reset_password
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { accessEmail, mailConfigured, PANEL_URL, sendMail } from "./mail.ts";
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -94,7 +95,23 @@ async function create(body: any) {
 
   const { error: e2 } = await sb.from("app_admins").upsert({ user_id: userId, email }, { onConflict: "user_id" });
   if (e2) throw e2;
-  return { ok: true, user_id: userId, email, existed, password: existed ? null : password, generated };
+  // Envia o acesso por e-mail (Gmail da Flow): endereço do painel, login e um link para a pessoa definir a própria senha.
+  let mailed = false, mailNote: string | null = null;
+  if (body.sendEmail !== false) {
+    if (!mailConfigured()) mailNote = "Envio de e-mail ainda não configurado (falta o secret GMAIL_APP_PASSWORD).";
+    else {
+      try {
+        const { data: ld, error: le } = await sb.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: PANEL_URL } });
+        const link = ld?.properties?.action_link;
+        if (le || !link) throw new Error(le?.message ?? "sem link");
+        await sendMail({ to: email, ...accessEmail(email, link) });
+        mailed = true;
+      } catch (e) {
+        mailNote = "O acesso foi criado, mas o e-mail não foi enviado: " + String((e as Error)?.message ?? e).slice(0, 120);
+      }
+    }
+  }
+  return { ok: true, user_id: userId, email, existed, password: existed ? null : password, generated, mailed, mailNote };
 }
 
 async function grant(body: any) {

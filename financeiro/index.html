@@ -1179,7 +1179,7 @@
     var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, password);
     btn.disabled = false; btn.textContent = "Entrar";
     if (res.error) {
-      msg.innerHTML = '<div class="msg error">' + (res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>";
+      msg.innerHTML = '<div class="msg error">' + (res.error.message === "Invalid login credentials" || res.error.message === "E-mail ou senha incorretos." ? "Credenciais incorretas: o e-mail ou a senha foram digitados errado. Confira e tente de novo." : res.error.message) + "</div>";
       return;
     }
     await boot();
@@ -1190,13 +1190,11 @@
     var msg = document.getElementById("login-msg");
     var btn = document.getElementById("reset-link");
     if (!email) { msg.innerHTML = '<div class="msg error">Digite seu e-mail acima primeiro.</div>'; return; }
-    btn.disabled = true;
+    btn.disabled = true; msg.innerHTML = '<div class="msg">Enviando o link…</div>';
     var redirectTo = window.location.origin + window.location.pathname;
-    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+    var res = await window.flowRecoverPassword(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, redirectTo);
     btn.disabled = false;
-    msg.innerHTML = res.error
-      ? '<div class="msg error">' + res.error.message + "</div>"
-      : '<div class="msg ok">Se essa conta existir, um link de redefinição foi enviado para ' + email + ". Confira também a caixa de spam.</div>";
+    msg.innerHTML = res.message;
   });
 
   document.getElementById("logout-btn").addEventListener("click", async function () {

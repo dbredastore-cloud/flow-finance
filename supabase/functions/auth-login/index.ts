@@ -17,7 +17,8 @@ const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const MAX_FAILS = 5;
 const WINDOW_MIN = 15;
 const ALLOWED_ORIGINS = ["https://gestorflowtools.shop", "https://www.gestorflowtools.shop", "http://localhost:8765"];
-const GENERIC_ERROR = "E-mail ou senha incorretos.";
+// Igual para e-mail inexistente e senha errada (não revela quais e-mails têm conta).
+const GENERIC_ERROR = "Credenciais incorretas: o e-mail ou a senha foram digitados errado. Confira e tente de novo.";
 
 function corsFor(req: Request) {
   const origin = req.headers.get("origin") ?? "";

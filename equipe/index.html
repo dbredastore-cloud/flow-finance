@@ -27,6 +27,7 @@
   .field input { width: 100%; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 14px; }
   .msg { font-size: 12.5px; margin-top: 10px; border-radius: var(--radius-sm); padding: 8px 10px; }
   .msg.error { background: color-mix(in oklab, var(--critical) 14%, transparent); color: var(--critical); }
+  .msg.ok { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
 
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }
   .btn:hover { background: var(--surface-2); }
@@ -64,6 +65,8 @@
   .pw-wrap button { position: absolute; right: 4px; top: 4px; bottom: 4px; padding: 0 10px; }
 
   .secret { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-sm); border: 1px dashed var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); font-size: 13px; line-height: 1.6; }
+  .mail-opt { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); cursor: pointer; }
+  .mail-opt input { accent-color: var(--accent); margin-top: 3px; }
   .secret code { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border-strong); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 14px; user-select: all; }
   .secret .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
 
@@ -104,6 +107,7 @@
       <div class="field"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
       <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" required></div>
       <button type="submit" class="btn btn-primary btn-block" id="login-submit">Entrar</button>
+      <div style="text-align:center; margin-top:12px;"><button type="button" id="reset-link" style="background:none;border:0;padding:4px;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">Esqueci minha senha</button></div>
       <div id="login-msg"></div>
     </form>
   </div>
@@ -143,6 +147,7 @@
           <button class="btn btn-primary" type="submit" id="add-btn">Criar acesso</button>
         </div>
       </form>
+      <label class="mail-opt"><input type="checkbox" id="add-mail" checked> Enviar o acesso por e-mail (de flow@tbnegociosdigitais.com): endereço do painel, login e um link para a pessoa definir a própria senha.</label>
       <div id="add-result"></div>
     </section>
 
@@ -223,10 +228,18 @@
     msg.innerHTML = ""; btn.disabled = true; btn.textContent = "Entrando…";
     var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, $("login-email").value.trim(), $("login-password").value);
     btn.disabled = false; btn.textContent = "Entrar";
-    if (res.error) { msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>"; return; }
+    if (res.error) { msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" || res.error.message === "E-mail ou senha incorretos." ? "Credenciais incorretas: o e-mail ou a senha foram digitados errado. Confira e tente de novo." : res.error.message) + "</div>"; return; }
     boot();
   });
   $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
+  // "Esqueci minha senha": envia o link pelo Gmail da Flow; a tela de nova senha fica no Financeiro.
+  $("reset-link").addEventListener("click", async function () {
+    var email = $("login-email").value.trim(), msg = $("login-msg"), btn = this;
+    if (!email) { msg.innerHTML = '<div class="msg error">Digite seu e-mail acima primeiro.</div>'; return; }
+    btn.disabled = true; msg.innerHTML = '<div class="msg">Enviando o link…</div>';
+    var r = await window.flowRecoverPassword(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, window.location.origin + "/financeiro/");
+    btn.disabled = false; msg.innerHTML = r.message;
+  });
   sb.auth.onAuthStateChange(function (ev) { if (ev === "SIGNED_OUT") showOnly("login-screen"); });
 
   /* ---------------- chamadas ---------------- */
@@ -296,13 +309,15 @@
     var btn = $("add-btn"), email = $("add-email").value.trim(), pw = $("add-pw").value;
     if (pw && pw.length < 10) { toast("A senha precisa ter pelo menos 10 caracteres.", true); return; }
     btn.disabled = true; btn.textContent = "Criando…"; $("add-result").innerHTML = "";
-    var r = await call({ action: "create", email: email, password: pw });
+    var r = await call({ action: "create", email: email, password: pw, sendEmail: $("add-mail").checked });
     btn.disabled = false; btn.textContent = "Criar acesso";
     if (!r.ok) { toast(r.error || "Não foi possível criar.", true); return; }
     $("add-form").reset();
     $("add-result").innerHTML = r.existed
       ? secretBox("Acesso liberado", r.email, null, "Essa pessoa já tinha conta, então a senha dela continua a mesma. Se ela não lembra, use <b>Redefinir senha</b> na lista.")
       : secretBox("Acesso criado", r.email, r.password, "Esta senha aparece só agora. Envie por um canal seguro e peça para a pessoa trocar em <b>Minha conta</b> no primeiro acesso. Endereço do painel: " + esc(location.origin) + "/financeiro/");
+    if (r.mailed) $("add-result").insertAdjacentHTML("beforeend", '<div class="msg ok">E-mail com o acesso enviado para ' + esc(r.email) + '.</div>');
+    else if (r.mailNote) $("add-result").insertAdjacentHTML("beforeend", '<div class="msg error">' + esc(r.mailNote) + '</div>');
     toast("Acesso liberado para " + r.email + ".");
     await reload();
   });

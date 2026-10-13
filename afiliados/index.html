@@ -45,6 +45,7 @@
   input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .msg { font-size: 12.5px; margin-top: 10px; border-radius: var(--radius-sm); padding: 8px 10px; }
   .msg.error { background: color-mix(in oklab, var(--critical) 14%, transparent); color: var(--critical); }
+  .msg.ok { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
 
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px;
@@ -335,6 +336,7 @@
         <input id="login-password" type="password" autocomplete="current-password" required>
       </div>
       <button type="submit" class="btn btn-primary btn-block" id="login-submit">Entrar</button>
+      <div style="text-align:center; margin-top:12px;"><button type="button" id="reset-link" style="background:none;border:0;padding:4px;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">Esqueci minha senha</button></div>
       <div id="login-msg"></div>
     </form>
   </div>
@@ -772,12 +774,20 @@
     var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, $("login-email").value.trim(), $("login-password").value);
     btn.disabled = false; btn.textContent = "Entrar";
     if (res.error) {
-      msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : res.error.message) + "</div>";
+      msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" || res.error.message === "E-mail ou senha incorretos." ? "Credenciais incorretas: o e-mail ou a senha foram digitados errado. Confira e tente de novo." : res.error.message) + "</div>";
       return;
     }
     boot();
   });
   $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
+  // "Esqueci minha senha": envia o link pelo Gmail da Flow; a tela de nova senha fica no Financeiro.
+  $("reset-link").addEventListener("click", async function () {
+    var email = $("login-email").value.trim(), msg = $("login-msg"), btn = this;
+    if (!email) { msg.innerHTML = '<div class="msg error">Digite seu e-mail acima primeiro.</div>'; return; }
+    btn.disabled = true; msg.innerHTML = '<div class="msg">Enviando o link…</div>';
+    var r = await window.flowRecoverPassword(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, window.location.origin + "/financeiro/");
+    btn.disabled = false; msg.innerHTML = r.message;
+  });
 
   /* ---------------- Dados ---------------- */
   // Busca todas as páginas de 1000 linhas: a 1ª sozinha (quase sempre basta) e,
