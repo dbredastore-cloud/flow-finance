@@ -76,6 +76,9 @@ window.DevHours = (function () {
     var D = snap.data || {}, CT = D.contracts || [], AV = D.contractAvg || null, contractSec = "";
     if (CT.length) {
       var money = function (v) { return v == null ? "—" : brl(v); };
+      /* A planilha não traz o valor pago da recorrência (contrato mensal, sem total de horas); vale o que é pago hoje. Se a planilha passar a trazer, ela prevalece. */
+      var PAID_FALLBACK = { recorrencia: 48000 };
+      CT.forEach(function (c) { c.recurring = c.hours == null; if (c.paid == null) { var k = norm(c.name).split(/[^a-z]/)[0]; if (PAID_FALLBACK[k]) c.paid = PAID_FALLBACK[k]; } });
       var h = function (v) { return v == null ? "—" : nf(v); };
       var sumMonthly = CT.reduce(function (s, c) { return s + (c.monthly || 0); }, 0);
       var rateMax = Math.max.apply(null, CT.map(function (c) { return c.rate; }).concat([AV ? AV.rate : 0, 1]));
@@ -87,11 +90,11 @@ window.DevHours = (function () {
         kpi("Valor mensal dos contratos", brl(AV && AV.monthly ? AV.monthly : sumMonthly), "horas por mês vezes o valor da hora") + "</div>" +
         '<div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Contrato</th><th>Horas por mês</th><th>Horas do contrato</th><th>Valor pago</th><th>Valor da hora</th><th>Valor mensal</th><th class="l">Valor da hora (comparação)</th></tr></thead><tbody>' +
         CT.map(function (c) {
-          return '<tr><td class="l">' + esc(c.name) + '</td><td class="num">' + nf(c.hoursMonth) + '</td><td class="num">' + h(c.hours) + '</td><td class="num">' + money(c.paid) + '</td><td class="num"><b>' + brl(c.rate) + '</b></td><td class="num">' + money(c.monthly) + '</td>' +
+          return '<tr><td class="l">' + esc(c.name) + '</td><td class="num">' + nf(c.hoursMonth) + '</td><td class="num">' + h(c.hours) + '</td><td class="num">' + money(c.paid) + (c.recurring && c.paid != null ? ' <span class="muted">/mês</span>' : "") + '</td><td class="num"><b>' + brl(c.rate) + '</b></td><td class="num">' + money(c.monthly) + '</td>' +
             '<td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (c.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr>';
         }).join("") + "</tbody>" +
         (AV ? '<tfoot><tr class="dh-foot"><td class="l">Total / média ponderada</td><td class="num">' + nf(AV.hoursMonth) + '</td><td class="num">—</td><td class="num">' + money(AV.paid) + '</td><td class="num">' + brl(AV.rate) + '</td><td class="num">' + money(AV.monthly || sumMonthly) + '</td><td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (AV.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr></tfoot>' : "") +
-        "</table></div></section>";
+        "</table></div>" + (CT.some(function (c) { return c.recurring && c.paid != null; }) ? '<p class="dh-note">Na recorrência o valor pago é mensal. Nos demais contratos é o valor total, e o total do rodapé soma só esses contratos fechados, como na planilha.</p>' : "") + "</section>";
     }
 
     var table = '<section class="panel"><div class="panel-head"><h3>Horas por ferramenta em cada mês</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
