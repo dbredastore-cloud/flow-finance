@@ -102,7 +102,8 @@ async function create(body: any) {
     else {
       try {
         const { data: ld, error: le } = await sb.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: PANEL_URL } });
-        const link = ld?.properties?.action_link;
+        const th = ld?.properties?.hashed_token;
+        const link = th ? `${PANEL_URL}?token_hash=${encodeURIComponent(th)}&type=recovery` : "";
         if (le || !link) throw new Error(le?.message ?? "sem link");
         await sendMail({ to: email, ...accessEmail(email, link) });
         mailed = true;

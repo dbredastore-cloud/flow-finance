@@ -3461,6 +3461,20 @@
 
   /* ---------------- Boot ---------------- */
   async function boot() {
+    // Link de redefinição do e-mail (?token_hash=…&type=recovery): valida o código aqui mesmo e abre a tela de nova senha.
+    var qs = new URLSearchParams(window.location.search), tokenHash = qs.get("token_hash");
+    if (tokenHash && qs.get("type") === "recovery") {
+      showStatus("Validando o link…", "Só um instante.", false);
+      var v = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+      history.replaceState(null, "", window.location.pathname);
+      if (v.error || !v.data || !v.data.session) {
+        pendingRecovery = false;
+        showLogin();
+        document.getElementById("login-msg").innerHTML = '<div class="msg error">Este link de redefinição é inválido ou já foi usado/expirou. Peça um novo em "Esqueci minha senha".</div>';
+        return;
+      }
+      pendingRecovery = true; showRecovery(); return;
+    }
     if (pendingRecovery) { showRecovery(); return; }
     showStatus("Carregando…", "Verificando sua sessão.", false);
     var sessionRes = await sb.auth.getSession();

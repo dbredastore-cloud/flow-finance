@@ -67,7 +67,9 @@ Deno.serve(async (req) => {
 
   try {
     const { data, error } = await sb.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: safeRedirect(body.redirectTo) } });
-    const uid = data?.user?.id, link = data?.properties?.action_link;
+    const uid = data?.user?.id, th = data?.properties?.hashed_token;
+    // Link direto para a página do painel (a página valida o código e abre a tela de nova senha); não depende da lista de URLs do Supabase.
+    const link = th ? `${safeRedirect(body.redirectTo)}?token_hash=${encodeURIComponent(th)}&type=recovery` : "";
     if (!error && uid && link) {
       const { data: admin } = await sb.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
       if (admin) await sendMail({ to: email, ...recoveryEmail(link) });
