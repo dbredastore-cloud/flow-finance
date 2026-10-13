@@ -2890,7 +2890,6 @@
     document.getElementById("tool-view").hidden = v !== "tool";
     document.getElementById("clients-view").hidden = v !== "clients";
     document.getElementById("hours-view").hidden = v !== "hours";
-    document.body.classList.toggle("calm", v === "hours");   // fundo neutro nesta tela (leitura)
     document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();

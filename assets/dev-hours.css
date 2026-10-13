@@ -1,27 +1,9 @@
 /* Horas de desenvolvimento (assets/dev-hours.js)
    Tela de leitura: fundo neutro (sem a imagem de gráficos), cartões sólidos e tabelas alinhadas. */
 
-/* ---------- Fundo neutro (a classe "calm" é ligada no <body> só nesta tela) ---------- */
-body.calm {
-  --calm-bg: #101315; --calm-card: #171b1e; --calm-card-2: #1d2226;
-  --calm-line: rgba(255, 255, 255, 0.08); --calm-line-2: rgba(255, 255, 255, 0.16);
-  background: var(--calm-bg);
-}
-:root[data-theme="light"] body.calm {
-  --calm-bg: #f3f4f5; --calm-card: #ffffff; --calm-card-2: #f6f7f7;
-  --calm-line: rgba(15, 23, 20, 0.09); --calm-line-2: rgba(15, 23, 20, 0.18);
-}
-body.calm::before, body.calm::after { display: none; }
-body.calm #hours-view .panel, body.calm #hours-view .kpi {
-  background: var(--calm-card); border: 1px solid var(--calm-line); box-shadow: none; animation: none;
-}
-body.calm #hours-view .panel::before, body.calm #hours-view .kpi::before, body.calm #hours-view .kpi::after { display: none; }
-body.calm #hours-view .kpi { transition: border-color .15s ease; }
-body.calm #hours-view .kpi:hover { transform: none; box-shadow: none; border-color: var(--calm-line-2); }
-body.calm #hours-view .kpi .value { text-shadow: none; }
-body.calm #hours-view .kpi .value.good, body.calm #hours-view .kpi .value.bad { text-shadow: none; }
-body.calm #hours-view .btn { box-shadow: none; }
-body.calm #hours-view thead th { background: transparent; }
+/* ---------- Base (o fundo neutro e os cartões sólidos vêm de flow-theme.css) ---------- */
+#hours-view .panel, #hours-view .kpi { animation: none; }
+#hours-view thead th { background: transparent; }
 
 /* ---------- Estrutura ---------- */
 #hours-view { display: grid; gap: 18px; }

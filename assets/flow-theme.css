@@ -323,3 +323,51 @@ input:disabled { opacity: .6; }
 @keyframes fxFade { from { opacity: 0; } to { opacity: 1; } }
 .fx-dot { transition: r .15s ease, opacity .15s ease; }
 .fx-scan { pointer-events: none; transition: opacity .12s ease; }
+
+
+/* =====================================================================
+   Leitura em primeiro lugar: fundo neutro, cartões sólidos, sem brilho.
+   Vale para todas as telas (Financeiro, Afiliados, Equipe). Fica por último
+   para sobrepor o acabamento "neon" acima. O verde continua só como cor de marca/ação.
+   ===================================================================== */
+:root, :root[data-theme="dark"] {
+  --bg: #101315;
+  --surface: #171b1e; --surface-solid: #171b1e; --card-bg: #171b1e;
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.09);
+  --row-line: rgba(255, 255, 255, 0.07);
+  --grid: rgba(255, 255, 255, 0.08);
+  --head-bg: #171b1e; --field-bg: #101315; --btn-bg: #1d2226; --pop-bg: #1b2024; --drawer-bg: #171b1e;
+  --sidebar-bg: #121618;
+  --track-bg: rgba(255, 255, 255, 0.08);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --glow: 0 0 0 transparent; --text-glow: none; --good-glow: none; --bad-glow: none; --link-glow: none;
+  --calm-line: rgba(255, 255, 255, 0.08); --calm-line-2: rgba(255, 255, 255, 0.16); --calm-card: #171b1e;
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f5;
+  --surface: #ffffff; --surface-solid: #ffffff; --card-bg: #ffffff;
+  --surface-2: rgba(15, 23, 20, 0.05);
+  --border: rgba(15, 23, 20, 0.10);
+  --row-line: rgba(15, 23, 20, 0.08);
+  --grid: rgba(15, 23, 20, 0.12);
+  --head-bg: #f6f7f7; --field-bg: #ffffff; --btn-bg: #ffffff; --pop-bg: #ffffff; --drawer-bg: #ffffff;
+  --sidebar-bg: #ffffff;
+  --track-bg: rgba(15, 23, 20, 0.09);
+  --shadow: 0 1px 2px rgba(15, 23, 20, 0.06);
+  --calm-line: rgba(15, 23, 20, 0.09); --calm-line-2: rgba(15, 23, 20, 0.18); --calm-card: #ffffff;
+}
+body::before, body::after { display: none; }                      /* sem imagem de gráficos nem grade de fundo */
+.panel::before, .kpi::before, .login-card::before, .kpi::after { display: none; }   /* sem filete e canto decorativo */
+.panel, .kpi, .alerts, .login-card { background: var(--card-bg); box-shadow: none; }
+.kpi:hover { transform: none; box-shadow: none; border-color: var(--border-strong); }
+.kpi .value, .kpi .value.good, .kpi .value.bad { text-shadow: none; }
+.btn:hover, .btn-primary, .btn.btn-primary, .btn-primary:hover { box-shadow: none; }
+.nav-btn.active, .tool-btn.active { box-shadow: inset 2px 0 0 var(--accent); }
+.bar-fill { box-shadow: none; }
+.topbar h2::after { box-shadow: none; }
+/* cabeçalho de cada bloco: respiro e linha de separação */
+.panel-head { padding-bottom: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+/* tabelas: cabeçalho discreto, linhas finas, sem linha na última */
+thead th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); border-bottom: 1px solid var(--border-strong); }
+tbody tr:last-child td { border-bottom: 0; }
