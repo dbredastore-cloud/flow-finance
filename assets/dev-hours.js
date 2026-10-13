@@ -76,9 +76,13 @@ window.DevHours = (function () {
     var D = snap.data || {}, CT = D.contracts || [], AV = D.contractAvg || null, contractSec = "";
     if (CT.length) {
       var money = function (v) { return v == null ? "—" : brl(v); };
-      /* A planilha não traz o valor pago da recorrência (contrato mensal, sem total de horas); vale o que é pago hoje. Se a planilha passar a trazer, ela prevalece. */
-      var PAID_FALLBACK = { recorrencia: 48000 };
-      CT.forEach(function (c) { c.recurring = c.hours == null; if (c.paid == null) { var k = norm(c.name).split(/[^a-z]/)[0]; if (PAID_FALLBACK[k]) c.paid = PAID_FALLBACK[k]; } });
+      /* Recorrência: contrato mensal fixo. Na planilha ficam em branco o valor pago e as horas do contrato; valem os dados informados (R$ 48.000,00 por mês, 360 h). Se a planilha passar a trazer, ela prevalece. */
+      var FIXED = { recorrencia: { paid: 48000, hours: 360 } };
+      CT.forEach(function (c) {
+        var f = FIXED[norm(c.name).split(/[^a-z]/)[0]];
+        c.recurring = !!f || c.hours == null;
+        if (f) { if (c.paid == null) c.paid = f.paid; if (c.hours == null) c.hours = f.hours; }
+      });
       var h = function (v) { return v == null ? "—" : nf(v); };
       var sumMonthly = CT.reduce(function (s, c) { return s + (c.monthly || 0); }, 0);
       var rateMax = Math.max.apply(null, CT.map(function (c) { return c.rate; }).concat([AV ? AV.rate : 0, 1]));
