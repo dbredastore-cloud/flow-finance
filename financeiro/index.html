@@ -570,10 +570,12 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/customer-health.css">
+<link rel="stylesheet" href="../assets/dev-hours.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/customer-health.js"></script>
+<script src="../assets/dev-hours.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -648,6 +650,7 @@
       <div class="fnav-group">Análises</div>
       <button class="fnav-item" id="health-btn" type="button"><i data-ic="pulse"></i><span>Flow Health</span></button>
       <button class="fnav-item" id="clients-btn" type="button"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
+      <button class="fnav-item" id="hours-btn" type="button"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
@@ -699,6 +702,7 @@
     </section>
 
     <div id="clients-view" hidden></div>
+    <div id="hours-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1599,6 +1603,7 @@
     list.innerHTML = "";
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
+    document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2884,9 +2889,11 @@
     document.getElementById("health-view").hidden = v !== "health";
     document.getElementById("tool-view").hidden = v !== "tool";
     document.getElementById("clients-view").hidden = v !== "clients";
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients";
+    document.getElementById("hours-view").hidden = v !== "hours";
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
+    if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
@@ -2900,6 +2907,13 @@
   async function openClients() {
     setView("clients");
     await CustomerHealth.show();
+  }
+  // Horas de desenvolvimento: foto da planilha da Biancode, atualizada sozinha a cada 30 minutos.
+  DevHours.init({ root: document.getElementById("hours-view"), sb: sb, toast: toast });
+  document.getElementById("hours-btn").addEventListener("click", function () { openHours(); });
+  async function openHours() {
+    setView("hours");
+    await DevHours.show();
   }
   function setHealthMode(on) { setView(on ? "health" : "tool"); }
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
@@ -3513,6 +3527,7 @@
     await selectTool(initialTool.id);
     if (view === "health") openHealth();
     else if (view === "clients") openClients();
+    else if (view === "hours") openHours();
     prefetchOtherTools();
   }
 
@@ -3525,6 +3540,7 @@
   window.addEventListener("flow-theme-change", function () {
     if (state.view === "health") { if (state.health) renderHealth(); }
     else if (state.view === "clients") CustomerHealth.redraw();
+    else if (state.view === "hours") DevHours.redraw();
     else if (state.view === "home") { if (state.home) renderHome(); }
     else if (state.activeToolId) renderChart();
   });

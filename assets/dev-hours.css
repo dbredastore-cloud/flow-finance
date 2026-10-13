@@ -1,0 +1,34 @@
+/* Horas de desenvolvimento (assets/dev-hours.js) */
+#hours-view { display: grid; gap: 16px; }
+#hours-view[hidden] { display: none; }
+.dh-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.dh-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+.dh-sub.muted { color: var(--text-muted); }
+.dh-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.dh-acts .btn { width: auto; padding: 7px 14px; text-decoration: none; }
+.dh-kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin: 0; }
+.dh-kpis .kpi .value.good { color: var(--accent); }
+.dh-kpis .kpi .value.bad { color: var(--critical); }
+.dh-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+.dh-grid .panel { margin: 0; }
+@media (max-width: 1100px) { .dh-grid { grid-template-columns: 1fr; } }
+.dh-table th, .dh-table td { text-align: right; white-space: nowrap; }
+.dh-table th.l, .dh-table td.l { text-align: left; }
+.dh-table td.bad { color: var(--critical); }
+.dh-table tr.dh-total td { font-weight: 700; border-top: 1px solid var(--border-strong); }
+.dh-table td.dh-demand { white-space: normal; min-width: 280px; }
+.dh-dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; vertical-align: 0; }
+.dh-use { display: inline-block; width: 54px; height: 6px; margin-right: 6px; border-radius: 999px; background: var(--track-bg); vertical-align: 1px; overflow: hidden; }
+.dh-use i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.dh-ghost { background: transparent !important; border: 1px dashed var(--border-strong); }
+.dh-note { margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+.dh-chip { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--c); background: color-mix(in oklab, var(--c) 14%, transparent); border: 1px solid color-mix(in oklab, var(--c) 40%, transparent); }
+.dh-stack { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--track-bg); margin: 6px 0 16px; }
+.dh-stack i { display: block; height: 100%; }
+.dh-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dh-list li { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 6px 12px; font-size: 13.5px; }
+.dh-list .dh-dot { margin: 0; }
+.dh-tools { margin-bottom: 12px; }
+.dh-empty p { color: var(--text-muted); }
+#dh-chart { width: 100%; }
+#dh-tip { display: none; }
