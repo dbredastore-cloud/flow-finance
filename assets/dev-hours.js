@@ -50,6 +50,14 @@ window.DevHours = (function () {
     return '<div class="kpi"><div class="label">' + label + '</div><div class="value num ' + (cls || "") + '">' + value + "</div>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>";
   }
 
+  /* cabeçalho de cada bloco: título + frase de apoio, com linha de separação abaixo */
+  function ph(title, sub, extra) {
+    return '<header class="dh-ph"><div><h3>' + title + "</h3>" + (sub ? "<p>" + sub + "</p>" : "") + "</div>" + (extra || "") + "</header>";
+  }
+  function stat(label, value, sub, cls) {
+    return '<div class="dh-stat"><div class="dh-stat-l">' + label + '</div><div class="dh-stat-v num ' + (cls || "") + '">' + value + "</div>" + (sub ? '<div class="dh-stat-s">' + sub + "</div>" : "") + "</div>";
+  }
+
   function render() {
     var root = A.root;
     if (!S.snap) {
@@ -64,13 +72,13 @@ window.DevHours = (function () {
       '<div class="dh-acts"><button class="btn" type="button" data-dh="sync" id="dh-sync">↻ Atualizar agora</button><a class="btn" href="' + url + '" target="_blank" rel="noopener noreferrer">Abrir a planilha ↗</a></div></div>' +
       '<div id="dh-alert"></div>';
 
-    var kpis = '<div class="kpi-row dh-kpis" style="--n:' + (snap.data && snap.data.rate ? 5 : 4) + '">' +
+    var kpis = '<div class="dh-label">Visão geral do período</div><div class="kpi-row dh-kpis" style="--n:' + (snap.data && snap.data.rate ? 5 : 4) + '">' +
       kpi("Horas disponíveis", nf(m.tot.avail), nf(m.tot.contracted) + " contratadas" + (m.tot.carry ? " + " + nf(m.tot.carry) + " de saldo anterior" : "")) +
       kpi("Horas gastas", nf(m.tot.spent), "soma de todas as demandas lançadas") +
       kpi("Saldo de horas", nf(m.tot.balance), "disponível menos gasto", m.tot.balance < 0 ? "bad" : "good") +
       kpi("Consumo do total", pct(m.tot.use), "das horas disponíveis") +
       (snap.data && snap.data.rate ? kpi("Valor das horas gastas", brl(m.tot.spent * snap.data.rate), "média de " + brl(snap.data.rate) + " por hora") : "") +
-      '</div><div class="kpi-row dh-kpis" style="--n:' + Math.max(P.length, 1) + '">' +
+      '</div><div class="dh-label">Horas gastas por ferramenta</div><div class="kpi-row dh-kpis" style="--n:' + Math.max(P.length, 1) + '">' +
       P.map(function (p, i) { return kpi(esc(p), nf(m.tot.by[p] || 0), m.tot.spent ? pct((m.tot.by[p] || 0) / m.tot.spent) + " das horas gastas" : "sem horas lançadas"); }).join("") + "</div>";
 
     var D = snap.data || {}, CT = D.contracts || [], AV = D.contractAvg || null, contractSec = "";
@@ -86,13 +94,13 @@ window.DevHours = (function () {
       var h = function (v) { return v == null ? "—" : nf(v); };
       var sumMonthly = CT.reduce(function (s, c) { return s + (c.monthly || 0); }, 0);
       var rateMax = Math.max.apply(null, CT.map(function (c) { return c.rate; }).concat([AV ? AV.rate : 0, 1]));
-      contractSec = '<section class="panel"><div class="panel-head"><h3>Contratos e valor por hora</h3></div>' +
-        '<div class="kpi-row dh-kpis" style="--n:4">' +
-        kpi("Horas contratadas por mês", nf(AV ? AV.hoursMonth : CT.reduce(function (s, c) { return s + c.hoursMonth; }, 0)), "soma dos " + CT.length + " contratos") +
-        kpi("Total contratado no período", nf(m.tot.contracted), m.rows.length + " meses · " + nf(m.tot.avail) + " h com o saldo anterior") +
-        kpi("Valor médio por hora", brl(AV ? AV.rate : D.rate), "média ponderada dos contratos") +
-        kpi("Valor mensal dos contratos", brl(AV && AV.monthly ? AV.monthly : sumMonthly), "horas por mês vezes o valor da hora") + "</div>" +
-        '<div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Contrato</th><th>Horas por mês</th><th>Horas do contrato</th><th>Valor pago</th><th>Valor da hora</th><th>Valor mensal</th><th class="l">Valor da hora (comparação)</th></tr></thead><tbody>' +
+      contractSec = '<section class="panel">' + ph("Contratos e valor por hora", "Quanto está contratado por mês e quanto custa cada hora.") +
+        '<div class="dh-stats">' +
+        stat("Horas contratadas por mês", nf(AV ? AV.hoursMonth : CT.reduce(function (s, c) { return s + c.hoursMonth; }, 0)), "soma dos " + CT.length + " contratos") +
+        stat("Total contratado no período", nf(m.tot.contracted), m.rows.length + " meses · " + nf(m.tot.avail) + " h com o saldo anterior") +
+        stat("Valor médio por hora", brl(AV ? AV.rate : D.rate), "média ponderada dos contratos") +
+        stat("Valor mensal dos contratos", brl(AV && AV.monthly ? AV.monthly : sumMonthly), "horas por mês vezes o valor da hora") + "</div>" +
+        '<div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Contrato</th><th>Horas por mês</th><th>Horas do contrato</th><th>Valor pago</th><th>Valor da hora</th><th>Valor mensal</th><th class="l">Comparar</th></tr></thead><tbody>' +
         CT.map(function (c) {
           return '<tr><td class="l">' + esc(c.name) + '</td><td class="num">' + nf(c.hoursMonth) + '</td><td class="num">' + h(c.hours) + '</td><td class="num">' + money(c.paid) + (c.recurring && c.paid != null ? ' <span class="muted">/mês</span>' : "") + '</td><td class="num"><b>' + brl(c.rate) + '</b></td><td class="num">' + money(c.monthly) + '</td>' +
             '<td class="l"><span class="dh-use" style="width:110px"><i style="width:' + (c.rate / rateMax * 100).toFixed(1) + '%"></i></span></td></tr>';
@@ -101,8 +109,8 @@ window.DevHours = (function () {
         "</table></div>" + (CT.some(function (c) { return c.recurring && c.paid != null; }) ? '<p class="dh-note">Na recorrência o valor pago é mensal. Nos demais contratos é o valor total, e o total do rodapé soma só esses contratos fechados, como na planilha.</p>' : "") + "</section>";
     }
 
-    var table = '<section class="panel"><div class="panel-head"><h3>Horas por ferramenta em cada mês</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
-      P.map(function (p, i) { return '<th><span class="dh-dot" style="background:' + color(p, i) + '"></span>' + esc(p) + "</th>"; }).join("") +
+    var table = '<section class="panel">' + ph("Horas por ferramenta em cada mês", "Horas gastas em cada ferramenta contra o que estava disponível no mês.") + '<div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Mês</th>' +
+      P.map(function (p, i) { return '<th class="nw"><span class="dh-dot" style="background:' + color(p, i) + '"></span>' + esc(p) + "</th>"; }).join("") +
       "<th>Gastas</th><th>Contratado</th><th>Saldo anterior</th><th>Disponível</th><th>Saldo do mês</th><th>% consumo</th></tr></thead><tbody>" +
       m.rows.map(function (r) {
         return '<tr><td class="l">' + esc(r.month) + "</td>" + P.map(function (p) { return '<td class="num">' + nf(r.by[p] || 0) + "</td>"; }).join("") +
@@ -113,18 +121,19 @@ window.DevHours = (function () {
       '<td class="num"><b>' + nf(m.tot.spent) + '</b></td><td class="num">' + nf(m.tot.contracted) + '</td><td class="num">' + nf(m.tot.carry) + '</td><td class="num">' + nf(m.tot.avail) + '</td><td class="num">' + nf(m.tot.balance) + '</td><td class="num">' + pct(m.tot.use) + "</td></tr>" +
       "</tbody></table></div>" + (m.noMonth.spent ? '<p class="dh-note">' + nf(m.noMonth.spent) + ' h lançadas em sprints sem mês de referência na planilha: contam no total, mas não aparecem em nenhum mês.</p>' : "") + "</section>";
 
-    var charts = '<div class="dh-grid"><section class="panel"><div class="panel-head"><h3>Horas gastas por mês</h3><div class="legend">' +
-      P.map(function (p, i) { return '<span><span class="dot" style="background:' + color(p, i) + '"></span>' + esc(p) + "</span>"; }).join("") + '<span><span class="dot dh-ghost"></span>Disponível</span></div></div><div class="chart-wrap"><div id="dh-chart"></div><div id="dh-tip" class="tooltip"></div></div></section>' +
-      '<section class="panel"><div class="panel-head"><h3>Quem consumiu as horas</h3></div><div id="dh-share"></div></section></div>';
+    var legend = '<div class="legend dh-legend">' +
+      P.map(function (p, i) { return '<span><span class="dot" style="background:' + color(p, i) + '"></span>' + esc(p) + "</span>"; }).join("") + '<span><span class="dot dh-ghost"></span>Disponível</span></div>';
+    var charts = '<div class="dh-grid"><section class="panel">' + ph("Horas gastas por mês", "Barras tracejadas mostram as horas disponíveis.") + legend + '<div class="chart-wrap"><div id="dh-chart"></div><div id="dh-tip" class="tooltip"></div></div></section>' +
+      '<section class="panel">' + ph("Quem consumiu as horas", "Participação de cada ferramenta no total gasto.") + '<div id="dh-share"></div></section></div>';
 
-    var sprints = '<section class="panel"><div class="panel-head"><h3>Horas por sprint</h3></div><div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Sprint</th><th class="l">Período</th><th class="l">Mês de referência</th>' +
+    var sprints = '<section class="panel">' + ph("Horas por sprint", "Período de cada sprint e o mês em que as horas contam.") + '<div class="table-scroll"><table class="dh-table"><thead><tr><th class="l">Sprint</th><th class="l">Período</th><th class="l">Mês de referência</th>' +
       P.map(function (p) { return "<th>" + esc(p) + "</th>"; }).join("") + "<th>Total</th></tr></thead><tbody>" +
       (m.sprintRows.length ? m.sprintRows.map(function (s) {
         return '<tr><td class="l">' + esc(s.name) + '</td><td class="l num">' + fmtDate(s.start) + " a " + fmtDate(s.end) + '</td><td class="l">' + esc(s.month || "—") + "</td>" +
           P.map(function (p) { return '<td class="num">' + nf(s.by[p] || 0) + "</td>"; }).join("") + '<td class="num"><b>' + nf(s.spent) + "</b></td></tr>";
       }).join("") : '<tr><td colspan="' + (P.length + 4) + '" class="empty">Nenhuma sprint cadastrada na planilha.</td></tr>') + "</tbody></table></div></section>";
 
-    var deliv = '<section class="panel"><div class="panel-head"><h3>Demandas lançadas</h3><span class="muted" id="dh-count"></span></div><div class="mr-tools dh-tools" id="dh-tools"></div>' +
+    var deliv = '<section class="panel">' + ph("Demandas lançadas", "Cada demanda com a ferramenta, as horas e o valor.", '<span class="dh-count" id="dh-count"></span>') + '<div class="mr-tools dh-tools" id="dh-tools"></div>' +
       '<div class="table-scroll"><table class="dh-table dh-deliv"><thead><tr><th class="l">Sprint</th><th class="l">Demanda</th><th class="l">Ferramenta</th><th>Horas</th><th>Valor</th><th class="l">Trello</th></tr></thead><tbody id="dh-body"></tbody></table></div></section>';
 
     root.innerHTML = head + contractSec + kpis + table + charts + sprints + deliv;

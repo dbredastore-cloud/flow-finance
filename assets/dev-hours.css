@@ -1,43 +1,111 @@
-/* Horas de desenvolvimento (assets/dev-hours.js) */
-#hours-view { display: grid; gap: 16px; }
+/* Horas de desenvolvimento (assets/dev-hours.js)
+   Tela de leitura: fundo neutro (sem a imagem de gráficos), cartões sólidos e tabelas alinhadas. */
+
+/* ---------- Fundo neutro (a classe "calm" é ligada no <body> só nesta tela) ---------- */
+body.calm {
+  --calm-bg: #101315; --calm-card: #171b1e; --calm-card-2: #1d2226;
+  --calm-line: rgba(255, 255, 255, 0.08); --calm-line-2: rgba(255, 255, 255, 0.16);
+  background: var(--calm-bg);
+}
+:root[data-theme="light"] body.calm {
+  --calm-bg: #f3f4f5; --calm-card: #ffffff; --calm-card-2: #f6f7f7;
+  --calm-line: rgba(15, 23, 20, 0.09); --calm-line-2: rgba(15, 23, 20, 0.18);
+}
+body.calm::before, body.calm::after { display: none; }
+body.calm #hours-view .panel, body.calm #hours-view .kpi {
+  background: var(--calm-card); border: 1px solid var(--calm-line); box-shadow: none; animation: none;
+}
+body.calm #hours-view .panel::before, body.calm #hours-view .kpi::before, body.calm #hours-view .kpi::after { display: none; }
+body.calm #hours-view .kpi { transition: border-color .15s ease; }
+body.calm #hours-view .kpi:hover { transform: none; box-shadow: none; border-color: var(--calm-line-2); }
+body.calm #hours-view .kpi .value { text-shadow: none; }
+body.calm #hours-view .kpi .value.good, body.calm #hours-view .kpi .value.bad { text-shadow: none; }
+body.calm #hours-view .btn { box-shadow: none; }
+body.calm #hours-view thead th { background: transparent; }
+
+/* ---------- Estrutura ---------- */
+#hours-view { display: grid; gap: 18px; }
 #hours-view[hidden] { display: none; }
 .dh-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
 .dh-sub { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
 .dh-sub.muted { color: var(--text-muted); }
 .dh-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .dh-acts .btn { width: auto; padding: 7px 14px; text-decoration: none; }
-/* duas linhas: totais em cima, uma por ferramenta embaixo; cada linha divide a largura em partes iguais */
+
+/* título + frase de apoio de cada bloco, com linha de separação */
+.dh-ph { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--calm-line, var(--border)); }
+.dh-ph h3 { margin: 0; font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); line-height: 1.3; }
+.dh-ph p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.dh-count { flex: none; font-size: 12.5px; color: var(--text-muted); white-space: nowrap; padding-top: 2px; }
+.dh-count b { color: var(--text); }
+.dh-label { margin: 6px 0 -8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+
+/* ---------- Cartões de resumo: duas linhas, colunas iguais ---------- */
 #hours-view .dh-kpis { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 14px; margin: 0; }
 #hours-view .dh-kpis .kpi { min-width: 0; height: 100%; min-height: 108px; }
-@media (max-width: 1000px) { #hours-view .dh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 520px) { #hours-view .dh-kpis { grid-template-columns: 1fr; } }
 .dh-kpis .kpi .value.good { color: var(--accent); }
 .dh-kpis .kpi .value.bad { color: var(--critical); }
+@media (max-width: 1000px) { #hours-view .dh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { #hours-view .dh-kpis { grid-template-columns: 1fr; } }
+
+/* ---------- Faixa de números do bloco de contratos ---------- */
+.dh-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 16px 0 20px; }
+.dh-stat { padding: 2px 22px; border-left: 1px solid var(--calm-line, var(--border)); min-width: 0; }
+.dh-stat:first-child { padding-left: 0; border-left: 0; }
+.dh-stat-l { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); line-height: 1.3; }
+.dh-stat-v { margin-top: 6px; font-size: 24px; font-weight: 600; color: var(--text); line-height: 1.15; }
+.dh-stat-s { margin-top: 4px; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+@media (max-width: 1000px) {
+  .dh-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+  .dh-stat:nth-child(odd) { padding-left: 0; border-left: 0; }
+}
+@media (max-width: 520px) {
+  .dh-stats { grid-template-columns: 1fr; }
+  .dh-stat { padding-left: 0; border-left: 0; }
+}
+
+/* ---------- Gráficos ---------- */
 .dh-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
 .dh-grid .panel { margin: 0; }
 @media (max-width: 1100px) { .dh-grid { grid-template-columns: 1fr; } }
-.dh-table th, .dh-table td { text-align: right; white-space: nowrap; }
+.dh-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 4px; font-size: 12.5px; color: var(--text-dim); }
+.dh-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.dh-legend .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dh-ghost { background: transparent !important; border: 1px dashed var(--border-strong); }
+#dh-chart { width: 100%; }
+#dh-tip { display: none; }
+
+/* ---------- Tabelas ---------- */
+.dh-table { width: 100%; border-collapse: collapse; }
+.dh-table th { padding: 11px 12px; text-align: right; vertical-align: bottom; white-space: normal; font-size: 11px; font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--calm-line-2, var(--border-strong)); }
+.dh-table td { padding: 13px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--calm-line, var(--row-line)); }
 .dh-table th.l, .dh-table td.l { text-align: left; }
+.dh-table th.nw { white-space: nowrap; }
+.dh-table tbody tr:last-child td { border-bottom: 0; }
+.dh-table tbody tr:hover { background: rgba(127, 127, 127, 0.06); }
 .dh-table td.bad { color: var(--critical); }
-.dh-table tr.dh-total td { font-weight: 700; border-top: 1px solid var(--border-strong); }
+.dh-table tr.dh-total td { font-weight: 700; border-top: 1px solid var(--calm-line-2, var(--border-strong)); }
+.dh-table td.dh-demand { white-space: normal; min-width: 280px; }
+.dh-table .muted { color: var(--text-muted); font-weight: 400; }
 /* rodapé da tabela de contratos: linha de total/média em destaque */
-.dh-table tfoot td { padding-top: 14px; padding-bottom: 14px; font-weight: 700; font-size: 14px; color: var(--text); background: color-mix(in oklab, var(--accent) 12%, var(--bg-card, transparent)); border-top: 2px solid var(--accent); border-bottom: 1px solid var(--border-strong); }
+.dh-table tfoot td { padding-top: 14px; padding-bottom: 14px; font-weight: 700; font-size: 14px; color: var(--text); background: color-mix(in oklab, var(--accent) 12%, var(--calm-card, transparent)); border-top: 2px solid var(--accent); border-bottom: 1px solid var(--calm-line-2, var(--border-strong)); }
 .dh-table tfoot td:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; box-shadow: inset 3px 0 0 var(--accent); text-transform: uppercase; letter-spacing: .04em; font-size: 12.5px; }
 .dh-table tfoot td:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 .dh-table tfoot td.num { color: var(--accent); }
-.dh-table td.dh-demand { white-space: normal; min-width: 280px; }
 .dh-dot { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%; vertical-align: 0; }
 .dh-use { display: inline-block; width: 54px; height: 6px; margin-right: 6px; border-radius: 999px; background: var(--track-bg); vertical-align: 1px; overflow: hidden; }
 .dh-use i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
-.dh-ghost { background: transparent !important; border: 1px dashed var(--border-strong); }
-.dh-note { margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+.dh-note { margin: 12px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
 .dh-chip { display: inline-block; padding: 1px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--c); background: color-mix(in oklab, var(--c) 14%, transparent); border: 1px solid color-mix(in oklab, var(--c) 40%, transparent); }
-.dh-stack { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--track-bg); margin: 6px 0 16px; }
+
+/* ---------- Participação por ferramenta ---------- */
+.dh-stack { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--track-bg); margin: 16px 0 18px; }
 .dh-stack i { display: block; height: 100%; }
-.dh-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dh-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .dh-list li { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 6px 12px; font-size: 13.5px; }
 .dh-list .dh-dot { margin: 0; }
-.dh-tools { margin-bottom: 12px; }
+.dh-list .num { text-align: right; min-width: 56px; }
+
+/* ---------- Filtros das demandas ---------- */
+.dh-tools { margin: 14px 0 12px; }
 .dh-empty p { color: var(--text-muted); }
-#dh-chart { width: 100%; }
-#dh-tip { display: none; }
