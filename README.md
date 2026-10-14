@@ -71,13 +71,15 @@ Supabase → Project Settings → Edge Functions → Secrets:
 ## Cards Trello (menu do /financeiro/)
 
 - Mostra os cards das listas **Testes do cliente** e **Em produção** dos boards do Trello das ferramentas Flow, com a **data de entrega** do card (atrasado / hoje / em N dias). Card sem data mostra quando entrou na lista.
-- Para cada card, o Claude (`claude-opus-5-5`) classifica o tipo de atualização (nova funcionalidade, melhoria, correção…) e escreve três textos, com botão **Copiar**:
+- Para cada card, o Claude classifica o tipo de atualização (nova funcionalidade, melhoria, correção…) e escreve três textos, com botão **Copiar**:
   1. **Para mim** — o que é, o que beneficia e para quem, de forma clara e objetiva;
   2. **Slack da TB** — mensagem amigável anunciando a novidade para a equipe;
   3. **Instagram** — ganchos, roteiro de reels, sequência de stories, carrossel e outros formatos, com legendas e CTA.
 - `supabase/functions/trello-cards/`: `sync` lê os boards (listas reconhecidas pelo nome, sem acento/maiúscula) e grava em `trello_cards`; `generate` gera os textos de um card. Card que sai dessas listas some da tela (fica `active = false`). Se o card mudar no Trello, o painel avisa para refazer os textos.
-- Roda a cada 30 min (`20261014_trello_cards.sql`), gerando os textos de até 3 cards novos por vez; o botão **Gerar textos pendentes** faz o resto na hora.
+- O Trello é lido a cada 30 min (`20261014_trello_cards.sql`) ou pelo botão **Atualizar do Trello**.
+- Textos, sem custo: a tarefa agendada **Textos dos Cards Trello** do app Claude (seg a sex, 8h, com o app aberto) lê os cards sem texto pelo conector do Supabase, escreve os textos e grava direto em `trello_cards.ai`. O painel mostra "Textos a caminho" até lá.
+- Textos pela API (opcional, pago): com o secret `ANTHROPIC_API_KEY`, a função gera com `claude-opus-5-5` — 3 cards novos a cada 30 min, e o painel ganha os botões **Gerar textos**, **Refazer** e **Gerar textos pendentes**.
 - Secrets (Supabase → Edge Functions → Secrets):
-  - `TRELLO_KEY` e `TRELLO_TOKEN` (trello.com/power-ups/admin → API key → gerar token);
+  - `TRELLO_KEY` e `TRELLO_TOKEN` (trello.com/power-ups/admin → Autenticação do Trello → chave de API → link "token");
   - `TRELLO_BOARD_IDS` (opcional, ids separados por vírgula; sem ele entram os boards abertos com "Flow" no nome);
-  - `ANTHROPIC_API_KEY`.
+  - `ANTHROPIC_API_KEY` (opcional, ver acima).

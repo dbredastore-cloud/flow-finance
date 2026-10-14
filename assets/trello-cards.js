@@ -26,6 +26,8 @@
   }
   function stageName(k) { return (STAGES.filter(function (s) { return s[0] === k; })[0] || [k, k])[1]; }
   function stale(c) { return !c.ai || c.ai_hash !== c.content_hash; }
+  // Com ANTHROPIC_API_KEY o painel gera os textos; sem ela, a tarefa agendada do Claude grava direto na coluna ai.
+  function apiOn() { return !!(S.last && S.last.ai_enabled); }
 
   async function call(body) {
     var res = await A.sb.functions.invoke("trello-cards", { body: body });
@@ -118,7 +120,7 @@
       ["Em produção", n(function (c) { return c.stage === "producao"; }), "cards na lista"],
       ["Entregas em 7 dias", week, "com data no card"],
       ["Atrasados", late, "data de entrega já passou"],
-      ["Sem textos", pend, pend ? "clique em Gerar textos pendentes" : "tudo gerado"]
+      ["Sem textos", pend, !pend ? "tudo gerado" : apiOn() ? "clique em Gerar textos pendentes" : "o Claude gera na próxima rodada"]
     ].map(function (t) {
       return '<div class="ch-tile" role="group"><small>' + esc(t[0]) + '</small><b class="num">' + t[1] + "</b><span>" + esc(t[2]) + "</span></div>";
     }).join("");
@@ -130,6 +132,7 @@
     $("tc-tool").innerHTML = [""].concat(TOOLS).map(function (t) {
       return '<button type="button" class="btn' + (S.tool === t ? " btn-primary" : "") + '" data-act="tool" data-v="' + t + '">' + esc(t || "Todas") + "</button>";
     }).join("");
+    $("tc-gen-all").hidden = !apiOn();
     $("tc-gen-all").disabled = S.bulk || !pend;
     $("tc-gen-all").textContent = S.bulk ? "Gerando…" : "Gerar textos pendentes" + (pend ? " (" + pend + ")" : "");
   }
@@ -161,10 +164,12 @@
   function cardHtml(c) {
     var ai = c.ai, busy = S.busy[c.id], open = S.open[c.id];
     var labels = (c.labels || []).filter(function (l) { return l.name; }).map(function (l) { return '<span class="tc-label">' + esc(l.name) + "</span>"; }).join("");
+    var api = apiOn();
     var genBtn = busy ? '<button class="btn" type="button" disabled>Gerando…</button>'
-      : !ai ? '<button class="btn btn-primary" type="button" data-act="gen" data-id="' + c.id + '">Gerar textos</button>'
+      : !ai ? (api ? '<button class="btn btn-primary" type="button" data-act="gen" data-id="' + c.id + '">Gerar textos</button>'
+        : '<span class="tc-wait">Textos a caminho: o Claude gera na próxima rodada</span>')
       : '<button class="btn" type="button" data-act="toggle" data-id="' + c.id + '">' + (open ? "Fechar textos" : "Ver textos") + "</button>" +
-        '<button class="btn btn-ghost" type="button" data-act="gen" data-id="' + c.id + '" data-force="1" title="Gerar de novo">↻ Refazer</button>';
+        (api ? '<button class="btn btn-ghost" type="button" data-act="gen" data-id="' + c.id + '" data-force="1" title="Gerar de novo">↻ Refazer</button>' : "");
     return '<article class="tc-card' + (open ? " open" : "") + '">' +
       '<div class="tc-head">' +
         '<div class="tc-main">' +
@@ -173,7 +178,7 @@
           "<h4>" + esc(ai ? ai.titulo : c.name) + "</h4>" +
           (ai ? '<div class="tc-orig">Card: ' + esc(c.name) + "</div>" : "") +
           (ai ? '<p class="tc-sum">' + esc(ai.resumo.o_que_e) + "</p>" : c.description ? '<p class="tc-sum">' + esc(c.description.slice(0, 220)) + (c.description.length > 220 ? "…" : "") + "</p>" : "") +
-          (ai && stale(c) ? '<div class="tc-warn">O card mudou no Trello depois que os textos foram gerados. Clique em Refazer.</div>' : "") +
+          (ai && stale(c) ? '<div class="tc-warn">O card mudou no Trello depois que os textos foram gerados. ' + (api ? "Clique em Refazer." : "O Claude reescreve na próxima rodada.") + "</div>" : "") +
           (c.ai_error && !busy ? '<div class="tc-warn">Erro ao gerar: ' + esc(c.ai_error) + "</div>" : "") +
         "</div>" +
         dueHtml(c) +

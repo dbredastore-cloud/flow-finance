@@ -13,7 +13,8 @@
 //   TRELLO_KEY, TRELLO_TOKEN  – https://trello.com/power-ups/admin → API key + token
 //   TRELLO_BOARD_IDS          – opcional: ids dos boards separados por vírgula. Sem ele, entram os boards
 //                               abertos da conta com "flow" no nome.
-//   ANTHROPIC_API_KEY         – para gerar os textos
+//   ANTHROPIC_API_KEY         – opcional (API paga): gera os textos pelo painel. Sem ela, o painel só lê o
+//                               Trello e os textos são escritos pelo Claude no chat, direto na coluna ai.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import Anthropic from "npm:@anthropic-ai/sdk@0.134.0";
 
@@ -263,11 +264,12 @@ Deno.serve(async (req) => {
       result.failed = done.filter((d) => !d.ok).length;
     }
     result.ok = true;
+    result.ai_enabled = !!Deno.env.get("ANTHROPIC_API_KEY");
     await sb.from("sync_state").upsert({ key: "trello_last_run", value: { at: new Date().toISOString(), ...result }, updated_at: new Date().toISOString() });
     return json(result);
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);
-    await sb.from("sync_state").upsert({ key: "trello_last_run", value: { at: new Date().toISOString(), ok: false, error: msg }, updated_at: new Date().toISOString() });
+    await sb.from("sync_state").upsert({ key: "trello_last_run", value: { at: new Date().toISOString(), ok: false, error: msg, ai_enabled: !!Deno.env.get("ANTHROPIC_API_KEY") }, updated_at: new Date().toISOString() });
     return json({ ok: false, error: msg }, 500);
   }
 });
