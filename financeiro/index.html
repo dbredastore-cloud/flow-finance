@@ -394,6 +394,7 @@
   /* ---------- Flow Health ---------- */
   .tool-btn.health-btn { margin-top: 6px; color: var(--accent); font-weight: 700; }
   .tool-btn.clients-btn { margin-top: 2px; color: var(--accent-3); font-weight: 700; }
+  .tool-btn.trello-btn { margin-top: 2px; color: var(--warning); font-weight: 700; }
   .tooltip { position: absolute; pointer-events: none; z-index: 5; padding: 8px 10px; font-size: 12px; min-width: 190px; display: none; }
   .tooltip .t-title { font-weight: 700; margin-bottom: 4px; }
   .tooltip .t-row { display: flex; justify-content: space-between; gap: 14px; }
@@ -489,9 +490,11 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/customer-health.css">
+<link rel="stylesheet" href="../assets/trello-cards.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/customer-health.js"></script>
+<script src="../assets/trello-cards.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -562,6 +565,7 @@
     <nav class="tool-list" id="tool-list"></nav>
     <button class="tool-btn health-btn" id="health-btn">⚡ Flow Health</button>
     <button class="tool-btn clients-btn" id="clients-btn" type="button">♥ Saúde dos clientes</button>
+    <button class="tool-btn trello-btn" id="trello-btn" type="button">▦ Cards Trello</button>
     <a class="tool-btn" href="../afiliados/" style="text-decoration:none; border-top:1px solid var(--border); border-radius:0; padding-top:14px;">Afiliados →</a>
     <a class="tool-btn" href="../equipe/" style="text-decoration:none; border-radius:0;">Equipe →</a>
     <div class="sidebar-foot">
@@ -610,6 +614,8 @@
     </section>
 
     <div id="clients-view" hidden></div>
+
+    <div id="trello-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1435,6 +1441,7 @@
     list.innerHTML = "";
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
+    document.getElementById("trello-btn").classList.toggle("active", state.view === "trello");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2667,12 +2674,14 @@
     document.getElementById("health-view").hidden = v !== "health";
     document.getElementById("tool-view").hidden = v !== "tool";
     document.getElementById("clients-view").hidden = v !== "clients";
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients";
+    document.getElementById("trello-view").hidden = v !== "trello";
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "trello";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
+    else if (v === "trello") document.getElementById("tool-title").textContent = "Cards Trello";
     renderSidebar();
   }
   CustomerHealth.init({
@@ -2683,6 +2692,12 @@
   async function openClients() {
     setView("clients");
     await CustomerHealth.show();
+  }
+  TrelloCards.init({ root: document.getElementById("trello-view"), sb: sb, toast: toast });
+  document.getElementById("trello-btn").addEventListener("click", function () { openTrello(); });
+  async function openTrello() {
+    setView("trello");
+    await TrelloCards.show();
   }
   function setHealthMode(on) { setView(on ? "health" : "tool"); }
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
@@ -3244,6 +3259,7 @@
     await selectTool(initialTool.id);
     if (view === "health") openHealth();
     else if (view === "clients") openClients();
+    else if (view === "trello") openTrello();
     prefetchOtherTools();
   }
 
