@@ -60,7 +60,7 @@ async function trello(path: string, params: Record<string, string | number> = {}
   return r.json();
 }
 
-const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const norm = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 // "Testes do cliente" → teste_cliente; "Em produção" → producao; o resto não entra.
 function stageOf(listName: string): "teste_cliente" | "producao" | null {
