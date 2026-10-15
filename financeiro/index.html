@@ -575,6 +575,7 @@
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
+<script src="../assets/flow-access.js"></script>
 <script src="../assets/customer-health.js"></script>
 <script src="../assets/dev-hours.js"></script>
 <script src="../assets/trello-cards.js"></script>
@@ -646,18 +647,18 @@
     <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Financeiro</small></div></div>
     <nav class="fnav-menu" aria-label="Menu">
       <div class="fnav-group">Visão geral</div>
-      <button class="fnav-item" id="home-btn" type="button"><i data-ic="home"></i><span>Home</span></button>
+      <button class="fnav-item" id="home-btn" type="button" data-menu="fin.financeiro"><i data-ic="home"></i><span>Home</span></button>
       <div class="fnav-group">Ferramentas</div>
-      <div class="fnav-tools" id="tool-list"></div>
+      <div class="fnav-tools" id="tool-list" data-menu="fin.financeiro"></div>
       <div class="fnav-group">Análises</div>
-      <button class="fnav-item" id="health-btn" type="button"><i data-ic="pulse"></i><span>Flow Health</span></button>
-      <button class="fnav-item" id="clients-btn" type="button"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
-      <button class="fnav-item" id="hours-btn" type="button"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
-      <button class="fnav-item" id="trello-btn" type="button"><i data-ic="grid"></i><span>Cards Trello</span></button>
+      <button class="fnav-item" id="health-btn" type="button" data-menu="fin.health"><i data-ic="pulse"></i><span>Flow Health</span></button>
+      <button class="fnav-item" id="clients-btn" type="button" data-menu="fin.clients"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
+      <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
+      <button class="fnav-item" id="trello-btn" type="button" data-menu="fin.trello"><i data-ic="grid"></i><span>Cards Trello</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
-      <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
-      <a class="fnav-item" href="../equipe/"><i data-ic="shield"></i><span>Equipe</span></a>
+      <a class="fnav-item" href="../afiliados/" data-page="afiliados"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item" href="../equipe/" data-admin-only><i data-ic="shield"></i><span>Equipe</span></a>
     </nav>
     <div class="sidebar-foot fnav-foot">
       <div class="fnav-user"><span class="fnav-avatar" id="user-avatar">·</span><span class="fnav-email note" id="user-email"></span></div>
@@ -3510,8 +3511,17 @@
     if (!session) { showLogin(); return; }
     document.getElementById("user-email").textContent = session.user.email;
     state.userId = session.user.id;
-    var alertsReady = loadAlerts().catch(function () { state.alerts = []; });
-    loadSecurity().then(renderSecurity).catch(function () {});
+    // Acesso por menu: quem não tem nenhum menu do Financeiro vai para o painel que pode ver.
+    try { await FlowAccess.load(sb); } catch (e) {
+      showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
+      return;
+    }
+    if (!FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
+    if (!FlowAccess.canPage("financeiro")) { location.replace(FlowAccess.firstHref() || "../afiliados/"); return; }
+    FlowAccess.apply();
+    var canFin = FlowAccess.can("fin.financeiro");
+    var alertsReady = canFin ? loadAlerts().catch(function () { state.alerts = []; }) : Promise.resolve();
+    if (FlowAccess.isAdmin()) loadSecurity().then(renderSecurity).catch(function () {});
 
     // Com cache da aba, abre na hora com as ferramentas conhecidas; senão espera a lista.
     if (finCache.tools && finCache.tools.length) {
@@ -3527,9 +3537,20 @@
     showApp();
     var savedTool = safeGet("flow_fin_tool");
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
-    alertsReady.then(function () { renderAlerts(); renderTable(); });
+    if (canFin) alertsReady.then(function () { renderAlerts(); renderTable(); });
+    // Tela inicial: a última aberta, se a pessoa ainda pode ver; senão a primeira liberada.
+    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello" };
     var view = safeGet("flow_fin_view");
+    if (view !== null && !(VIEW_MENU[view] && FlowAccess.can(VIEW_MENU[view]))) view = null;
+    if (view === null && !canFin) view = ["health", "clients", "hours", "trello"].filter(function (v) { return FlowAccess.can(VIEW_MENU[v]); })[0];
     renderPeriodBar();
+    if (!canFin) {
+      if (view === "health") openHealth();
+      else if (view === "clients") openClients();
+      else if (view === "hours") openHours();
+      else if (view === "trello") openTrello();
+      return;
+    }
     if (view === "home" || view === null) {
       // Abre na Home; a ferramenta guardada fica pronta para quando o usuário trocar.
       state.activeToolId = initialTool.id;

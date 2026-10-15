@@ -75,3 +75,5 @@ aside.fnav .fnav-logout:hover .fnav-ic { color: var(--critical); }
 .period-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .period-step:disabled { opacity: .35; cursor: not-allowed; }
 .period-nav .period-label { min-width: 118px; text-align: center; }
+/* Itens escondidos pelo acesso por menu (assets/flow-access.js). */
+.fnav [hidden] { display: none !important; }

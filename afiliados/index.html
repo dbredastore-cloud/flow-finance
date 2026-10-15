@@ -306,6 +306,7 @@
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
+<script src="../assets/flow-access.js"></script>
 <link rel="prefetch" href="../financeiro/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -347,18 +348,18 @@
     <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Afiliados</small></div></div>
     <nav class="nav fnav-menu" aria-label="Menu">
       <div class="fnav-group">Visão geral</div>
-      <button class="nav-btn fnav-item" data-view="overview"><i data-ic="grid"></i><span>Visão geral</span></button>
+      <button class="nav-btn fnav-item" data-view="overview" data-menu="af.overview"><i data-ic="grid"></i><span>Visão geral</span></button>
       <div class="fnav-group">Parceiros</div>
-      <button class="nav-btn fnav-item" data-view="base"><i data-ic="users"></i><span>Influencers</span></button>
-      <button class="nav-btn fnav-item fnav-star" data-view="flowinf"><i data-ic="star"></i><span>Influencers Flow</span></button>
-      <button class="nav-btn fnav-item" data-view="products"><i data-ic="box"></i><span>Produtos</span></button>
+      <button class="nav-btn fnav-item" data-view="base" data-menu="af.base"><i data-ic="users"></i><span>Influencers</span></button>
+      <button class="nav-btn fnav-item fnav-star" data-view="flowinf" data-menu="af.flowinf"><i data-ic="star"></i><span>Influencers Flow</span></button>
+      <button class="nav-btn fnav-item" data-view="products" data-menu="af.products"><i data-ic="box"></i><span>Produtos</span></button>
       <div class="fnav-group">Mercado</div>
-      <button class="nav-btn fnav-item" data-view="youtube"><i data-ic="play"></i><span>YouTube</span></button>
-      <button class="nav-btn fnav-item" data-view="mercado"><i data-ic="radar"></i><span>Rastrear Mercado</span></button>
+      <button class="nav-btn fnav-item" data-view="youtube" data-menu="af.youtube"><i data-ic="play"></i><span>YouTube</span></button>
+      <button class="nav-btn fnav-item" data-view="mercado" data-menu="af.mercado"><i data-ic="radar"></i><span>Rastrear Mercado</span></button>
       <div class="fnav-group">Painéis Flow</div>
-      <a class="fnav-item" href="../financeiro/"><i data-ic="wallet"></i><span>Financeiro</span></a>
+      <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="chart"></i><span>Afiliados</span></a>
-      <a class="fnav-item" href="../equipe/"><i data-ic="shield"></i><span>Equipe</span></a>
+      <a class="fnav-item" href="../equipe/" data-admin-only><i data-ic="shield"></i><span>Equipe</span></a>
     </nav>
     <div class="sidebar-foot fnav-foot">
       <div class="fnav-user"><span class="fnav-avatar" id="user-avatar">·</span><span class="fnav-email note" id="user-email"></span></div>
@@ -1929,7 +1930,13 @@
 
   /* ---------------- Navegação e filtros ---------------- */
   var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado" };
+  // Acesso por menu: tela que a pessoa não pode ver cai na primeira liberada.
+  function allowedView(v) {
+    if (v && window.FlowAccess.can("af." + v)) return v;
+    return Object.keys(VIEW_TITLES).filter(function (k) { return window.FlowAccess.can("af." + k); })[0] || "overview";
+  }
   function setView(v) {
+    v = allowedView(v);
     state.view = v;
     safeSet("flow_aff_view", v);
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
@@ -2050,6 +2057,13 @@
     if (!session) { showOnly("login-screen"); return; }
     $("user-email").textContent = session.user.email;
     state.userId = session.user.id;
+    try { await window.FlowAccess.load(sb); } catch (e) {
+      showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
+      return;
+    }
+    if (!window.FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
+    if (!window.FlowAccess.canPage("afiliados")) { location.replace(window.FlowAccess.firstHref() || "../financeiro/"); return; }
+    window.FlowAccess.apply();
     try { state.yt.widths = ytCleanWidths(JSON.parse(safeGet("flow_aff_ytw"))); } catch (e) { state.yt.widths = {}; }
     restorePeriod();
     renderPeriodBar();
@@ -2106,6 +2120,7 @@
   function flowProductIds() { return state.products.filter(function (p) { return p.tool_id; }).map(function (p) { return p.id; }); }
   function contractOf(email) { return state.fi.contracts.find(function (c) { return c.affiliate_email === email; }); }
   function starBtn(email) {
+    if (!window.FlowAccess.can("af.flowinf")) return ""; // contratar influencer é do menu Influencers Flow
     var c = contractOf(email), on = c && c.active;
     return '<button type="button" class="star' + (on ? " on" : "") + '" data-fav="' + esc(email) + '" data-stop title="' +
       (on ? "Influencer Flow contratado — clique para remover" : "Marcar como Influencer Flow (contratado)") + '">' + (on ? "★" : "☆") + "</button>";

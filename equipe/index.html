@@ -78,6 +78,29 @@
   .eq-top h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-family: var(--font-display); }
   .eq-top p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
   @media (max-width: 768px) { #app { flex-direction: column; } aside.sidebar { position: static; height: auto; } }
+  /* Acesso por menu */
+  .acc-sum { display: flex; flex-wrap: wrap; gap: 4px; max-width: 360px; }
+  .acc-chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--border-strong); color: var(--text-dim); white-space: nowrap; }
+  .acc-chip.all { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .acc { display: grid; gap: 12px; }
+  .acc-role { display: flex; flex-wrap: wrap; gap: 8px; }
+  .acc-role label { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 240px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); cursor: pointer; font-size: 13px; line-height: 1.45; }
+  .acc-role label:has(input:checked) { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); }
+  .acc-role input, .acc-menus input { accent-color: var(--accent); margin-top: 2px; }
+  .acc-role small { display: block; color: var(--text-muted); font-size: 12px; }
+  .acc-menus { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .acc-menus[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+  .acc-menus fieldset { margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .acc-menus legend { padding: 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+  .acc-menus label { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; cursor: pointer; }
+  .acc-menus .all-link { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 0; }
+  .add-access { margin-top: 14px; }
+  .add-access > b { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+  .eq-modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--scrim, rgba(0,0,0,.5)); }
+  .eq-modal[hidden] { display: none; }
+  .eq-modal-box { width: min(640px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 20px 22px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); display: grid; gap: 14px; }
+  .eq-modal-box h3 { margin: 0; font-size: 15px; }
+  .eq-modal-box .acts { display: flex; justify-content: flex-end; gap: 8px; }
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; transition: all .2s; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; z-index: 99; pointer-events: none; max-width: 90vw; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
@@ -86,6 +109,7 @@
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-nav.js"></script>
+<script src="../assets/flow-access.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
 </head>
@@ -118,8 +142,8 @@
     <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Equipe</small></div></div>
     <nav class="fnav-menu" aria-label="Menu">
       <div class="fnav-group">Painéis Flow</div>
-      <a class="fnav-item" href="../financeiro/"><i data-ic="wallet"></i><span>Financeiro</span></a>
-      <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
+      <a class="fnav-item" href="../afiliados/" data-page="afiliados"><i data-ic="chart"></i><span>Afiliados</span></a>
       <a class="fnav-item active" href="./" aria-current="page"><i data-ic="shield"></i><span>Equipe</span></a>
     </nav>
     <div class="sidebar-foot fnav-foot">
@@ -132,8 +156,8 @@
   <main>
     <section class="panel">
       <h2>Quem tem acesso</h2>
-      <p class="hint">Estas pessoas entram em <b>todos os painéis</b> (Financeiro, Afiliados, Rastrear Mercado, Equipe) e veem e alteram tudo. Quem não está nesta lista, mesmo com conta, não enxerga nenhum dado.</p>
-      <div class="table-scroll"><table><thead><tr><th>E-mail</th><th>Último acesso</th><th>Acesso desde</th><th></th></tr></thead><tbody id="members"></tbody></table></div>
+      <p class="hint"><b>Admin</b> vê todos os menus e gerencia esta tela. <b>Acesso personalizado</b> vê só os menus marcados, e o banco de dados também bloqueia o resto (não adianta tentar abrir pelo navegador). Quem não está nesta lista, mesmo com conta, não enxerga nenhum dado.</p>
+      <div class="table-scroll"><table><thead><tr><th>E-mail</th><th>Acesso</th><th>Último acesso</th><th>Acesso desde</th><th></th></tr></thead><tbody id="members"></tbody></table></div>
     </section>
 
     <section class="panel">
@@ -146,6 +170,7 @@
             <div class="pw-wrap"><input id="add-pw" type="text" minlength="10" placeholder="deixe em branco para gerar" autocomplete="off"><button class="btn btn-sm" type="button" id="add-gen">Gerar</button></div></div>
           <button class="btn btn-primary" type="submit" id="add-btn">Criar acesso</button>
         </div>
+        <div class="add-access"><b>O que essa pessoa pode acessar</b><div id="add-access"></div></div>
       </form>
       <label class="mail-opt"><input type="checkbox" id="add-mail" checked> Enviar o acesso por e-mail (de flow@tbnegociosdigitais.com): endereço do painel, login e um link para a pessoa definir a própria senha.</label>
       <div id="add-result"></div>
@@ -180,6 +205,13 @@
       <p class="hint" style="margin:10px 0 0">Esta tela continua criando contas normalmente com o cadastro público desligado, e quem já tem conta continua entrando.</p>
     </section>
   </main>
+  </div>
+</div>
+<div class="eq-modal" id="acc-modal" hidden>
+  <div class="eq-modal-box" role="dialog" aria-modal="true" aria-labelledby="acc-title">
+    <h3 id="acc-title">Acesso</h3>
+    <div id="acc-body"></div>
+    <div class="acts"><button class="btn" type="button" id="acc-cancel">Cancelar</button><button class="btn btn-primary" type="button" id="acc-save">Salvar acesso</button></div>
   </div>
 </div>
 <div id="toast" role="status"></div>
@@ -258,13 +290,21 @@
     var session = s.data && s.data.session;
     if (!session) { showOnly("login-screen"); return; }
     $("user-email").textContent = session.user.email;
+    // Equipe é só do perfil admin; acesso personalizado volta para o painel que pode ver.
+    try { await window.FlowAccess.load(sb); } catch (e) { /* segue: a função team-admin decide */ }
+    if (window.FlowAccess.has() && !window.FlowAccess.isAdmin()) {
+      var go = window.FlowAccess.firstHref();
+      if (go) { location.replace(go); return; }
+    }
     var r = await call({ action: "list" });
     if (!r.ok) {
-      if (r.error === "unauthorized") showStatus("Sem permissão", "Só quem já tem acesso ao painel pode ver a Equipe.", false);
+      if (r.error === "unauthorized") showStatus("Sem permissão", "Só o perfil Admin gerencia a Equipe.", false);
       else showStatus("Não foi possível carregar", r.error || "Erro desconhecido.", true);
       return;
     }
     me = r.me; data = r;
+    window.FlowAccess.apply();
+    if (!$("add-access").firstChild) $("add-access").innerHTML = pickerHtml("acc-add", "custom", []);
     showOnly("app"); render();
   }
   async function reload() {
@@ -273,15 +313,79 @@
     data = r; render();
   }
 
+  /* ---------------- acesso por menu ---------------- */
+  // Seletor: Admin (tudo) ou Acesso personalizado (menus marcados), agrupado por painel.
+  function pickerHtml(id, role, menus) {
+    role = role === "admin" ? "admin" : "custom";
+    menus = menus || [];
+    return '<div class="acc" data-acc="' + id + '">' +
+      '<div class="acc-role">' +
+        '<label><input type="radio" name="' + id + '-role" value="custom"' + (role === "custom" ? " checked" : "") + '><span><b>Acesso personalizado</b><small>Vê só os menus marcados abaixo.</small></span></label>' +
+        '<label><input type="radio" name="' + id + '-role" value="admin"' + (role === "admin" ? " checked" : "") + '><span><b>Admin</b><small>Vê todos os menus e gerencia a Equipe.</small></span></label>' +
+      "</div>" +
+      '<div class="acc-menus"' + (role === "admin" ? ' aria-disabled="true"' : "") + ">" +
+        window.FlowAccess.CATALOG.map(function (p) {
+          return '<fieldset><legend>' + esc(p.label) + '</legend>' +
+            '<button type="button" class="all-link" data-act="acc-all" data-page="' + p.page + '">marcar todos</button>' +
+            p.menus.map(function (m) {
+              return '<label><input type="checkbox" value="' + m[0] + '" data-page-of="' + p.page + '"' + (menus.indexOf(m[0]) >= 0 ? " checked" : "") + "> " + esc(m[1]) + "</label>";
+            }).join("") + "</fieldset>";
+        }).join("") +
+      "</div></div>";
+  }
+  function readPicker(root) {
+    var el = root.querySelector(".acc");
+    var role = (el.querySelector('input[type=radio]:checked') || {}).value === "admin" ? "admin" : "custom";
+    var menus = [].map.call(el.querySelectorAll(".acc-menus input:checked"), function (i) { return i.value; });
+    return { role: role, menus: role === "admin" ? [] : menus };
+  }
+  document.addEventListener("change", function (e) {
+    var r = e.target.closest(".acc-role input");
+    if (r) r.closest(".acc").querySelector(".acc-menus").setAttribute("aria-disabled", r.value === "admin" ? "true" : "false");
+  });
+  function accessSummary(u) {
+    if (u.role === "admin") return '<span class="acc-chip all">Admin · tudo</span>';
+    var m = u.menus || [];
+    if (!m.length) return '<span class="acc-chip">nenhum menu</span>';
+    return '<div class="acc-sum">' + m.map(function (k) { return '<span class="acc-chip">' + esc(window.FlowAccess.label(k)) + "</span>"; }).join("") + "</div>";
+  }
+
+  // Editor em janela: usado para "Editar acesso" e para "Dar acesso" a contas sem acesso.
+  var editing = null;
+  function openEditor(opts) {
+    editing = opts;
+    $("acc-title").textContent = opts.title;
+    $("acc-body").innerHTML = pickerHtml("acc-edit", opts.role, opts.menus);
+    $("acc-modal").hidden = false;
+  }
+  function closeEditor() { editing = null; $("acc-modal").hidden = true; }
+  $("acc-cancel").addEventListener("click", closeEditor);
+  $("acc-modal").addEventListener("click", function (e) { if (e.target.id === "acc-modal") closeEditor(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && editing) closeEditor(); });
+  $("acc-save").addEventListener("click", async function () {
+    if (!editing) return;
+    var acc = readPicker($("acc-body"));
+    if (acc.role === "custom" && !acc.menus.length) { toast("Marque pelo menos um menu.", true); return; }
+    var btn = this; btn.disabled = true;
+    var r = await call(Object.assign({ action: editing.action, userId: editing.id }, acc));
+    btn.disabled = false;
+    if (!r.ok) { toast(r.error || "Não foi possível salvar.", true); return; }
+    closeEditor();
+    toast("Acesso salvo.");
+    await reload();
+  });
+
   /* ---------------- tela ---------------- */
   function render() {
     $("members").innerHTML = data.members.length ? data.members.map(function (u) {
       var self = u.user_id === me;
       return "<tr><td>" + esc(u.email) + (self ? '<span class="tag">você</span>' : "") + (u.confirmed ? "" : '<span class="tag warn">não confirmado</span>') + "</td>" +
+        "<td>" + accessSummary(u) + "</td>" +
         '<td class="num">' + ago(u.last_sign_in_at) + '</td><td class="num">' + fmtDate(u.access_since) + "</td>" +
-        '<td><div class="acts"><button class="btn btn-sm" data-act="reset" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Redefinir senha</button>' +
+        '<td><div class="acts">' + (self ? "" : '<button class="btn btn-sm" data-act="access" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Editar acesso</button>') +
+        '<button class="btn btn-sm" data-act="reset" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Redefinir senha</button>' +
         (self ? "" : '<button class="btn btn-sm btn-danger" data-act="revoke" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Remover acesso</button>') + "</div></td></tr>";
-    }).join("") : '<tr><td colspan="4" class="empty">Ninguém na lista.</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="empty">Ninguém na lista.</td></tr>';
     $("others-panel").hidden = !data.others.length;
     $("others").innerHTML = data.others.map(function (u) {
       return "<tr><td>" + esc(u.email) + "</td><td class=\"num\">" + fmtDate(u.created_at) + '</td><td class="num">' + ago(u.last_sign_in_at) + "</td>" +
@@ -308,11 +412,14 @@
     e.preventDefault();
     var btn = $("add-btn"), email = $("add-email").value.trim(), pw = $("add-pw").value;
     if (pw && pw.length < 10) { toast("A senha precisa ter pelo menos 10 caracteres.", true); return; }
+    var acc = readPicker($("add-access"));
+    if (acc.role === "custom" && !acc.menus.length) { toast("Marque pelo menos um menu (ou escolha Admin).", true); return; }
     btn.disabled = true; btn.textContent = "Criando…"; $("add-result").innerHTML = "";
-    var r = await call({ action: "create", email: email, password: pw, sendEmail: $("add-mail").checked });
+    var r = await call(Object.assign({ action: "create", email: email, password: pw, sendEmail: $("add-mail").checked }, acc));
     btn.disabled = false; btn.textContent = "Criar acesso";
     if (!r.ok) { toast(r.error || "Não foi possível criar.", true); return; }
     $("add-form").reset();
+    $("add-access").innerHTML = pickerHtml("acc-add", "custom", []);
     $("add-result").innerHTML = r.existed
       ? secretBox("Acesso liberado", r.email, null, "Essa pessoa já tinha conta, então a senha dela continua a mesma. Se ela não lembra, use <b>Redefinir senha</b> na lista.")
       : secretBox("Acesso criado", r.email, r.password, "Esta senha aparece só agora. Envie por um canal seguro e peça para a pessoa trocar em <b>Minha conta</b> no primeiro acesso. Endereço do painel: " + esc(location.origin) + "/financeiro/");
@@ -326,6 +433,19 @@
     var b = e.target.closest("[data-act]");
     if (!b) return;
     var act = b.dataset.act, id = b.dataset.id, email = b.dataset.email;
+    if (act === "acc-all") {
+      var boxes = b.closest("fieldset").querySelectorAll("input[type=checkbox]");
+      var all = [].every.call(boxes, function (x) { return x.checked; });
+      [].forEach.call(boxes, function (x) { x.checked = !all; });
+      return;
+    }
+    if (act === "access" || act === "grant") {
+      var u = (data.members || []).filter(function (x) { return x.user_id === id; })[0];
+      openEditor({ action: act === "grant" ? "grant" : "set_access", id: id,
+        title: (act === "grant" ? "Dar acesso a " : "Acesso de ") + email,
+        role: u ? u.role : "custom", menus: u ? u.menus : [] });
+      return;
+    }
     if (act === "copy") {
       var txt = "Painel: " + location.origin + "/financeiro/\nE-mail: " + document.querySelector("#add-result .secret code").textContent + "\nSenha provisória: " + $("secret-pw").textContent;
       try { await navigator.clipboard.writeText(txt); toast("Copiado."); } catch (err) { toast("Não foi possível copiar; selecione o texto e copie.", true); }
@@ -335,9 +455,6 @@
     if (act === "revoke") {
       if (!confirm("Remover o acesso de " + email + "? A conta continua existindo, mas deixa de ver os dados.")) return;
       r = await call({ action: "revoke", userId: id });
-    } else if (act === "grant") {
-      if (!confirm("Dar acesso total aos painéis para " + email + "?")) return;
-      r = await call({ action: "grant", userId: id });
     } else if (act === "delete") {
       if (!confirm("Excluir a conta de " + email + " de vez? Não dá para desfazer.")) return;
       r = await call({ action: "delete_user", userId: id });

@@ -85,3 +85,11 @@ Supabase → Project Settings → Edge Functions → Secrets:
   - `TRELLO_KEY` e `TRELLO_TOKEN` (trello.com/power-ups/admin → Autenticação do Trello → chave de API → link "token");
   - `TRELLO_BOARD_IDS` (opcional, ids separados por vírgula; sem ele entram os boards abertos com "Flow" no nome);
   - `ANTHROPIC_API_KEY` (opcional, ver acima).
+
+## Acesso por menu (tela Equipe)
+
+- Cada pessoa em `app_admins` tem um perfil: **Admin** (`role = 'admin'`, vê todos os menus e gerencia a Equipe) ou **Acesso personalizado** (`role = 'custom'`, vê só os menus em `menus`). Quem já tinha acesso antes desta mudança ficou como Admin.
+- Menus: Financeiro → `fin.financeiro` (Home e ferramentas), `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`; Afiliados → `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`. A lista fica em `assets/flow-access.js`, na Edge Function `team-admin` e na migration `20261015_menu_access.sql`; menu novo precisa entrar nos três.
+- Proteção nos dados, não só na tela: as policies de cada tabela usam `public.can(array[...menus])`, então quem só tem Cards Trello não lê despesas nem pela API. `is_owner()` = perfil admin (tentativas de login, tela Equipe); `my_access()` devolve o perfil de quem está logado.
+- No painel, os itens do menu têm `data-menu`, os links entre painéis `data-page` e o link da Equipe `data-admin-only`; quem não tem nenhum menu de um painel é levado ao primeiro que pode ver.
+- Gerenciar: tela Equipe → **Editar acesso** (ou o seletor ao adicionar pessoa). Precisa sobrar sempre pelo menos um Admin.
