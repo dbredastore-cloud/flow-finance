@@ -67,3 +67,19 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Função SQL `flow_health(ano)` calcula, venda a venda (`kiwify_sales_snapshot` + plano de cada venda em `kiwify_plans`): clientes ativos/em carência/cancelados, taxa de renovação (geral, mensal, anual), LTV histórico e projetado (ponderado por duração de plano), MRR/ARR, CAC (comissão de afiliados das 1ªs compras + despesas do grupo Marketing), payback, reembolso, coortes e planos.
 - Metas anuais em `flow_goals` (2026: 8.600 novos clientes e R$ 3 milhões), editáveis no painel. "Novo cliente" = primeira compra paga na ferramenta; há opção de contar renovações como no financeiro.
 - A duração de cada plano é deduzida do nome (Mensal=1, Trimestral=3, Semestral=6, resto=12) e pode ser corrigida na tabela "Planos".
+
+## Cards Trello (menu do /financeiro/)
+
+- Mostra os cards das listas **Testes do cliente** e **Em produção** dos boards do Trello das ferramentas Flow, com a **data de entrega** do card (atrasado / hoje / em N dias). Card sem data mostra quando entrou na lista.
+- Para cada card, o Claude classifica o tipo de atualização (nova funcionalidade, melhoria, correção…) e escreve três textos, com botão **Copiar**:
+  1. **Para mim** — o que é, o que beneficia e para quem, de forma clara e objetiva;
+  2. **Slack da TB** — mensagem amigável anunciando a novidade para a equipe;
+  3. **Instagram** — ganchos, roteiro de reels, sequência de stories, carrossel e outros formatos, com legendas e CTA.
+- `supabase/functions/trello-cards/`: `sync` lê os boards (listas reconhecidas pelo nome, sem acento/maiúscula) e grava em `trello_cards`; `generate` gera os textos de um card. Card que sai dessas listas some da tela (fica `active = false`). Se o card mudar no Trello, o painel avisa para refazer os textos.
+- O Trello é lido a cada 30 min (`20261014_trello_cards.sql`) ou pelo botão **Atualizar do Trello**.
+- Textos, sem custo: a tarefa agendada **Textos dos Cards Trello** do app Claude (seg a sex, 8h, com o app aberto) lê os cards sem texto pelo conector do Supabase, escreve os textos e grava direto em `trello_cards.ai`. O painel mostra "Textos a caminho" até lá.
+- Textos pela API (opcional, pago): com o secret `ANTHROPIC_API_KEY`, a função gera com `claude-opus-5-5` — 3 cards novos a cada 30 min, e o painel ganha os botões **Gerar textos**, **Refazer** e **Gerar textos pendentes**.
+- Secrets (Supabase → Edge Functions → Secrets):
+  - `TRELLO_KEY` e `TRELLO_TOKEN` (trello.com/power-ups/admin → Autenticação do Trello → chave de API → link "token");
+  - `TRELLO_BOARD_IDS` (opcional, ids separados por vírgula; sem ele entram os boards abertos com "Flow" no nome);
+  - `ANTHROPIC_API_KEY` (opcional, ver acima).

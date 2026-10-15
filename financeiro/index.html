@@ -571,11 +571,13 @@
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/customer-health.css">
 <link rel="stylesheet" href="../assets/dev-hours.css">
+<link rel="stylesheet" href="../assets/trello-cards.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/customer-health.js"></script>
 <script src="../assets/dev-hours.js"></script>
+<script src="../assets/trello-cards.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -651,6 +653,7 @@
       <button class="fnav-item" id="health-btn" type="button"><i data-ic="pulse"></i><span>Flow Health</span></button>
       <button class="fnav-item" id="clients-btn" type="button"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
       <button class="fnav-item" id="hours-btn" type="button"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
+      <button class="fnav-item" id="trello-btn" type="button"><i data-ic="grid"></i><span>Cards Trello</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="../afiliados/"><i data-ic="chart"></i><span>Afiliados</span></a>
@@ -703,6 +706,8 @@
 
     <div id="clients-view" hidden></div>
     <div id="hours-view" hidden></div>
+
+    <div id="trello-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1604,6 +1609,7 @@
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
     document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
+    document.getElementById("trello-btn").classList.toggle("active", state.view === "trello");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2890,13 +2896,15 @@
     document.getElementById("tool-view").hidden = v !== "tool";
     document.getElementById("clients-view").hidden = v !== "clients";
     document.getElementById("hours-view").hidden = v !== "hours";
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours";
+    document.getElementById("trello-view").hidden = v !== "trello";
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours" || v === "trello";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
+    else if (v === "trello") document.getElementById("tool-title").textContent = "Cards Trello";
     renderSidebar();
   }
   CustomerHealth.init({
@@ -2914,6 +2922,12 @@
   async function openHours() {
     setView("hours");
     await DevHours.show();
+  }
+  TrelloCards.init({ root: document.getElementById("trello-view"), sb: sb, toast: toast });
+  document.getElementById("trello-btn").addEventListener("click", function () { openTrello(); });
+  async function openTrello() {
+    setView("trello");
+    await TrelloCards.show();
   }
   function setHealthMode(on) { setView(on ? "health" : "tool"); }
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
@@ -3528,6 +3542,7 @@
     if (view === "health") openHealth();
     else if (view === "clients") openClients();
     else if (view === "hours") openHours();
+    else if (view === "trello") openTrello();
     prefetchOtherTools();
   }
 
