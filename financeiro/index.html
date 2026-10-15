@@ -3528,7 +3528,7 @@
     document.getElementById("user-email").textContent = session.user.email;
     state.userId = session.user.id;
     // Acesso por menu: quem não tem nenhum menu do Financeiro vai para o painel que pode ver.
-    try { await FlowAccess.load(sb); } catch (e) {
+    try { await FlowAccess.load(sb, session.user.id); } catch (e) {
       showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
       return;
     }

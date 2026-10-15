@@ -51,6 +51,11 @@
   }
 
   /* ---------------- dados ---------------- */
+  // Cache da aba: ao voltar para a tela mostra na hora o que já tinha e atualiza por trás.
+  function cacheKey() { return "flow_ig_cache_v1:" + ((window.FlowAccess && window.FlowAccess.email()) || ""); }
+  function cacheRead() { try { return JSON.parse(sessionStorage.getItem(cacheKey()) || "null"); } catch (e) { return null; } }
+  function cacheWrite() { try { sessionStorage.setItem(cacheKey(), JSON.stringify(S.cards)); } catch (e) {} }
+
   async function load() {
     var r = await A.sb.from("trello_cards").select(COLS).eq("active", true).eq("is_bug", false).not("ai", "is", null);
     if (r.error) throw r.error;
@@ -321,15 +326,22 @@
     }
     Object.assign(c, r.data || {});
     render();
+    cacheWrite();
   }
 
   /* ---------------- API pública ---------------- */
   async function show() {
     if (!A) return;
     try {
-      if (!S.ready) { S.ready = true; $("ig-grid").innerHTML = '<div class="panel ig-empty">Carregando…</div>'; }
+      if (!S.ready) {
+        S.ready = true;
+        var cached = cacheRead();
+        if (Array.isArray(cached)) { S.cards = cached; render(); }
+        else $("ig-grid").innerHTML = '<div class="panel ig-empty">Carregando…</div>';
+      }
       await load();
       render();
+      cacheWrite();
     } catch (e) {
       console.warn("Instagram:", e);
       A.toast("Não foi possível carregar o Instagram: " + (e.message || e), true);

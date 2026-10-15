@@ -2057,7 +2057,7 @@
     if (!session) { showOnly("login-screen"); return; }
     $("user-email").textContent = session.user.email;
     state.userId = session.user.id;
-    try { await window.FlowAccess.load(sb); } catch (e) {
+    try { await window.FlowAccess.load(sb, session.user.id); } catch (e) {
       showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
       return;
     }

@@ -49,9 +49,15 @@
   }
 
   /* ---------------- dados ---------------- */
+  // Cache da aba: ao voltar para a tela mostra na hora o que já tinha e atualiza por trás.
+  function cacheKey() { return "flow_tc_cache_v1:" + ((window.FlowAccess && window.FlowAccess.email()) || ""); }
+  function cacheRead() { try { return JSON.parse(sessionStorage.getItem(cacheKey()) || "null"); } catch (e) { return null; } }
+  function cacheWrite() { try { sessionStorage.setItem(cacheKey(), JSON.stringify({ cards: S.cards, last: S.last })); } catch (e) {} }
+
+  // trello_cards_list: só as colunas da tela (descrição resumida, imagens sem o endereço do Trello).
   async function load() {
     var r = await Promise.all([
-      A.sb.from("trello_cards").select("*").eq("active", true),
+      A.sb.from("trello_cards_list").select("*").eq("active", true),
       A.sb.from("sync_state").select("value").eq("key", "trello_last_run").maybeSingle()
     ]);
     if (r[0].error) throw r[0].error;
@@ -307,6 +313,7 @@
     var r = await A.sb.rpc("trello_set_read", { p_id: id, p_read: read });
     if (r.error) { c.read_at = before; render(); A.toast("Não foi possível salvar: " + r.error.message, true); return; }
     c.read_at = r.data;
+    cacheWrite();
     A.toast(read ? "Marcado como lido." : "Voltou para Pendentes.");
   }
 
@@ -411,9 +418,15 @@
   async function show() {
     if (!A) return;
     try {
-      if (!S.ready) { S.ready = true; $("tc-list").innerHTML = '<div class="panel tc-empty">Carregando…</div>'; }
+      if (!S.ready) {
+        S.ready = true;
+        var cached = cacheRead();
+        if (cached && cached.cards) { S.cards = cached.cards; S.last = cached.last; render(); }
+        else $("tc-list").innerHTML = '<div class="panel tc-empty">Carregando…</div>';
+      }
       await load();
       render();
+      cacheWrite();
     } catch (e) {
       console.warn("Cards Trello:", e);
       A.toast("Não foi possível carregar os cards do Trello: " + (e.message || e), true);

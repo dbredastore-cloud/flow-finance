@@ -104,6 +104,8 @@
   #toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; transition: all .2s; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; z-index: 99; pointer-events: none; max-width: 90vw; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>
+<link rel="preconnect" href="https://jagmnogcpxeujtsrrotd.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
@@ -291,7 +293,7 @@
     if (!session) { showOnly("login-screen"); return; }
     $("user-email").textContent = session.user.email;
     // Equipe é só do perfil admin; acesso personalizado volta para o painel que pode ver.
-    try { await window.FlowAccess.load(sb); } catch (e) { /* segue: a função team-admin decide */ }
+    try { await window.FlowAccess.load(sb, session.user.id); } catch (e) { /* segue: a função team-admin decide */ }
     if (window.FlowAccess.has() && !window.FlowAccess.isAdmin()) {
       var go = window.FlowAccess.firstHref();
       if (go) { location.replace(go); return; }

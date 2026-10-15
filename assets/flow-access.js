@@ -30,12 +30,28 @@ window.FlowAccess = (function () {
 
   var me = null; // { role, menus, email }
 
-  async function load(sb) {
-    var r = await sb.rpc("my_access");
-    if (r.error) throw r.error;
-    me = r.data || null; // null = conta sem acesso aos painéis
+  // Com o perfil já guardado nesta aba (mesmo usuário), a página abre sem esperar a consulta; o perfil é
+  // conferido por trás e, se mudou (ex.: admin alterou os menus), a página recarrega. A proteção dos dados
+  // não depende disso: as regras do banco valem sempre.
+  async function load(sb, uid) {
+    var key = "flow_access_v1:" + (uid || "");
+    var cached = null;
+    try { cached = uid ? JSON.parse(sessionStorage.getItem(key) || "null") : null; } catch (e) {}
+    var fresh = sb.rpc("my_access").then(function (r) {
+      if (r.error) throw r.error;
+      var v = r.data || null; // null = conta sem acesso aos painéis
+      try { if (uid) sessionStorage.setItem(key, JSON.stringify({ v: v })); } catch (e) {}
+      return v;
+    });
+    if (cached && cached.v) {
+      me = cached.v;
+      fresh.then(function (v) { if (JSON.stringify(v) !== JSON.stringify(me)) location.reload(); }).catch(function () {});
+      return me;
+    }
+    me = await fresh;
     return me;
   }
+  function email() { return me ? me.email : null; }
   function has() { return !!me; }
   function isAdmin() { return !!me && me.role === "admin"; }
   function can(key) { return !!me && (me.role === "admin" || (me.menus || []).indexOf(key) >= 0); }
@@ -65,5 +81,5 @@ window.FlowAccess = (function () {
     });
   }
 
-  return { CATALOG: CATALOG, load: load, has: has, isAdmin: isAdmin, can: can, canPage: canPage, allowed: allowed, firstHref: firstHref, label: label, apply: apply };
+  return { CATALOG: CATALOG, load: load, email: email, has: has, isAdmin: isAdmin, can: can, canPage: canPage, allowed: allowed, firstHref: firstHref, label: label, apply: apply };
 })();

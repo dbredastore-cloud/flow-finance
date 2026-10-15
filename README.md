@@ -101,3 +101,9 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Marcações compartilhadas pela equipe, que ligam e desligam: **Lido**, **Interessante** e **Conteúdo feito** (marcar Conteúdo feito também marca Lido). Gravadas pela função `trello_ig_flag`, com quem marcou e quando. Filtros por situação, ferramenta, tipo e formato ideal.
 - O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
 - Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
+
+## Velocidade
+
+- **Policies (RLS)**: sempre `using ((select public.can(array[...])))`, com o `select` em volta. Sem ele o Postgres chama a função para cada linha (afiliados levava 0,6 s a 4 s; com ele, 14 ms). Migration `20261015_rls_initplan.sql`.
+- **Cards Trello** lê a visão `trello_cards_list` (só as colunas da tela, ~0,77 MB em vez de 1,86 MB).
+- **Cache da aba** (sessionStorage): Financeiro, Cards Trello e Instagram mostram na hora o que já tinham e atualizam por trás; o perfil de acesso (`flow_access_v1`) também fica guardado e é conferido por trás (se mudou, a página recarrega).
