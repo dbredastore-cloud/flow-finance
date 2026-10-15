@@ -10,8 +10,10 @@
   var TOOLS = ["FlowPages", "FlowTracking", "FlowSpy"];
   var TABS = [["resumo", "Para mim"], ["slack", "Slack da TB"], ["instagram", "Instagram"]];
 
+  var RECENT_DAYS = 30;
+
   var A = null;
-  var S = { ready: false, cards: [], last: null, stage: "", tool: "", q: "", open: {}, tab: {}, busy: {}, bulk: false };
+  var S = { ready: false, cards: [], last: null, stage: "", tool: "", q: "", recent: true, open: {}, tab: {}, busy: {}, bulk: false };
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -28,6 +30,11 @@
   function stale(c) { return !c.ai || c.ai_hash !== c.content_hash; }
   // Com ANTHROPIC_API_KEY o painel gera os textos; sem ela, a tarefa agendada do Claude grava direto na coluna ai.
   function apiOn() { return !!(S.last && S.last.ai_enabled); }
+  // "Em produção" guarda tudo o que já foi entregue. O que importa agora (e ganha textos) é Testes do cliente
+  // e o que entrou em Em produção nos últimos 30 dias.
+  function since(c) { return Date.parse(c.entered_list_at || c.last_activity || 0) || 0; }
+  function inScope(c) { return c.stage === "teste_cliente" || since(c) >= Date.now() - RECENT_DAYS * 86400000; }
+  function shown(c) { return !S.recent || inScope(c); }
 
   async function call(body) {
     var res = await A.sb.functions.invoke("trello-cards", { body: body });
@@ -49,19 +56,23 @@
     S.last = r[1].data ? r[1].data.value : null;
   }
 
-  // Com data de entrega primeiro (mais próxima antes); sem data, pela entrada na lista (mais recente antes).
+  // Testes do cliente primeiro, pela data de entrega (mais próxima antes; sem data no fim).
+  // Em produção depois, pela entrada na lista (mais recente antes).
   function visible() {
     var q = S.q.trim().toLowerCase();
     return S.cards.filter(function (c) {
+      if (!shown(c)) return false;
       if (S.stage && c.stage !== S.stage) return false;
       if (S.tool && c.tool !== S.tool) return false;
       if (q && (c.name + " " + (c.ai && c.ai.titulo || "") + " " + c.board_name).toLowerCase().indexOf(q) < 0) return false;
       return true;
     }).sort(function (a, b) {
-      if (a.due && b.due) return Date.parse(a.due) - Date.parse(b.due);
-      if (a.due) return -1;
-      if (b.due) return 1;
-      return Date.parse(b.entered_list_at || b.last_activity || 0) - Date.parse(a.entered_list_at || a.last_activity || 0);
+      if (a.stage !== b.stage) return a.stage === "teste_cliente" ? -1 : 1;
+      if (a.stage === "teste_cliente") {
+        if (a.due && b.due) return Date.parse(a.due) - Date.parse(b.due);
+        if (a.due || b.due) return a.due ? -1 : 1;
+      }
+      return since(b) - since(a);
     });
   }
 
@@ -78,6 +89,7 @@
       '<div class="tc-filters">' +
         '<div class="ch-tabs" id="tc-stage" role="tablist" aria-label="Lista"></div>' +
         '<div class="ch-tabs" id="tc-tool" role="tablist" aria-label="Ferramenta"></div>' +
+        '<button type="button" class="btn" id="tc-recent" data-act="recent"></button>' +
         '<input type="search" id="tc-q" placeholder="Buscar card…" aria-label="Buscar card">' +
       "</div>" +
       '<div id="tc-list" class="tc-list"></div>';
@@ -94,6 +106,7 @@
     var act = el.getAttribute("data-act"), id = el.getAttribute("data-id");
     if (act === "stage") { S.stage = el.getAttribute("data-v"); render(); }
     else if (act === "tool") { S.tool = el.getAttribute("data-v"); render(); }
+    else if (act === "recent") { S.recent = !S.recent; render(); }
     else if (act === "toggle") { S.open[id] = !S.open[id]; renderList(); }
     else if (act === "tab") { S.tab[id] = el.getAttribute("data-v"); S.open[id] = true; renderList(); }
     else if (act === "gen") generateCard(id, el.getAttribute("data-force") === "1");
@@ -111,27 +124,32 @@
       (l.boards ? '<span class="ch-src">Boards: ' + esc(l.boards.join(", ")) + "</span>" : "");
     $("tc-sources").innerHTML = src;
 
-    var n = function (f) { return S.cards.filter(f).length; };
-    var late = n(function (c) { return c.due && !c.due_complete && daysFromToday(c.due) < 0; });
-    var week = n(function (c) { return c.due && !c.due_complete && daysFromToday(c.due) >= 0 && daysFromToday(c.due) <= 7; });
-    var pend = n(stale);
+    var base = S.cards.filter(shown);
+    var n = function (f) { return base.filter(f).length; };
+    var testing = function (c) { return c.stage === "teste_cliente"; };
+    var late = n(function (c) { return testing(c) && c.due && !c.due_complete && daysFromToday(c.due) < 0; });
+    var week = n(function (c) { return testing(c) && c.due && !c.due_complete && daysFromToday(c.due) >= 0 && daysFromToday(c.due) <= 7; });
+    var pend = S.cards.filter(function (c) { return inScope(c) && stale(c); }).length;
+    var prodAll = S.cards.filter(function (c) { return c.stage === "producao"; }).length;
     $("tc-tiles").innerHTML = [
-      ["Testes do cliente", n(function (c) { return c.stage === "teste_cliente"; }), "aguardando validação"],
-      ["Em produção", n(function (c) { return c.stage === "producao"; }), "cards na lista"],
-      ["Entregas em 7 dias", week, "com data no card"],
-      ["Atrasados", late, "data de entrega já passou"],
+      ["Testes do cliente", n(testing), "aguardando validação"],
+      ["Em produção", n(function (c) { return c.stage === "producao"; }), S.recent ? "nos últimos " + RECENT_DAYS + " dias · " + prodAll + " no total" : "no total"],
+      ["Entregas em 7 dias", week, "em testes, com data no card"],
+      ["Atrasados", late, "em testes, data já passou"],
       ["Sem textos", pend, !pend ? "tudo gerado" : apiOn() ? "clique em Gerar textos pendentes" : "o Claude gera na próxima rodada"]
     ].map(function (t) {
       return '<div class="ch-tile" role="group"><small>' + esc(t[0]) + '</small><b class="num">' + t[1] + "</b><span>" + esc(t[2]) + "</span></div>";
     }).join("");
 
     $("tc-stage").innerHTML = STAGES.map(function (s) {
-      var count = s[0] ? n(function (c) { return c.stage === s[0]; }) : S.cards.length;
+      var count = s[0] ? n(function (c) { return c.stage === s[0]; }) : base.length;
       return '<button type="button" class="btn' + (S.stage === s[0] ? " btn-primary" : "") + '" data-act="stage" data-v="' + s[0] + '">' + esc(s[1]) + " · " + count + "</button>";
     }).join("");
     $("tc-tool").innerHTML = [""].concat(TOOLS).map(function (t) {
       return '<button type="button" class="btn' + (S.tool === t ? " btn-primary" : "") + '" data-act="tool" data-v="' + t + '">' + esc(t || "Todas") + "</button>";
     }).join("");
+    $("tc-recent").textContent = S.recent ? "Em produção: últimos " + RECENT_DAYS + " dias ▾" : "Em produção: todos ▾";
+    $("tc-recent").title = S.recent ? "Mostrar todos os cards de Em produção" : "Mostrar só os últimos " + RECENT_DAYS + " dias";
     $("tc-gen-all").hidden = !apiOn();
     $("tc-gen-all").disabled = S.bulk || !pend;
     $("tc-gen-all").textContent = S.bulk ? "Gerando…" : "Gerar textos pendentes" + (pend ? " (" + pend + ")" : "");
@@ -144,6 +162,7 @@
     }
     var d = daysFromToday(c.due), cls, rel;
     if (c.due_complete) { cls = "done"; rel = "✓ marcada como concluída"; }
+    else if (c.stage === "producao" && d <= 0) { cls = "done"; rel = d === 0 ? "entregue hoje" : "entregue há " + (-d) + (d === -1 ? " dia" : " dias"); }
     else if (d < 0) { cls = "late"; rel = "atrasado " + (-d) + (d === -1 ? " dia" : " dias"); }
     else if (d === 0) { cls = "soon"; rel = "hoje"; }
     else if (d <= 7) { cls = "soon"; rel = d === 1 ? "amanhã" : "em " + d + " dias"; }
@@ -167,7 +186,7 @@
     var api = apiOn();
     var genBtn = busy ? '<button class="btn" type="button" disabled>Gerando…</button>'
       : !ai ? (api ? '<button class="btn btn-primary" type="button" data-act="gen" data-id="' + c.id + '">Gerar textos</button>'
-        : '<span class="tc-wait">Textos a caminho: o Claude gera na próxima rodada</span>')
+        : '<span class="tc-wait">' + (inScope(c) ? "Textos a caminho: o Claude gera na próxima rodada" : "Entrega com mais de " + RECENT_DAYS + " dias: sem textos") + "</span>")
       : '<button class="btn" type="button" data-act="toggle" data-id="' + c.id + '">' + (open ? "Fechar textos" : "Ver textos") + "</button>" +
         (api ? '<button class="btn btn-ghost" type="button" data-act="gen" data-id="' + c.id + '" data-force="1" title="Gerar de novo">↻ Refazer</button>' : "");
     return '<article class="tc-card' + (open ? " open" : "") + '">' +

@@ -6,6 +6,7 @@
 .tc-filters { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 4px 0 16px; }
 .tc-filters .ch-tabs { margin: 0; }
 .tc-filters .btn { width: auto; }
+#tc-recent { border-style: dashed; }
 .tc-filters input[type="search"] { flex: 1 1 200px; min-width: 0; max-width: 320px; margin-left: auto; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; }
 
 .tc-list { display: grid; gap: 12px; }
