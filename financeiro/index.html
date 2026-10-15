@@ -572,6 +572,7 @@
 <link rel="stylesheet" href="../assets/customer-health.css">
 <link rel="stylesheet" href="../assets/dev-hours.css">
 <link rel="stylesheet" href="../assets/trello-cards.css">
+<link rel="stylesheet" href="../assets/instagram-hub.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -579,6 +580,7 @@
 <script src="../assets/customer-health.js"></script>
 <script src="../assets/dev-hours.js"></script>
 <script src="../assets/trello-cards.js"></script>
+<script src="../assets/instagram-hub.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -655,6 +657,7 @@
       <button class="fnav-item" id="clients-btn" type="button" data-menu="fin.clients"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
       <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
       <button class="fnav-item" id="trello-btn" type="button" data-menu="fin.trello"><i data-ic="grid"></i><span>Cards Trello</span></button>
+      <button class="fnav-item" id="ig-btn" type="button" data-menu="fin.instagram"><i data-ic="camera"></i><span>Instagram</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="../afiliados/" data-page="afiliados"><i data-ic="chart"></i><span>Afiliados</span></a>
@@ -709,6 +712,8 @@
     <div id="hours-view" hidden></div>
 
     <div id="trello-view" hidden></div>
+
+    <div id="ig-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1611,6 +1616,7 @@
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
     document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
     document.getElementById("trello-btn").classList.toggle("active", state.view === "trello");
+    document.getElementById("ig-btn").classList.toggle("active", state.view === "instagram");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2898,7 +2904,9 @@
     document.getElementById("clients-view").hidden = v !== "clients";
     document.getElementById("hours-view").hidden = v !== "hours";
     document.getElementById("trello-view").hidden = v !== "trello";
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours" || v === "trello";
+    document.getElementById("ig-view").hidden = v !== "instagram";
+    if (v !== "instagram") InstagramHub.hide();
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours" || v === "trello" || v === "instagram";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
@@ -2906,6 +2914,7 @@
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
     else if (v === "trello") document.getElementById("tool-title").textContent = "Cards Trello";
+    else if (v === "instagram") document.getElementById("tool-title").textContent = "Instagram";
     renderSidebar();
   }
   CustomerHealth.init({
@@ -2929,6 +2938,13 @@
   async function openTrello() {
     setView("trello");
     await TrelloCards.show();
+  }
+  // Instagram: pautas e roteiros das atualizações (sem bugs), com marcações da equipe.
+  InstagramHub.init({ root: document.getElementById("ig-view"), sb: sb, toast: toast });
+  document.getElementById("ig-btn").addEventListener("click", function () { openInstagram(); });
+  async function openInstagram() {
+    setView("instagram");
+    await InstagramHub.show();
   }
   function setHealthMode(on) { setView(on ? "health" : "tool"); }
   document.getElementById("health-btn").addEventListener("click", function () { openHealth(); });
@@ -3539,16 +3555,17 @@
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
     if (canFin) alertsReady.then(function () { renderAlerts(); renderTable(); });
     // Tela inicial: a última aberta, se a pessoa ainda pode ver; senão a primeira liberada.
-    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello" };
+    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello", instagram: "fin.instagram" };
     var view = safeGet("flow_fin_view");
     if (view !== null && !(VIEW_MENU[view] && FlowAccess.can(VIEW_MENU[view]))) view = null;
-    if (view === null && !canFin) view = ["health", "clients", "hours", "trello"].filter(function (v) { return FlowAccess.can(VIEW_MENU[v]); })[0];
+    if (view === null && !canFin) view = ["health", "clients", "hours", "trello", "instagram"].filter(function (v) { return FlowAccess.can(VIEW_MENU[v]); })[0];
     renderPeriodBar();
     if (!canFin) {
       if (view === "health") openHealth();
       else if (view === "clients") openClients();
       else if (view === "hours") openHours();
       else if (view === "trello") openTrello();
+      else if (view === "instagram") openInstagram();
       return;
     }
     if (view === "home" || view === null) {
@@ -3564,6 +3581,7 @@
     else if (view === "clients") openClients();
     else if (view === "hours") openHours();
     else if (view === "trello") openTrello();
+    else if (view === "instagram") openInstagram();
     prefetchOtherTools();
   }
 
