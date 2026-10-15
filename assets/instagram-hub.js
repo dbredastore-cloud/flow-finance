@@ -22,7 +22,7 @@
     "ig_read_at, ig_read_by, ig_fav_at, ig_fav_by, ig_used_at, ig_used_by";
 
   var A = null;
-  var S = { ready: false, cards: [], status: "", tool: "", tipo: "", q: "", openId: null, tab: "geral", busy: {} };
+  var S = { ready: false, cards: [], status: "", tool: "", tipo: "", fmt: "", q: "", openId: null, tab: "geral", busy: {} };
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -63,6 +63,7 @@
   function match(c) {
     if (S.tool && c.tool !== S.tool) return false;
     if (S.tipo && tipo(c) !== S.tipo) return false;
+    if (S.fmt && (pack(c).formato_ideal || "") !== S.fmt) return false;
     if (S.status === "unread" && c.ig_read_at) return false;
     if (S.status === "fav" && !c.ig_fav_at) return false;
     if (S.status === "todo" && c.ig_used_at) return false;
@@ -84,6 +85,7 @@
         '<div class="ch-tabs" id="ig-status" role="tablist" aria-label="Situação"></div>' +
         '<div class="ig-row"><div class="ch-tabs" id="ig-tool" role="tablist" aria-label="Ferramenta"></div>' +
         '<select id="ig-tipo" aria-label="Tipo de atualização"></select>' +
+        '<select id="ig-fmt" aria-label="Formato ideal"></select>' +
         '<input type="search" id="ig-q" placeholder="Buscar atualização…" aria-label="Buscar atualização"></div>' +
       "</div>" +
       '<div class="ig-grid" id="ig-grid"></div>' +
@@ -92,6 +94,7 @@
 
     $("ig-q").addEventListener("input", function (e) { S.q = e.target.value; renderGrid(); });
     $("ig-tipo").addEventListener("change", function (e) { S.tipo = e.target.value; render(); });
+    $("ig-fmt").addEventListener("change", function (e) { S.fmt = e.target.value; render(); });
     $("ig-back").addEventListener("click", closeDrawer);
     root.addEventListener("click", onClick);
     root.addEventListener("keydown", function (e) {
@@ -142,6 +145,11 @@
     all.forEach(function (c) { tipos[tipo(c)] = (tipos[tipo(c)] || 0) + 1; });
     $("ig-tipo").innerHTML = '<option value="">Todos os tipos</option>' + Object.keys(tipos).sort().map(function (t) {
       return '<option value="' + esc(t) + '"' + (S.tipo === t ? " selected" : "") + ">" + esc(t) + " (" + tipos[t] + ")</option>";
+    }).join("");
+    var fmts = {};
+    all.forEach(function (c) { var f = pack(c).formato_ideal; if (f) fmts[f] = (fmts[f] || 0) + 1; });
+    $("ig-fmt").innerHTML = '<option value="">Todos os formatos</option>' + ["Reels", "Carrossel", "Stories"].filter(function (f) { return fmts[f]; }).map(function (f) {
+      return '<option value="' + f + '"' + (S.fmt === f ? " selected" : "") + ">Formato ideal: " + f + " (" + fmts[f] + ")</option>";
     }).join("");
   }
   function tile(label, value, sub, status) {

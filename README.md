@@ -93,3 +93,11 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Proteção nos dados, não só na tela: as policies de cada tabela usam `public.can(array[...menus])`, então quem só tem Cards Trello não lê despesas nem pela API. `is_owner()` = perfil admin (tentativas de login, tela Equipe); `my_access()` devolve o perfil de quem está logado.
 - No painel, os itens do menu têm `data-menu`, os links entre painéis `data-page` e o link da Equipe `data-admin-only`; quem não tem nenhum menu de um painel é levado ao primeiro que pode ver.
 - Gerenciar: tela Equipe → **Editar acesso** (ou o seletor ao adicionar pessoa). Precisa sobrar sempre pelo menos um Admin.
+
+## Instagram (menu do /financeiro/)
+
+- Painel de pautas a partir das entregas do Trello, só com o que **não é bug** (coluna gerada `trello_cards.is_bug`: etiqueta "Bug", tipo "Correção de bug" ou nome começando com "[Bug]").
+- Para cada card: o que foi feito, ângulo, formato ideal, ganchos, roteiro de Reels cena a cena (tempo, imagem, fala, texto na tela), carrossel slide a slide, sequência de stories, legenda, hashtags e dica de gravação (coluna `ig`), além dos textos Para mim e Slack dos Cards Trello. Tudo com botão Copiar.
+- Marcações compartilhadas pela equipe, que ligam e desligam: **Lido**, **Interessante** e **Conteúdo feito** (marcar Conteúdo feito também marca Lido). Gravadas pela função `trello_ig_flag`, com quem marcou e quando. Filtros por situação, ferramenta, tipo e formato ideal.
+- O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
+- Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
