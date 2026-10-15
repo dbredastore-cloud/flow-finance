@@ -72,10 +72,12 @@ Supabase → Project Settings → Edge Functions → Secrets:
 
 - Mostra os cards das listas **Testes do cliente** e **Em produção** dos boards do Trello das ferramentas Flow, com a **data de entrega** do card (atrasado / hoje / em N dias). Card sem data mostra quando entrou na lista.
 - Para cada card, o Claude classifica o tipo de atualização (nova funcionalidade, melhoria, correção…) e escreve três textos, com botão **Copiar**:
-  1. **Para mim** — o que é, o que beneficia e para quem, de forma clara e objetiva;
-  2. **Slack da TB** — mensagem amigável anunciando a novidade para a equipe;
+  1. **Para mim** — o que é (contexto de antes e depois), como funciona, o que beneficia e para quem;
+  2. **Slack da TB** — comunicado executivo, sem emojis: título, contexto, *O que muda*, *Impacto* e *Próximos passos*;
   3. **Instagram** — ganchos, roteiro de reels, sequência de stories, carrossel e outros formatos, com legendas e CTA.
-- `supabase/functions/trello-cards/`: `sync` lê os boards (listas reconhecidas pelo nome, sem acento/maiúscula) e grava em `trello_cards`; `generate` gera os textos de um card. Card que sai dessas listas some da tela (fica `active = false`). Se o card mudar no Trello, o painel avisa para refazer os textos.
+- **Lido / Pendente**: cada card tem o botão **Marcar como lido** (`read_at`, gravado pela função `trello_set_read`, só admin). O filtro abre em **Pendentes**; o card lido vai para **Lidos** e pode voltar. O sync nunca mexe nisso.
+- **Imagens**: os anexos de imagem do card ficam em `trello_cards.images` e abrem numa galeria. Como o Trello só entrega anexos com a chave da API, a imagem vem pela função (`action: "image"`).
+- `supabase/functions/trello-cards/`: `sync` lê os boards (listas reconhecidas pelo nome, sem acento/maiúscula) e grava em `trello_cards`; `generate` gera os textos de um card; `image` devolve um anexo. Card que sai dessas listas some da tela (fica `active = false`). Se o card mudar no Trello, o painel avisa para refazer os textos. Migrations: `20261014_trello_cards.sql` e `20261015_trello_cards_read_images.sql`.
 - O Trello é lido a cada 30 min (`20261014_trello_cards.sql`) ou pelo botão **Atualizar do Trello**.
 - Textos, sem custo: a tarefa agendada **Textos dos Cards Trello** do app Claude (seg a sex, 8h, com o app aberto) lê os cards sem texto pelo conector do Supabase, escreve os textos e grava direto em `trello_cards.ai`. O painel mostra "Textos a caminho" até lá.
 - Textos pela API (opcional, pago): com o secret `ANTHROPIC_API_KEY`, a função gera com `claude-opus-5-5` — 3 cards novos a cada 30 min, e o painel ganha os botões **Gerar textos**, **Refazer** e **Gerar textos pendentes**.

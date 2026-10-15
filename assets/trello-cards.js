@@ -9,11 +9,12 @@
   var STAGES = [["", "Todos"], ["teste_cliente", "Testes do cliente"], ["producao", "Em produção"]];
   var TOOLS = ["FlowPages", "FlowTracking", "FlowSpy"];
   var TABS = [["resumo", "Para mim"], ["slack", "Slack da TB"], ["instagram", "Instagram"]];
+  var READS = [["pendente", "Pendentes"], ["lido", "Lidos"], ["", "Todos"]];
 
   var RECENT_DAYS = 30;
 
   var A = null;
-  var S = { ready: false, cards: [], last: null, stage: "", tool: "", q: "", recent: true, open: {}, tab: {}, busy: {}, bulk: false };
+  var S = { ready: false, cards: [], last: null, stage: "", tool: "", q: "", recent: true, read: "pendente", open: {}, tab: {}, busy: {}, bulk: false, imgs: {}, gallery: null };
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -35,6 +36,8 @@
   function since(c) { return Date.parse(c.entered_list_at || c.last_activity || 0) || 0; }
   function inScope(c) { return c.stage === "teste_cliente" || since(c) >= Date.now() - RECENT_DAYS * 86400000; }
   function shown(c) { return !S.recent || inScope(c); }
+  function readOk(c) { return !S.read || (S.read === "lido" ? !!c.read_at : !c.read_at); }
+  function byId(id) { return S.cards.filter(function (x) { return x.id === id; })[0]; }
 
   async function call(body) {
     var res = await A.sb.functions.invoke("trello-cards", { body: body });
@@ -61,7 +64,7 @@
   function visible() {
     var q = S.q.trim().toLowerCase();
     return S.cards.filter(function (c) {
-      if (!shown(c)) return false;
+      if (!shown(c) || !readOk(c)) return false;
       if (S.stage && c.stage !== S.stage) return false;
       if (S.tool && c.tool !== S.tool) return false;
       if (q && (c.name + " " + (c.ai && c.ai.titulo || "") + " " + c.board_name).toLowerCase().indexOf(q) < 0) return false;
@@ -87,14 +90,29 @@
       "</section>" +
       '<div class="ch-tiles" id="tc-tiles"></div>' +
       '<div class="tc-filters">' +
+        '<div class="ch-tabs tc-read-tabs" id="tc-read" role="tablist" aria-label="Leitura"></div>' +
         '<div class="ch-tabs" id="tc-stage" role="tablist" aria-label="Lista"></div>' +
         '<div class="ch-tabs" id="tc-tool" role="tablist" aria-label="Ferramenta"></div>' +
         '<button type="button" class="btn" id="tc-recent" data-act="recent"></button>' +
         '<input type="search" id="tc-q" placeholder="Buscar card…" aria-label="Buscar card">' +
       "</div>" +
-      '<div id="tc-list" class="tc-list"></div>';
+      '<div id="tc-list" class="tc-list"></div>' +
+      '<div class="tc-modal" id="tc-modal" hidden>' +
+        '<div class="tc-modal-box" role="dialog" aria-modal="true" aria-labelledby="tc-modal-title">' +
+          '<div class="tc-modal-head"><h3 id="tc-modal-title">Imagens</h3><button type="button" class="btn btn-ghost" data-act="close-gallery" aria-label="Fechar">✕</button></div>' +
+          '<div class="tc-viewer" id="tc-viewer"></div>' +
+          '<div class="tc-thumbs" id="tc-thumbs"></div>' +
+        "</div>" +
+      "</div>";
 
     $("tc-sync").addEventListener("click", syncNow);
+    $("tc-modal").addEventListener("click", function (e) { if (e.target.id === "tc-modal") closeGallery(); });
+    document.addEventListener("keydown", function (e) {
+      if (!S.gallery) return;
+      if (e.key === "Escape") closeGallery();
+      else if (e.key === "ArrowRight") stepGallery(1);
+      else if (e.key === "ArrowLeft") stepGallery(-1);
+    });
     $("tc-gen-all").addEventListener("click", generatePending);
     $("tc-q").addEventListener("input", function (e) { S.q = e.target.value; renderList(); });
     root.addEventListener("click", onClick);
@@ -107,6 +125,12 @@
     if (act === "stage") { S.stage = el.getAttribute("data-v"); render(); }
     else if (act === "tool") { S.tool = el.getAttribute("data-v"); render(); }
     else if (act === "recent") { S.recent = !S.recent; render(); }
+    else if (act === "read-filter") { S.read = el.getAttribute("data-v"); render(); }
+    else if (act === "read") setRead(id, el.getAttribute("data-v") === "1");
+    else if (act === "gallery") openGallery(id, 0);
+    else if (act === "gallery-pick") showImage(Number(el.getAttribute("data-v")));
+    else if (act === "gallery-step") stepGallery(Number(el.getAttribute("data-v")));
+    else if (act === "close-gallery") closeGallery();
     else if (act === "toggle") { S.open[id] = !S.open[id]; renderList(); }
     else if (act === "tab") { S.tab[id] = el.getAttribute("data-v"); S.open[id] = true; renderList(); }
     else if (act === "gen") generateCard(id, el.getAttribute("data-force") === "1");
@@ -131,7 +155,9 @@
     var week = n(function (c) { return testing(c) && c.due && !c.due_complete && daysFromToday(c.due) >= 0 && daysFromToday(c.due) <= 7; });
     var pend = S.cards.filter(function (c) { return inScope(c) && stale(c); }).length;
     var prodAll = S.cards.filter(function (c) { return c.stage === "producao"; }).length;
+    var unread = n(function (c) { return !c.read_at; });
     $("tc-tiles").innerHTML = [
+      ["Para ler", unread, unread ? "cards ainda não marcados como lidos" : "tudo lido"],
       ["Testes do cliente", n(testing), "aguardando validação"],
       ["Em produção", n(function (c) { return c.stage === "producao"; }), S.recent ? "nos últimos " + RECENT_DAYS + " dias · " + prodAll + " no total" : "no total"],
       ["Entregas em 7 dias", week, "em testes, com data no card"],
@@ -141,6 +167,10 @@
       return '<div class="ch-tile" role="group"><small>' + esc(t[0]) + '</small><b class="num">' + t[1] + "</b><span>" + esc(t[2]) + "</span></div>";
     }).join("");
 
+    $("tc-read").innerHTML = READS.map(function (r) {
+      var count = r[0] === "pendente" ? unread : r[0] === "lido" ? base.length - unread : base.length;
+      return '<button type="button" class="btn' + (S.read === r[0] ? " btn-primary" : "") + '" data-act="read-filter" data-v="' + r[0] + '">' + esc(r[1]) + " · " + count + "</button>";
+    }).join("");
     $("tc-stage").innerHTML = STAGES.map(function (s) {
       var count = s[0] ? n(function (c) { return c.stage === s[0]; }) : base.length;
       return '<button type="button" class="btn' + (S.stage === s[0] ? " btn-primary" : "") + '" data-act="stage" data-v="' + s[0] + '">' + esc(s[1]) + " · " + count + "</button>";
@@ -176,7 +206,10 @@
       $("tc-list").innerHTML = '<div class="panel tc-empty">Nenhum card em Testes do cliente ou Em produção ainda. Clique em <b>Atualizar do Trello</b>.</div>';
       return;
     }
-    if (!list.length) { $("tc-list").innerHTML = '<div class="panel tc-empty">Nenhum card com esses filtros.</div>'; return; }
+    if (!list.length) {
+      $("tc-list").innerHTML = '<div class="panel tc-empty">' + (S.read === "pendente" ? "Nenhum card pendente de leitura com esses filtros. 🎉" : "Nenhum card com esses filtros.") + "</div>";
+      return;
+    }
     $("tc-list").innerHTML = list.map(cardHtml).join("");
   }
 
@@ -189,7 +222,12 @@
         : '<span class="tc-wait">' + (inScope(c) ? "Textos a caminho: o Claude gera na próxima rodada" : "Entrega com mais de " + RECENT_DAYS + " dias: sem textos") + "</span>")
       : '<button class="btn" type="button" data-act="toggle" data-id="' + c.id + '">' + (open ? "Fechar textos" : "Ver textos") + "</button>" +
         (api ? '<button class="btn btn-ghost" type="button" data-act="gen" data-id="' + c.id + '" data-force="1" title="Gerar de novo">↻ Refazer</button>' : "");
-    return '<article class="tc-card' + (open ? " open" : "") + '">' +
+    var nImg = (c.images || []).length;
+    var readBtn = c.read_at
+      ? '<button class="btn tc-read-btn on" type="button" data-act="read" data-id="' + c.id + '" data-v="0" title="Lido em ' + esc(fmtDateTime(c.read_at)) + '. Clique para voltar a Pendente.">✓ Lido</button>'
+      : '<button class="btn tc-read-btn" type="button" data-act="read" data-id="' + c.id + '" data-v="1">Marcar como lido</button>';
+    var imgBtn = nImg ? '<button class="btn" type="button" data-act="gallery" data-id="' + c.id + '">Imagens (' + nImg + ")</button>" : "";
+    return '<article class="tc-card' + (open ? " open" : "") + (c.read_at ? " read" : "") + '">' +
       '<div class="tc-head">' +
         '<div class="tc-main">' +
           '<div class="tc-tags"><span class="tc-tool">' + esc(c.tool || c.board_name) + '</span><span class="tc-stage s-' + c.stage + '">' + esc(c.list_name) + "</span>" +
@@ -202,7 +240,7 @@
         "</div>" +
         dueHtml(c) +
       "</div>" +
-      '<div class="tc-acts">' + genBtn + (c.url ? '<a class="btn btn-ghost" href="' + esc(c.url) + '" target="_blank" rel="noopener">Abrir no Trello ↗</a>' : "") +
+      '<div class="tc-acts">' + readBtn + genBtn + imgBtn + (c.url ?'<a class="btn btn-ghost" href="' + esc(c.url) + '" target="_blank" rel="noopener">Abrir no Trello ↗</a>' : "") +
         (c.members && c.members.length ? '<span class="tc-members">' + esc(c.members.join(", ")) + "</span>" : "") + "</div>" +
       (ai && open ? textsHtml(c) : "") +
       "</article>";
@@ -211,8 +249,9 @@
   function textsHtml(c) {
     var tab = S.tab[c.id] || "resumo", ai = c.ai, body;
     if (tab === "resumo") {
-      body = '<dl class="tc-dl"><dt>Tipo</dt><dd>' + esc(ai.tipo) + "</dd><dt>O que é</dt><dd>" + esc(ai.resumo.o_que_e) + "</dd><dt>O que beneficia</dt><dd>" + esc(ai.resumo.beneficio) +
-        "</dd><dt>Para quem</dt><dd>" + esc(ai.resumo.para_quem) + "</dd></dl>";
+      body = '<dl class="tc-dl"><dt>Tipo</dt><dd>' + esc(ai.tipo) + "</dd><dt>O que é</dt><dd>" + esc(ai.resumo.o_que_e) + "</dd>" +
+        (ai.resumo.como_funciona ? "<dt>Como funciona</dt><dd>" + esc(ai.resumo.como_funciona) + "</dd>" : "") +
+        "<dt>O que beneficia</dt><dd>" + esc(ai.resumo.beneficio) + "</dd><dt>Para quem</dt><dd>" + esc(ai.resumo.para_quem) + "</dd></dl>";
     } else if (tab === "slack") {
       body = '<div class="tc-text">' + esc(ai.slack) + "</div>";
     } else {
@@ -241,7 +280,7 @@
     var due = c.due ? "Entrega: " + fmtDate(c.due) : "Entrega: sem data no card";
     if (tab === "resumo") {
       return ai.titulo + " (" + ai.tipo + ")\n" + (c.tool || c.board_name) + " · " + c.list_name + " · " + due + "\n\n" +
-        "O que é: " + ai.resumo.o_que_e + "\n\nO que beneficia: " + ai.resumo.beneficio + "\n\nPara quem: " + ai.resumo.para_quem;
+        "O que é: " + ai.resumo.o_que_e + (ai.resumo.como_funciona ? "\n\nComo funciona: " + ai.resumo.como_funciona : "") + "\n\nO que beneficia: " + ai.resumo.beneficio + "\n\nPara quem: " + ai.resumo.para_quem;
     }
     if (tab === "slack") return ai.slack;
     var ig = ai.instagram;
@@ -257,6 +296,76 @@
     try { await navigator.clipboard.writeText(plain(c, tab)); A.toast("Texto copiado."); }
     catch (e) { A.toast("Não foi possível copiar: " + (e.message || e), true); }
   }
+
+  /* ---------------- lido / pendente ---------------- */
+  async function setRead(id, read) {
+    var c = byId(id);
+    if (!c) return;
+    var before = c.read_at;
+    c.read_at = read ? new Date().toISOString() : null; // otimista: some do filtro na hora
+    render();
+    var r = await A.sb.rpc("trello_set_read", { p_id: id, p_read: read });
+    if (r.error) { c.read_at = before; render(); A.toast("Não foi possível salvar: " + r.error.message, true); return; }
+    c.read_at = r.data;
+    A.toast(read ? "Marcado como lido." : "Voltou para Pendentes.");
+  }
+
+  /* ---------------- imagens ---------------- */
+  // Os anexos do Trello só abrem com a chave da API, então vêm pela Edge Function e viram URL local (blob).
+  function mimeOf(img) {
+    if (img.mime) return img.mime;
+    var ext = (img.name || "").split(".").pop().toLowerCase();
+    return { jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp" }[ext] || "image/png";
+  }
+  async function imageUrl(card, img) {
+    var key = card.id + "/" + img.id;
+    if (S.imgs[key]) return S.imgs[key];
+    var res = await A.sb.functions.invoke("trello-cards", { body: { action: "image", id: card.id, att: img.id } });
+    if (res.error || !(res.data instanceof Blob)) throw new Error((res.error && res.error.message) || "imagem indisponível");
+    S.imgs[key] = URL.createObjectURL(new Blob([res.data], { type: mimeOf(img) }));
+    return S.imgs[key];
+  }
+  function openGallery(id, i) {
+    var c = byId(id);
+    if (!c || !(c.images || []).length) return;
+    S.gallery = { id: id, i: i };
+    $("tc-modal-title").textContent = "Imagens · " + ((c.ai && c.ai.titulo) || c.name);
+    $("tc-thumbs").innerHTML = c.images.map(function (img, k) {
+      return '<button type="button" class="tc-thumb" data-act="gallery-pick" data-v="' + k + '" title="' + esc(img.name) + '"><span class="tc-thumb-ph">' + (k + 1) + "</span></button>";
+    }).join("");
+    $("tc-modal").hidden = false;
+    showImage(i);
+    // Miniaturas carregam em sequência, sem travar a imagem principal.
+    c.images.reduce(function (p, img, k) {
+      return p.then(function () {
+        return imageUrl(c, img).then(function (u) {
+          var b = $("tc-thumbs").children[k];
+          if (b && S.gallery && S.gallery.id === id) b.innerHTML = '<img src="' + u + '" alt="">';
+        }).catch(function () {});
+      });
+    }, Promise.resolve());
+  }
+  async function showImage(i) {
+    var g = S.gallery, c = g && byId(g.id);
+    if (!c) return;
+    var n = c.images.length;
+    g.i = (i + n) % n;
+    var img = c.images[g.i];
+    [].forEach.call($("tc-thumbs").children, function (b, k) { b.classList.toggle("on", k === g.i); });
+    var nav = n > 1 ? '<button type="button" class="tc-nav prev" data-act="gallery-step" data-v="-1" aria-label="Anterior">‹</button><button type="button" class="tc-nav next" data-act="gallery-step" data-v="1" aria-label="Próxima">›</button>' : "";
+    $("tc-viewer").innerHTML = nav + '<div class="tc-view-msg">Carregando imagem…</div>' +
+      '<div class="tc-view-cap">' + esc(img.name) + " · " + (g.i + 1) + " de " + n + "</div>";
+    try {
+      var u = await imageUrl(c, img);
+      if (!S.gallery || S.gallery.id !== c.id || S.gallery.i !== g.i) return;
+      $("tc-viewer").querySelector(".tc-view-msg").outerHTML = '<a href="' + u + '" target="_blank" rel="noopener" title="Abrir em tamanho real"><img src="' + u + '" alt="' + esc(img.name) + '"></a>';
+    } catch (e) {
+      var m = $("tc-viewer").querySelector(".tc-view-msg");
+      if (m) m.textContent = "Não foi possível carregar esta imagem (" + (e.message || e) + ").";
+    }
+  }
+  function stepGallery(d) { if (S.gallery) showImage(S.gallery.i + d); }
+  function closeGallery() { S.gallery = null; $("tc-modal").hidden = true; $("tc-viewer").innerHTML = ""; }
 
   /* ---------------- ações ---------------- */
   async function syncNow() {

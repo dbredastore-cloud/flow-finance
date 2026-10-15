@@ -6,6 +6,7 @@
 // Ações (POST JSON):
 //   { action: "sync", generate?: n }   → lê o Trello; depois gera textos de até n cards sem texto/desatualizados
 //   { action: "generate", id, force? } → gera (ou refaz) os textos de um card
+//   { action: "image", id, att }        → devolve a imagem anexada ao card (o Trello só entrega com a chave)
 //
 // Chamado pelo pg_cron (header x-cron-secret) ou pelo painel (JWT de administrador).
 //
@@ -48,10 +49,15 @@ async function authorized(req: Request) {
 }
 
 /* ---------------- Trello ---------------- */
-async function trello(path: string, params: Record<string, string | number> = {}) {
+function trelloCreds() {
   const key = (Deno.env.get("TRELLO_KEY") ?? "").trim();
   const token = (Deno.env.get("TRELLO_TOKEN") ?? "").trim();
   if (!key || !token) throw new Error("Secrets TRELLO_KEY e TRELLO_TOKEN não configurados no Supabase.");
+  return { key, token };
+}
+
+async function trello(path: string, params: Record<string, string | number> = {}) {
+  const { key, token } = trelloCreds();
   const url = new URL(TRELLO + path);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   url.searchParams.set("key", key);
@@ -77,6 +83,21 @@ function toolOf(boardName: string): string | null {
   if (n.includes("tracking")) return "FlowTracking";
   if (n.includes("spy")) return "FlowSpy";
   return null;
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+function isImage(a: any) {
+  return a?.isUpload && typeof a.url === "string" && (String(a.mimeType ?? "").startsWith("image/") || IMAGE_EXT.test(a.name ?? a.url));
+}
+
+// Anexo do Trello: só abre com a chave no header OAuth, pelo domínio da API.
+async function attachment(url: string) {
+  const { key, token } = trelloCreds();
+  const api = url.replace(/^https:\/\/trello\.com\/1\//, "https://api.trello.com/1/");
+  if (!api.startsWith("https://api.trello.com/1/cards/")) throw new Error("anexo inválido");
+  const r = await fetch(api, { headers: { Authorization: `OAuth oauth_consumer_key="${key}", oauth_token="${token}"` } });
+  if (!r.ok) throw new Error(`Trello anexo → ${r.status}`);
+  return r;
 }
 
 async function hash(s: string) {
@@ -115,6 +136,7 @@ async function sync() {
     for (const l of lists) {
       const cards = await trello(`/lists/${l.id}/cards`, {
         fields: "name,desc,due,dueComplete,labels,shortUrl,dateLastActivity,idList", members: "true", member_fields: "fullName",
+        attachments: "true", attachment_fields: "id,name,mimeType,url,isUpload",
       });
       for (const c of cards) {
         seen.push(c.id);
@@ -123,6 +145,7 @@ async function sync() {
           name: c.name, description: c.desc ?? "",
           labels: (c.labels ?? []).map((x: any) => ({ name: x.name, color: x.color })),
           members: (c.members ?? []).map((m: any) => m.fullName),
+          images: (c.attachments ?? []).filter(isImage).map((a: any) => ({ id: a.id, name: a.name, mime: a.mimeType || null, url: a.url })),
           url: c.shortUrl, due: c.due, due_complete: !!c.dueComplete,
           entered_list_at: entered.get(c.id + l.id) ?? null, last_activity: c.dateLastActivity,
           active: true, content_hash: await hash(c.name + "\n" + (c.desc ?? "")), synced_at: now,
@@ -153,7 +176,7 @@ const obj = (props: Record<string, unknown>) => ({ type: "object", properties: p
 const SCHEMA = obj({
   tipo: { type: "string", enum: TIPOS },
   titulo: str,
-  resumo: obj({ o_que_e: str, beneficio: str, para_quem: str }),
+  resumo: obj({ o_que_e: str, como_funciona: str, beneficio: str, para_quem: str }),
   slack: str,
   instagram: obj({
     ganchos: strs,
@@ -174,8 +197,18 @@ Regras:
 - Baseie-se só no que o card diz. Não invente números, prazos ou funcionalidades que não estão nele. Se o card for vago, seja honesto e genérico em vez de inventar.
 - "tipo": a categoria que melhor descreve a atualização.
 - "titulo": nome curto e claro da atualização (até 8 palavras), sem jargão técnico.
-- "resumo": para o Daniel, de forma clara e objetiva. "o_que_e" em 1 a 3 frases; "beneficio" diz o ganho prático para o usuário da ferramenta; "para_quem" diz quem mais aproveita.
-- "slack": mensagem para a equipe da TB no Slack, amigável e humana, como um colega contando uma novidade. Comece com um emoji e uma frase de impacto, explique em poucas linhas o que mudou e por que importa, feche convidando a testar ou a mandar feedback. Use *negrito* do Slack com moderação. Sem hashtags.
+- "resumo": para o Daniel, com força e contexto, como um briefing de produto bem escrito.
+  - "o_que_e": 2 a 4 frases. O cenário de antes (a dor ou limitação), o que mudou e o que isso representa para a ferramenta.
+  - "como_funciona": 2 a 5 frases concretas: onde fica na ferramenta, o que o usuário faz e o que acontece em seguida, passo a passo, com os detalhes que o card traz (regras, limites, telas, plataformas).
+  - "beneficio": o ganho prático e mensurável para o afiliado (tempo, dinheiro, dados mais confiáveis, menos erro), em 1 a 3 frases.
+  - "para_quem": quem mais aproveita e em que situação.
+- "slack": comunicado oficial para a equipe da TB no Slack, com padrão de comunicação executiva: profissional, seguro, bem escrito, sem gírias. No máximo um emoji discreto no título (ou nenhum). Estrutura:
+  *Título da atualização em negrito* (com a ferramenta)
+  Um parágrafo de abertura com o contexto: qual problema ou oportunidade motivou a entrega.
+  *O que muda* — 2 a 4 linhas iniciadas por "•" com o que foi entregue e como funciona.
+  *Impacto* — 1 ou 2 frases com o ganho para o cliente e para o negócio.
+  *Próximos passos* — o que a equipe deve fazer (testar, orientar clientes, atualizar materiais), quando fizer sentido.
+  Correções e ajustes internos pequenos: mesma postura profissional, em versão curta (título, contexto e impacto). Sem hashtags. Use quebras de linha reais.
 - "instagram": ideias para o perfil da ferramenta, falando com afiliados e gestores de tráfego.
   - "ganchos": 5 ganchos fortes para os primeiros segundos/primeira linha (curiosidade, dor, contraste, número, prova).
   - "reels": um gancho, o roteiro em cenas curtas (o que aparece/é dito em cada uma) e a legenda com CTA.
@@ -245,6 +278,17 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* corpo vazio */ }
 
   try {
+    if (body.action === "image") {
+      if (typeof body.id !== "string" || typeof body.att !== "string") return json({ error: "id e att obrigatórios" }, 400);
+      const { data: card, error } = await sb.from("trello_cards").select("images").eq("id", body.id).maybeSingle();
+      if (error) throw error;
+      const img = (card?.images ?? []).find((i: any) => i.id === body.att);
+      if (!img) return json({ error: "imagem não encontrada" }, 404);
+      const r = await attachment(img.url);
+      // octet-stream: o supabase-js entrega como Blob; o painel aplica o tipo certo.
+      return new Response(r.body, { headers: { ...cors, "Content-Type": "application/octet-stream", "Cache-Control": "private, max-age=3600" } });
+    }
+
     if (body.action === "generate") {
       if (typeof body.id !== "string") return json({ error: "id obrigatório" }, 400);
       const { data: card, error } = await sb.from("trello_cards").select("*").eq("id", body.id).maybeSingle();
