@@ -203,12 +203,12 @@
     renderPeriodChips();
     $("period-label").textContent = periodLabel();
     var seq = ++S.loadSeq;
-    $("kpis").innerHTML = '<p class="muted">Carregando as vendas…</p>';
+    $("kpis").innerHTML = '<p class="muted pp-span">Carregando as vendas…</p>';
     try {
       var data = await rpc("portal_sales", { p_from: S.from.toISOString(), p_to: S.to.toISOString() });
       if (seq !== S.loadSeq) return;
       S.sales = data || [];
-    } catch (e) { if (seq === S.loadSeq) { $("kpis").innerHTML = '<p class="msg error">Não foi possível ler as vendas: ' + esc(e.message || e) + "</p>"; } return; }
+    } catch (e) { if (seq === S.loadSeq) { $("kpis").innerHTML = '<p class="msg error pp-span">Não foi possível ler as vendas: ' + esc(e.message || e) + "</p>"; } return; }
     renderSales();
     if (S.extrasLoaded) renderChannel(); // o resumo do canal mostra as vendas do período
   }
@@ -225,13 +225,13 @@
       return '<button type="button" class="pp-kpi' + (cls ? " " + cls : "") + (S.filter === k ? " on" : "") + '" data-filter="' + k + '"><small>' + label + '</small><b class="num">' + value + "</b><span>" + sub + "</span></button>";
     };
     $("kpis").innerHTML =
-      tile("ok", "Vendas aprovadas", int(ok.length), total ? pct(ok.length / total) + " de todas as tentativas" : "nenhuma venda no período", "good") +
-      tile("ok", "Faturamento", brl(amount), "valor pago pelos clientes") +
-      tile("ok", "Sua comissão", brl(comm), avgPct != null ? "média de " + Math.round(avgPct) + "% por venda" : "nas vendas aprovadas", "accent") +
-      tile("wait", "Pendentes", int(by.wait.length), by.wait.length ? brl(sum(by.wait, function (s) { return s.commission; })) + " de comissão a confirmar" : "nada aguardando", "warn") +
-      tile("refused", "Recusadas", int(by.refused.length), by.refused.length ? "clientes que tentaram comprar" : "nenhuma recusa", "bad") +
-      tile("refund", "Reembolsos", int(by.refund.length), by.refund.length ? brl(sum(by.refund, function (s) { return s.amount; })) + " devolvidos" : "nenhum reembolso") +
-      tile("cb", "Chargebacks", int(by.cb.length), by.cb.length ? "contestações no cartão" : "nenhum chargeback");
+      tile("ok", "Vendas aprovadas", int(ok.length), total ? pct(ok.length / total) + " de todas as tentativas" : "nenhuma venda no período", "good big") +
+      tile("ok", "Faturamento", brl(amount), "valor pago pelos clientes", "big") +
+      tile("ok", "Sua comissão", brl(comm), avgPct != null ? "média de " + Math.round(avgPct) + "% por venda" : "nas vendas aprovadas", "accent big") +
+      tile("wait", "Pendentes", int(by.wait.length), by.wait.length ? brl(sum(by.wait, function (s) { return s.commission; })) + " de comissão a confirmar" : "nada aguardando", "warn sm") +
+      tile("refused", "Recusadas", int(by.refused.length), by.refused.length ? "clientes que tentaram comprar" : "nenhuma recusa", "bad sm") +
+      tile("refund", "Reembolsos", int(by.refund.length), by.refund.length ? brl(sum(by.refund, function (s) { return s.amount; })) + " devolvidos" : "nenhum reembolso", "sm") +
+      tile("cb", "Chargebacks", int(by.cb.length), by.cb.length ? "contestações no cartão" : "nenhum chargeback", "sm");
 
     $("status-chips").innerHTML = [["all", "Todas", total]].concat(GROUPS.map(function (g) { return [g[0], g[1], by[g[0]].length]; })).map(function (c) {
       return '<button type="button" class="pp-chip' + (S.filter === c[0] ? " on" : "") + '" data-filter="' + c[0] + '">' + c[1] + " <small>" + c[2] + "</small></button>";
