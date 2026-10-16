@@ -146,3 +146,28 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
   #kpis .pp-kpi.big { grid-column: 1 / -1; }
   #kpis .pp-kpi.sm { grid-column: span 1; }
 }
+
+/* ---------- acompanhamento de cada cliente ---------- */
+.pp-fu-chips { margin-top: 8px; align-items: center; }
+.pp-fu-lbl { font-size: 12px; margin-right: 2px; }
+.pp-fu-cell { min-width: 190px; max-width: 280px; }
+.pp-fu-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-fu { padding: 3px 10px; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  color: var(--warning); background: transparent; border: 1px dashed color-mix(in oklab, var(--warning) 60%, transparent); }
+.pp-fu:hover { background: color-mix(in oklab, var(--warning) 10%, transparent); }
+.pp-fu.done { color: var(--good); border-style: solid; border-color: color-mix(in oklab, var(--good) 55%, transparent); background: color-mix(in oklab, var(--good) 12%, transparent); }
+span.pp-fu { cursor: default; display: inline-block; }
+.pp-fu-btn { padding: 3px 10px; border-radius: 999px; font: inherit; font-size: 12px; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); cursor: pointer; white-space: nowrap; }
+.pp-fu-btn:hover { border-color: var(--accent); color: var(--text); }
+.pp-fu-note { margin-top: 5px; font-size: 12px; line-height: 1.45; color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
+.pp-row.fu-done td { background: color-mix(in oklab, var(--good) 4%, transparent); }
+.pp-fu-edit td { background: var(--surface-2); text-align: left; }
+.pp-fu-box { display: grid; gap: 8px; max-width: 760px; margin-left: auto; }
+.pp-fu-box label { font-size: 12.5px; color: var(--text-dim); }
+.pp-fu-box textarea { width: 100%; padding: 9px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg, var(--bg)); color: var(--text); font: inherit; font-size: 13px; resize: vertical; }
+.pp-fu-box textarea:focus { border-color: var(--accent); outline: none; }
+.pp-fu-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pp-fu-row .btn { width: auto; }
+.pp-fu-sp { flex: 1; }
+.pp-fu-chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.pp-fu-chk input { accent-color: var(--accent); }

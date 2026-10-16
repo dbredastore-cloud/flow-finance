@@ -29,7 +29,7 @@
 
   var qs = new URLSearchParams(location.search);
   var VER = (qs.get("ver") || "").trim().toLowerCase() || null; // visão da equipe
-  var S = { me: null, sales: [], period: "month", from: null, to: null, filter: "all", text: "", sort: { key: "at", dir: -1 },
+  var S = { me: null, sales: [], period: "month", from: null, to: null, filter: "all", fu: "all", editing: null, text: "", sort: { key: "at", dir: -1 },
     contract: null, yt: null, extrasLoaded: false, loadSeq: 0 };
 
   /* ---------------- utilidades ---------------- */
@@ -239,6 +239,7 @@
 
     renderChart(ok);
     renderProducts(ok);
+    renderFuChips();
     renderTable();
   }
   document.addEventListener("click", function (e) {
@@ -320,27 +321,92 @@
   }
   function contactOn() { return !!(S.me && (S.me.preview || S.me.show_contact)); }
 
+  /* ---------------- acompanhamento de cada cliente (feito / pendente + observação) ---------------- */
+  // Só o próprio afiliado grava; a equipe (?ver=) vê em modo leitura.
+  function canEditFu() { return !!(S.me && !S.me.preview); }
+  function fuCell(s) {
+    var note = s.fu_note ? '<div class="pp-fu-note" title="' + esc(s.fu_note) + '">' + esc(s.fu_note.length > 90 ? s.fu_note.slice(0, 90) + "…" : s.fu_note) + "</div>" : "";
+    var when = s.fu_at ? '<div class="pp-sub">' + (s.fu_done ? "feito" : "anotado") + " em " + dtt(s.fu_at) + "</div>" : "";
+    if (!canEditFu()) {
+      return (s.fu_done ? '<span class="pp-fu done">✓ Feito</span>' : s.fu_at ? '<span class="pp-fu">Pendente</span>' : '<span class="muted">—</span>') + note + when;
+    }
+    return '<div class="pp-fu-acts"><button type="button" class="pp-fu' + (s.fu_done ? " done" : "") + '" data-fu-toggle="' + esc(s.id) + '" aria-pressed="' + !!s.fu_done + '" title="' + (s.fu_done ? "Marcar como pendente" : "Marcar como feito (já tratei este cliente)") + '">' +
+      (s.fu_done ? "✓ Feito" : "○ Pendente") + "</button>" +
+      '<button type="button" class="pp-fu-btn" data-fu-edit="' + esc(s.id) + '" title="' + (s.fu_note ? "Editar a observação" : "Anotar o que foi tratado com este cliente") + '">' + (s.fu_note ? "✎ Editar" : "＋ Observação") + "</button></div>" + note + when;
+  }
+  function fuEditor(s) {
+    return '<div class="pp-fu-box"><label for="fu-note">O que foi tratado com <b>' + esc(s.customer || "este cliente") + "</b> (" + esc(s.product || "") + ")</label>" +
+      '<textarea id="fu-note" rows="3" maxlength="2000" placeholder="Ex.: chamei no WhatsApp em 16/10, cartão recusado; vai tentar no Pix amanhã.">' + esc(s.fu_note || "") + "</textarea>" +
+      '<div class="pp-fu-row"><label class="pp-fu-chk"><input type="checkbox" id="fu-done"' + (s.fu_done ? " checked" : "") + "> Marcar como feito</label>" +
+      '<span class="pp-fu-sp"></span><button type="button" class="btn" data-fu-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-fu-save="' + esc(s.id) + '">Salvar</button></div></div>';
+  }
+  async function saveFu(id, done, note) {
+    var s = S.sales.filter(function (x) { return x.id === id; })[0];
+    if (!s) return false;
+    var r = await sb.rpc("portal_set_followup", { p_sale_id: id, p_done: !!done, p_note: note == null ? (s.fu_note || "") : note });
+    if (r.error) { toast("Não foi possível salvar: " + r.error.message, true); return false; }
+    s.fu_done = r.data.done; s.fu_note = r.data.note; s.fu_at = r.data.updated_at;
+    return true;
+  }
+  $("sales-body").addEventListener("click", async function (e) {
+    var t = e.target.closest("[data-fu-toggle]");
+    if (t) {
+      var s = S.sales.filter(function (x) { return x.id === t.dataset.fuToggle; })[0];
+      t.disabled = true;
+      if (await saveFu(s.id, !s.fu_done, null)) { toast(s.fu_done ? "Cliente marcado como feito." : "Cliente voltou para pendente."); renderSales(); }
+      else t.disabled = false;
+      return;
+    }
+    var ed = e.target.closest("[data-fu-edit]");
+    if (ed) { S.editing = S.editing === ed.dataset.fuEdit ? null : ed.dataset.fuEdit; renderTable(); var ta = $("fu-note"); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+    if (e.target.closest("[data-fu-cancel]")) { S.editing = null; renderTable(); return; }
+    var sv = e.target.closest("[data-fu-save]");
+    if (sv) {
+      sv.disabled = true;
+      if (await saveFu(sv.dataset.fuSave, $("fu-done").checked, $("fu-note").value)) { S.editing = null; toast("Observação salva."); renderSales(); }
+      else sv.disabled = false;
+    }
+  });
+  $("sales-body").addEventListener("keydown", function (e) {
+    if (e.target.id === "fu-note" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { var b = document.querySelector("[data-fu-save]"); if (b) b.click(); }
+    if (e.key === "Escape" && S.editing) { S.editing = null; renderTable(); }
+  });
+  $("fu-chips").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-fu]");
+    if (!b) return;
+    S.fu = b.dataset.fu; renderSales();
+  });
+  function renderFuChips() {
+    var all = S.sales.filter(function (s) { return S.filter === "all" || groupOf(s.status) === S.filter; });
+    var done = all.filter(function (s) { return s.fu_done; }).length;
+    $("fu-chips").innerHTML = '<span class="muted pp-fu-lbl">Acompanhamento:</span>' + [["all", "Todos", all.length], ["pending", "A tratar", all.length - done], ["done", "Feitos", done]].map(function (c) {
+      return '<button type="button" class="pp-chip' + (S.fu === c[0] ? " on" : "") + '" data-fu="' + c[0] + '" aria-pressed="' + (S.fu === c[0]) + '">' + c[1] + " <small>" + c[2] + "</small></button>";
+    }).join("");
+  }
+
   var COLS = [["at", "Data", "l"], ["customer", "Cliente", "l"], ["phone", "WhatsApp", "l"], ["product", "Produto", "l"], ["method", "Pagamento", "l"],
-    ["status", "Situação", "l"], ["amount", "Valor", ""], ["commission", "Comissão", ""], ["pct", "%", ""]];
+    ["status", "Situação", "l"], ["amount", "Valor", ""], ["commission", "Comissão", ""], ["pct", "%", ""], ["fu", "Acompanhamento", "l"]];
   function cols() { return COLS.filter(function (c) { return c[0] !== "phone" || contactOn(); }); }
   function filtered() {
     var q = S.text.trim().toLowerCase();
     return S.sales.filter(function (s) {
       if (S.filter !== "all" && groupOf(s.status) !== S.filter) return false;
+      if (S.fu === "done" && !s.fu_done) return false;
+      if (S.fu === "pending" && s.fu_done) return false;
       if (q && [s.customer, s.customer_email, s.product, s.customer_phone].join(" ").toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
   }
   function renderTable() {
     var list = filtered(), k = S.sort.key, dir = S.sort.dir;
-    var val = function (s) { return k === "at" ? Date.parse(s.at) : k === "amount" || k === "commission" || k === "pct" ? Number(s[k]) || 0 : String(s[k === "phone" ? "customer_phone" : k] || "").toLowerCase(); };
+    var val = function (s) { return k === "at" ? Date.parse(s.at) : k === "amount" || k === "commission" || k === "pct" ? Number(s[k]) || 0 : k === "fu" ? (s.fu_done ? 2 : s.fu_note ? 1 : 0) : String(s[k === "phone" ? "customer_phone" : k] || "").toLowerCase(); };
     list.sort(function (a, b) { var x = val(a), y = val(b); return x < y ? -dir : x > y ? dir : 0; });
     var cs = cols();
     $("sales-head").innerHTML = "<tr>" + cs.map(function (c) {
       return '<th class="sortable ' + c[2] + '" data-sort="' + c[0] + '">' + c[1] + (S.sort.key === c[0] ? ' <span class="arrow">' + (dir < 0 ? "↓" : "↑") + "</span>" : "") + "</th>";
     }).join("") + "</tr>";
     $("contact-hint").textContent = contactOn()
-      ? "Clique no WhatsApp para abrir a conversa com uma mensagem pronta (recusadas e pendentes são ótimas para recuperar a venda)."
+      ? "Clique no WhatsApp para abrir a conversa com uma mensagem pronta (recusadas e pendentes são ótimas para recuperar a venda). Em Acompanhamento, marque cada cliente como feito e anote o que foi tratado."
       : "Os contatos dos clientes não estão liberados no seu portal.";
     $("sales-body").innerHTML = list.length ? list.slice(0, 1000).map(function (s) {
       var g = groupOf(s.status);
@@ -355,9 +421,12 @@
         status: '<td class="l"><span class="pp-st ' + g + '">' + esc(STATUS_LABEL[s.status] || s.status || "—") + "</span>" + (s.refunded_at ? '<div class="pp-sub">em ' + dt(s.refunded_at) + "</div>" : "") + "</td>",
         amount: '<td class="num">' + brl(s.amount) + "</td>",
         commission: '<td class="num' + (g === "ok" ? " pp-good" : g === "refund" || g === "cb" || g === "refused" ? " pp-strike" : "") + '">' + brl(s.commission) + "</td>",
-        pct: '<td class="num">' + (s.pct != null ? s.pct + "%" : "—") + "</td>"
+        pct: '<td class="num">' + (s.pct != null ? s.pct + "%" : "—") + "</td>",
+        fu: '<td class="l pp-fu-cell">' + fuCell(s) + "</td>"
       };
-      return '<tr class="pp-row ' + g + '">' + cs.map(function (c) { return cell[c[0]]; }).join("") + "</tr>";
+      var row = '<tr class="pp-row ' + g + (s.fu_done ? " fu-done" : "") + '" data-sale="' + esc(s.id) + '">' + cs.map(function (c) { return cell[c[0]]; }).join("") + "</tr>";
+      if (S.editing === s.id) row += '<tr class="pp-fu-edit"><td colspan="' + cs.length + '">' + fuEditor(s) + "</td></tr>";
+      return row;
     }).join("") : '<tr><td colspan="' + cs.length + '" class="empty">Nenhuma venda com esse filtro no período.</td></tr>';
     $("sales-count").textContent = list.length + " de " + S.sales.length + " vendas no período" + (list.length > 1000 ? " (mostrando as 1.000 primeiras; use a busca ou exporte o CSV)" : "") + ".";
   }
@@ -371,10 +440,10 @@
   $("sales-q").addEventListener("input", function (e) { S.text = e.target.value; renderTable(); });
   $("sales-csv").addEventListener("click", function () {
     var c = function (v) { var s = v == null ? "" : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    var head = ["Data", "Cliente"].concat(contactOn() ? ["E-mail do cliente", "WhatsApp"] : []).concat(["Produto", "Pagamento", "Situação", "Valor", "Comissão", "% comissão"]);
+    var head = ["Data", "Cliente"].concat(contactOn() ? ["E-mail do cliente", "WhatsApp"] : []).concat(["Produto", "Pagamento", "Situação", "Valor", "Comissão", "% comissão", "Acompanhamento", "Observação"]);
     var rows = [head.map(c).join(",")].concat(filtered().map(function (s) {
       return [dtt(s.at), s.customer].concat(contactOn() ? [s.customer_email, s.customer_phone ? "+" + s.customer_phone : ""] : [])
-        .concat([s.product, METHOD[s.method] || s.method, STATUS_LABEL[s.status] || s.status, Number(s.amount || 0).toFixed(2).replace(".", ","), Number(s.commission || 0).toFixed(2).replace(".", ","), s.pct != null ? s.pct + "%" : ""]).map(c).join(",");
+        .concat([s.product, METHOD[s.method] || s.method, STATUS_LABEL[s.status] || s.status, Number(s.amount || 0).toFixed(2).replace(".", ","), Number(s.commission || 0).toFixed(2).replace(".", ","), s.pct != null ? s.pct + "%" : "", s.fu_done ? "feito" : "pendente", s.fu_note || ""]).map(c).join(",");
     }));
     var blob = new Blob(["﻿" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "minhas-vendas-" + ymd(S.from) + "-a-" + ymd(new Date(S.to.getTime() - DAY)) + ".csv";
