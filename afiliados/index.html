@@ -352,7 +352,7 @@
       <div class="fnav-group">Visão geral</div>
       <button class="nav-btn fnav-item" data-view="overview" data-menu="af.overview"><i data-ic="grid"></i><span>Visão geral</span></button>
       <div class="fnav-group">Parceiros</div>
-      <button class="nav-btn fnav-item" data-view="base" data-menu="af.base"><i data-ic="users"></i><span>Influencers</span></button>
+      <button class="nav-btn fnav-item" data-view="base" data-menu="af.base"><i data-ic="users"></i><span>Afiliados</span></button>
       <button class="nav-btn fnav-item fnav-star" data-view="flowinf" data-menu="af.flowinf"><i data-ic="star"></i><span>Influencers Flow</span></button>
       <button class="nav-btn fnav-item" data-view="products" data-menu="af.products"><i data-ic="box"></i><span>Produtos</span></button>
       <div class="fnav-group">Mercado</div>
@@ -445,7 +445,7 @@
     <section id="view-base" hidden>
       <section class="panel">
         <div class="panel-head">
-          <h3 id="base-title">Base de influencers</h3>
+          <h3 id="base-title">Base de afiliados</h3>
           <div class="tools">
             <input class="search" id="base-search" type="search" placeholder="Buscar nome, e-mail, CNPJ, @…">
             <select class="search" id="base-filter" aria-label="Filtro">
@@ -486,7 +486,7 @@
     </section>
     <!-- Influencers Flow (contratados) -->
     <section id="view-flowinf" hidden>
-      <p class="muted" style="font-size:12.5px; margin:0 0 14px;">Influencers contratados (marcados com ★ no menu Influencers). Os números usam o <strong>período de cada contrato</strong> e só as ferramentas Flow — os filtros do topo não se aplicam aqui. Stories e reels são marcados à mão; vídeos do YouTube com "Flow" no título são detectados no canal.</p>
+      <p class="muted" style="font-size:12.5px; margin:0 0 14px;">Influencers contratados (marcados com ★ no menu Afiliados). Os números usam o <strong>período de cada contrato</strong> e só as ferramentas Flow — os filtros do topo não se aplicam aqui. Stories e reels são marcados à mão; vídeos do YouTube com "Flow" no título são detectados no canal.</p>
       <div class="kpi-row" id="fi-kpis"></div>
       <div id="fi-list"></div>
     </section>
@@ -860,7 +860,7 @@
     });
   }
 
-  // Base completa sob demanda (filtro "Todos" / "Ativos na Kiwify" do menu Influencers).
+  // Base completa sob demanda (filtro "Todos" / "Ativos na Kiwify" do menu Afiliados).
   var fullBasePromise = null;
   function ensureFullBase() {
     if (state.fullBase) return Promise.resolve();
@@ -1257,7 +1257,7 @@
   });
 
   /* ---------------- Render: base ---------------- */
-  // Influencers: uma linha por afiliado, uma coluna por produto vendido no período/filtros.
+  // Afiliados: uma linha por afiliado, uma coluna por produto vendido no período/filtros.
   var BASE_LIMIT = 300;
   var EMPTY_STATS = { count: 0, amount: 0, commission: 0, products: {} };
 
@@ -1308,7 +1308,7 @@
 
     var list = baseRows();
     var sellers = list.filter(function (x) { return x.st.count > 0; }).length;
-    $("base-title").textContent = "Influencers (" + fmtInt(list.length) + (sellers !== list.length ? " · " + fmtInt(sellers) + " venderam" : "") + ")";
+    $("base-title").textContent = "Afiliados (" + fmtInt(list.length) + (sellers !== list.length ? " · " + fmtInt(sellers) + " venderam" : "") + ")";
     var shown = list.slice(0, BASE_LIMIT);
     var colCount = 7 + cols.length;
     $("base-body").innerHTML = shown.length ? shown.map(function (x, i) {
@@ -1722,7 +1722,7 @@
         '<td class="num">' + (st ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td></tr>";
       if (open) row += '<tr class="yt-detail"><td colspan="' + cols + '">' + ytDetail(x) + "</td></tr>";
       return row;
-    }).join("") : '<tr><td colspan="' + cols + '" class="empty">Nenhum canal ainda. Cadastre o link do YouTube na ficha do influencer (menu Influencers → clique no nome) e clique em "Atualizar YouTube".</td></tr>';
+    }).join("") : '<tr><td colspan="' + cols + '" class="empty">Nenhum canal ainda. Cadastre o link do YouTube na ficha do influencer (menu Afiliados → clique no nome) e clique em "Atualizar YouTube".</td></tr>';
   }
 
   function bestLine(label, v) {
@@ -1936,7 +1936,7 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado", favoritos: "Canais favoritos" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Afiliados", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado", favoritos: "Canais favoritos" };
   // Acesso por menu: tela que a pessoa não pode ver cai na primeira liberada.
   function allowedView(v) {
     if (v && window.FlowAccess.can("af." + v)) return v;
@@ -2218,7 +2218,7 @@
     var box = $("fi-list");
     if (!list.length) {
       $("fi-kpis").innerHTML = "";
-      box.innerHTML = '<section class="panel"><p class="empty">Nenhum influencer contratado ainda. No menu <strong>Influencers</strong>, clique na estrela ☆ ao lado do nome para adicionar.</p></section>';
+      box.innerHTML = '<section class="panel"><p class="empty">Nenhum influencer contratado ainda. No menu <strong>Afiliados</strong>, clique na estrela ☆ ao lado do nome para adicionar.</p></section>';
       return;
     }
     var now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1;

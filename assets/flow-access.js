@@ -20,7 +20,7 @@ window.FlowAccess = (function () {
     ] },
     { page: "afiliados", label: "Afiliados", href: "../afiliados/", menus: [
       ["af.overview", "Visão geral"],
-      ["af.base", "Influencers"],
+      ["af.base", "Afiliados"],
       ["af.flowinf", "Influencers Flow"],
       ["af.products", "Produtos"],
       ["af.youtube", "YouTube"],

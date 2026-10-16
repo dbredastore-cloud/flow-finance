@@ -219,7 +219,7 @@ window.InfluencerDash = (function () {
       "</div></section>";
 
     if (!ch) {
-      body += '<section class="mr-fsec"><div class="mr-fnote">Este influencer não tem o link do canal do YouTube na ficha. Cadastre no menu <b>Influencers</b> (clique no nome) e depois clique em <b>Atualizar YouTube</b> para trazer vídeos, views e métricas.</div></section>';
+      body += '<section class="mr-fsec"><div class="mr-fnote">Este influencer não tem o link do canal do YouTube na ficha. Cadastre no menu <b>Afiliados</b> (clique no nome) e depois clique em <b>Atualizar YouTube</b> para trazer vídeos, views e métricas.</div></section>';
       if (!S.ctx.hideInsta) body += instaSection();
       $("fd-body").innerHTML = body;
       return;
