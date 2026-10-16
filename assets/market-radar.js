@@ -47,6 +47,10 @@
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
+  // ☆ para acompanhar o canal no menu Canais favoritos (assets/yt-favorites.js).
+  function favStar(c) {
+    return window.YtFavorites ? window.YtFavorites.star({ channel_id: c.channel_id, title: c.title, handle: c.handle, thumbnail_url: c.thumbnail_url, source: "mercado" }) : "";
+  }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
   function median(arr) {
@@ -804,7 +808,7 @@
       return '<tr class="mr-row' + (S.compare.indexOf(c.channel_id) >= 0 ? " sel" : "") + (st === "descartado" ? " dim" : "") + '" data-id="' + esc(c.channel_id) + '">' +
         '<td class="mr-chk"><input type="checkbox" data-cmp="' + esc(c.channel_id) + '"' + (S.compare.indexOf(c.channel_id) >= 0 ? " checked" : "") + ' aria-label="Comparar ' + esc(c.title) + '"></td>' +
         '<td class="num muted">' + (i + 1) + "</td>" +
-        '<td class="l"><div class="mr-ch">' + avHtml(c) + '<div><div class="nm">' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</div><div class="hd">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + "</div></div></div></td>" +
+        '<td class="l"><div class="mr-ch">' + avHtml(c) + '<div><div class="nm">' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + favStar(c) + '</div><div class="hd">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + "</div></div></div></td>" +
         '<td><div class="mr-score' + cls + '"><b>' + c.score + '</b><span class="mr-bar"><i style="width:' + c.score + '%"></i></span></div></td>' +
         '<td class="num">' + (c.hidden_subs ? '<span class="muted" title="O canal oculta os inscritos">oculto</span>' : fmtN(c.subscribers)) + "</td>" +
         '<td class="num">' + fmtN(m.avgViews) + "</td>" +
@@ -943,7 +947,7 @@
     var mails = (ct.emails || []).map(function (e) { return '<a href="mailto:' + esc(e) + '">' + esc(e) + "</a>"; }).join("");
     $("mr-drawer").innerHTML =
       '<div class="mr-d-top"><button class="btn btn-primary" type="button" data-expand="' + esc(c.channel_id) + '" title="Abre uma tela completa com todas as informações e os últimos vídeos deste canal">⤢ Expandir pesquisa</button><button class="btn btn-ghost mr-d-close" id="mr-d-close" type="button" aria-label="Fechar">✕</button></div>' +
-      '<div class="mr-d-head">' + avHtml(c) + '<div><h3>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + '</h3><div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · desde " + new Date(c.channel_created).getFullYear() : "") + "</div></div></div>" +
+      '<div class="mr-d-head">' + avHtml(c) + '<div><h3>' + esc(c.title) + (isPartner(c) ? '<span class="mr-badge p">parceiro</span>' : "") + " " + favStar(c) + '</h3><div class="sub">' + esc(c.handle || "") + (c.country ? " · " + esc(c.country) : "") + (c.channel_created ? " · desde " + new Date(c.channel_created).getFullYear() : "") + "</div></div></div>" +
       '<div class="mr-d-score"><div class="mr-ring ' + cls + '" style="--p:' + c.score + '"><div><b>' + c.score + "</b><span>SCORE</span></div></div><div class=\"mr-d-axes\">" +
         AXES.map(function (a) { return '<div title="' + esc(a.tip) + '"><span>' + a.label + '</span><span class="mr-bar"><i style="width:' + Math.round(c.ax[a.key]) + '%"></i></span><b>' + Math.round(c.ax[a.key]) + "</b></div>"; }).join("") + "</div></div>" +
       '<div class="mr-d-stats">' + stat("Inscritos", c.hidden_subs ? "oculto" : fmtN(c.subscribers)) + stat("Views médias", fmtN(m.avgViews)) + stat("Engajamento", pct(m.engagement)) +
@@ -1174,7 +1178,7 @@
   function renderFullBar(c) {
     $("mr-full-title").textContent = c.title;
     var inCmp = S.compare.indexOf(c.channel_id) >= 0, st = statusOf(c);
-    $("mr-full-acts").innerHTML =
+    $("mr-full-acts").innerHTML = favStar(c) +
       '<select class="mr-funnel s-' + st + '" data-status="' + esc(c.channel_id) + '" aria-label="Etapa do funil">' + STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (s[0] === st ? " selected" : "") + ">" + s[1] + "</option>"; }).join("") + "</select>" +
       '<button class="btn" type="button" data-full-cmp="' + esc(c.channel_id) + '">' + (inCmp ? "✓ Na comparação" : "Comparar") + "</button>" +
       '<button class="btn" type="button" data-full-csv="1">Exportar vídeos (CSV)</button>' +

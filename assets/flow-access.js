@@ -24,7 +24,8 @@ window.FlowAccess = (function () {
       ["af.flowinf", "Influencers Flow"],
       ["af.products", "Produtos"],
       ["af.youtube", "YouTube"],
-      ["af.mercado", "Rastrear Mercado"]
+      ["af.mercado", "Rastrear Mercado"],
+      ["af.favoritos", "Canais favoritos"]
     ] }
   ];
 

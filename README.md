@@ -39,6 +39,14 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - `supabase/functions/youtube-sync/` lê o canal (inscritos, views, nº de vídeos) e os últimos 100 envios, marcando quais são Shorts (confirmado pela URL /shorts/ID) pela YouTube Data API; roda a cada 6 h (`20260922_schedule_youtube_sync.sql`) ou pelo botão **Atualizar YouTube**.
 - Secret necessário: `YOUTUBE_API_KEY` (Supabase → Edge Functions → Secrets).
 
+## Canais favoritos (menu do /afiliados/)
+
+- Acompanhar de perto youtubers que receberam acesso às ferramentas Flow. A estrela ☆ no **YouTube** (ao lado do nome do canal) e no **Rastrear Mercado** (tabela, painel lateral e tela expandida) favorita o canal; também dá para colar o link, @usuario ou ID no topo do menu.
+- Cada canal tem a **data em que a Flow liberou o acesso**. A partir dela o card conta os vídeos publicados e quantos citam FlowPages, FlowTracking ou FlowSpy no título ou na descrição (por ferramenta), mostra se o canal já citava a Flow antes do acesso, o crescimento de inscritos, o último vídeo e um campo de observações. Filtros: divulgaram / ainda não divulgaram / sem data de acesso.
+- **Abrir painel do canal** usa o dashboard do influencer (`assets/influencer-dash.js`, `openCtx`) com a janela começando na data de acesso: métricas dia a dia, views de cada vídeo, menções à Flow com o trecho, tabela de todos os vídeos e CSV.
+- Coleta: `youtube-sync` lê os favoritos a cada 6 h (junto dos influencers) e, ao favoritar, busca 12 meses de vídeos (`fav_add` / `fav_sync`); cerca de 3 a 5 unidades da cota do YouTube por canal por rodada. Vídeos e fotos diárias ficam em `youtube_videos` e `youtube_channel_snapshots`.
+- Banco: `yt_favorites`, visão `yt_favorites_summary` e função `flow_tool_hits` (migration `20261016_yt_favorites.sql`). Menu de acesso `af.favoritos` (tela Equipe); a estrela só aparece para quem tem esse menu.
+
 ## Influencers Flow (menu do /afiliados/)
 
 - Influencers contratados: a estrela ☆ ao lado do nome (menu Influencers ou ficha) cria o contrato em `influencer_contracts` (padrão: fixo, 30% de comissão, bônus de R$ 3.000 ao bater 150 vendas, 12 stories + 1 reels + 1 vídeo no YouTube por mês) e abre os termos para editar. Tirar a estrela só desativa; o histórico fica.

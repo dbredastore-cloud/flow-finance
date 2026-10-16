@@ -303,6 +303,7 @@
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
 <link rel="stylesheet" href="../assets/influencer-dash.css">
+<link rel="stylesheet" href="../assets/yt-favorites.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -312,6 +313,7 @@
 <script src="../assets/secure-login.js"></script>
 <script src="../assets/market-radar.js"></script>
 <script src="../assets/influencer-dash.js"></script>
+<script src="../assets/yt-favorites.js"></script>
 </head>
 <body>
 
@@ -356,6 +358,7 @@
       <div class="fnav-group">Mercado</div>
       <button class="nav-btn fnav-item" data-view="youtube" data-menu="af.youtube"><i data-ic="play"></i><span>YouTube</span></button>
       <button class="nav-btn fnav-item" data-view="mercado" data-menu="af.mercado"><i data-ic="radar"></i><span>Rastrear Mercado</span></button>
+      <button class="nav-btn fnav-item" data-view="favoritos" data-menu="af.favoritos"><i data-ic="heart"></i><span>Canais favoritos</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="chart"></i><span>Afiliados</span></a>
@@ -512,6 +515,9 @@
 
     <!-- Rastrear Mercado (assets/market-radar.js) -->
     <section id="view-mercado" hidden style="position:relative;"></section>
+
+    <!-- Canais favoritos (assets/yt-favorites.js) -->
+    <section id="view-favoritos" hidden></section>
   </main>
 </div>
 
@@ -1041,6 +1047,7 @@
     else if (v === "youtube") renderYoutube();
     else if (v === "flowinf") renderFlowInf();
     else if (v === "mercado") window.MarketRadar.show();
+    else if (v === "favoritos") window.YtFavorites.show();
   }
 
   function kpi(label, value, sub, tip) {
@@ -1700,7 +1707,7 @@
       var open = state.yt.open === c.affiliate_email;
       var head = '<td class="l"><div style="display:flex;align-items:center;gap:10px;">' +
         (c.thumbnail_url ? '<img src="' + esc(c.thumbnail_url) + '" alt="" width="34" height="34" style="border-radius:50%;flex-shrink:0;" loading="lazy" referrerpolicy="no-referrer">' : '<span class="soc" style="width:34px;height:34px;border-radius:50%;">YT</span>') +
-        '<div class="who"><div class="n"><a href="' + esc(channelUrl(c)) + '" target="_blank" rel="noopener" data-stop>' + esc(c.title || c.input_url) + '</a> <button type="button" class="yt-open" data-yt-dash="' + esc(c.affiliate_email) + '" data-stop title="Abrir os dados completos deste canal">⤢ Abrir dados</button></div><div class="e">' + esc(a.name || c.affiliate_email) + (c.handle ? " · " + esc(c.handle) : "") + "</div></div></div></td>";
+        '<div class="who"><div class="n">' + window.YtFavorites.star({ channel_id: c.channel_id, title: c.title, handle: c.handle, thumbnail_url: c.thumbnail_url, source: "youtube", affiliate_email: c.affiliate_email }) + ' <a href="' + esc(channelUrl(c)) + '" target="_blank" rel="noopener" data-stop>' + esc(c.title || c.input_url) + '</a> <button type="button" class="yt-open" data-yt-dash="' + esc(c.affiliate_email) + '" data-stop title="Abrir os dados completos deste canal">⤢ Abrir dados</button></div><div class="e">' + esc(a.name || c.affiliate_email) + (c.handle ? " · " + esc(c.handle) : "") + "</div></div></div></td>";
       if (c.error && !c.channel_id) {
         return '<tr class="yt-row">' + head + '<td colspan="' + (cols - 1) + '" class="l" style="color:var(--critical); white-space:normal;">Não foi possível ler este canal: ' + esc(c.error) + ". Confira o link na ficha do influencer.</td></tr>";
       }
@@ -1929,7 +1936,7 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Influencers", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado", favoritos: "Canais favoritos" };
   // Acesso por menu: tela que a pessoa não pode ver cai na primeira liberada.
   function allowedView(v) {
     if (v && window.FlowAccess.can("af." + v)) return v;
@@ -1940,7 +1947,7 @@
     state.view = v;
     safeSet("flow_aff_view", v);
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
-    $("filters").hidden = v === "flowinf" || v === "mercado"; // contratos e radar não usam o período/produtos do topo
+    $("filters").hidden = v === "flowinf" || v === "mercado" || v === "favoritos"; // contratos, radar e favoritos não usam o período/produtos do topo
     window.MarketRadar.hide();
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
@@ -2064,6 +2071,8 @@
     if (!window.FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
     if (!window.FlowAccess.canPage("afiliados")) { location.replace(window.FlowAccess.firstHref() || "../financeiro/"); return; }
     window.FlowAccess.apply();
+    // Canais favoritos: lê as estrelas já com o perfil de acesso carregado.
+    window.YtFavorites.init({ root: $("view-favoritos"), sb: sb, toast: toast, dash: InfluencerDash, channelUrl: channelUrl });
     try { state.yt.widths = ytCleanWidths(JSON.parse(safeGet("flow_aff_ytw"))); } catch (e) { state.yt.widths = {}; }
     restorePeriod();
     renderPeriodBar();

@@ -1,0 +1,94 @@
+/* Canais favoritos — usa os tokens de flow-theme.css. */
+
+#view-favoritos .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.yf-intro { font-size: 12.5px; margin: 0 0 14px; line-height: 1.6; }
+.yf-inline-star { color: var(--star, var(--accent)); }
+
+/* ---------- Estrela (YouTube, Rastrear Mercado, cards) ---------- */
+.yf-star { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: transparent; color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer; vertical-align: middle;
+  transition: color .15s, border-color .15s, background .15s, transform .15s; }
+.yf-star:hover { color: var(--star, var(--accent)); border-color: var(--star, var(--accent)); transform: scale(1.08); }
+.yf-star.on { color: var(--star, var(--accent)); border-color: color-mix(in oklab, var(--star, var(--accent)) 55%, transparent); background: color-mix(in oklab, var(--star, var(--accent)) 14%, transparent); }
+.yf-star:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+
+/* ---------- Adicionar pelo link ---------- */
+.yf-add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 16px; padding: 12px 14px; border-radius: var(--radius); border: 1px dashed var(--border-strong); background: var(--surface); }
+.yf-add .field { display: grid; gap: 4px; margin: 0; }
+.yf-add .field:first-child { flex: 1 1 280px; }
+.yf-add label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.yf-add input { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; min-width: 0; }
+.yf-add .btn { width: auto; }
+
+/* ---------- Números ---------- */
+.yf-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.yf-tile { display: block; text-align: left; font: inherit; color: var(--text); padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.yf-tile:hover { border-color: var(--accent); }
+.yf-tile.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.yf-tile small { display: block; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.yf-tile b { display: block; margin: 3px 0 2px; font-size: 24px; font-weight: 600; }
+.yf-tile b span { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+.yf-tile > span { font-size: 11.5px; color: var(--text-muted); }
+
+/* ---------- Filtros ---------- */
+.yf-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.yf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.yf-chips .pay-chip { padding: 5px 13px; border-radius: 999px; font: inherit; font-size: 12.5px; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); cursor: pointer; }
+.yf-chips .pay-chip:hover { border-color: var(--accent); color: var(--text); }
+.yf-chips .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
+.yf-chips small { opacity: .7; margin-left: 2px; }
+.yf-filters select, .yf-filters input[type="search"] { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; }
+.yf-filters input[type="search"] { flex: 1 1 200px; min-width: 0; max-width: 300px; margin-left: auto; }
+
+/* ---------- Cards ---------- */
+.yf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.yf-empty { grid-column: 1 / -1; padding: 26px; color: var(--text-dim); text-align: center; line-height: 1.7; }
+.yf-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); cursor: pointer; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.yf-card:hover, .yf-card:focus-visible { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); outline: none; }
+.yf-card.st-yes { border-left-color: var(--good); }
+.yf-card.st-no { border-left-color: var(--warning); }
+.yf-head { display: flex; gap: 12px; align-items: center; }
+.yf-av { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex: none; background: var(--surface-2); }
+.yf-av.ph { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.yf-who { flex: 1; min-width: 0; }
+.yf-who h4 { margin: 0; font-size: 15.5px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yf-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yf-status { display: flex; flex-wrap: wrap; gap: 6px; }
+.yf-pill { padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--border-strong); color: var(--text-dim); }
+.yf-pill.good { color: var(--good); border-color: color-mix(in oklab, var(--good) 50%, transparent); background: color-mix(in oklab, var(--good) 12%, transparent); }
+.yf-pill.wait { color: var(--warning); border-color: color-mix(in oklab, var(--warning) 50%, transparent); }
+.yf-pill.bad { color: var(--critical); border-color: color-mix(in oklab, var(--critical) 50%, transparent); background: color-mix(in oklab, var(--critical) 10%, transparent); }
+.yf-pill.soft { border-style: dashed; }
+.yf-verdict { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.yf-verdict b { color: var(--text); }
+.yf-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.yf-tool { padding: 3px 9px; border-radius: 6px; font-size: 11.5px; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-display); letter-spacing: .03em; }
+.yf-tool.on { color: var(--accent); font-weight: 600; background: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+.yf-tool b { font-family: var(--font-mono); }
+.yf-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px 0; border-top: 1px solid var(--row-line, var(--border)); border-bottom: 1px solid var(--row-line, var(--border)); }
+.yf-stats small { display: block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.yf-stats b { display: block; font-size: 17px; font-weight: 600; margin: 2px 0; }
+.yf-stats span { display: block; font-size: 11px; color: var(--text-muted); }
+.yf-stats .good, .yf-card .good { color: var(--good); }
+.yf-stats .bad, .yf-card .bad { color: var(--critical); }
+.yf-access { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-dim); }
+.yf-access label { display: inline-flex; gap: 8px; align-items: center; }
+.yf-access input { padding: 5px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 12.5px; }
+.yf-mini { width: auto; padding: 4px 10px; font-size: 12px; }
+.yf-notes { width: 100%; box-sizing: border-box; resize: vertical; min-height: 34px; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--field-bg); color: var(--text); font: inherit; font-size: 12.5px; }
+.yf-notes:focus { border-color: var(--accent); outline: none; }
+.yf-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+.yf-note.bad { color: var(--critical); }
+.yf-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.yf-acts .btn { width: auto; }
+.yf-rm { margin-left: auto; }
+
+@media (max-width: 1100px) { .yf-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .yf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yf-grid { grid-template-columns: 1fr; }
+  .yf-filters input[type="search"] { max-width: none; margin-left: 0; }
+}
+
+/* Estrela compacta dentro das tabelas (YouTube e Rastrear Mercado). */
+#yt-body .yf-star, #mr-body .yf-star { width: 22px; height: 22px; font-size: 12px; margin-right: 4px; }

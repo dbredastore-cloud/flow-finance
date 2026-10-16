@@ -1,5 +1,6 @@
 // Atualiza canais e vídeos do YouTube dos influencers que têm o link do canal
-// cadastrado no painel (affiliates.youtube).
+// cadastrado no painel (affiliates.youtube) e dos Canais favoritos (yt_favorites).
+// Ações extras do painel: fav_add (favoritar pelo link) e fav_sync (atualizar um favorito).
 //
 // Chamado pelo pg_cron (header x-cron-secret) ou pelo botão "Atualizar YouTube"
 // do painel (JWT de usuário logado). Custo por canal ≈ 5 unidades da cota diária
@@ -110,14 +111,21 @@ const MAX_DEEP = 500;
 type SyncOpts = { since?: string };
 
 async function syncChannel(email: string, url: string, known: any, opts: SyncOpts = {}) {
-  const now = new Date().toISOString();
   const channelId = known?.input_url === url && known?.channel_id ? known.channel_id : await resolveChannelId(url);
+  const { meta, videos } = await syncById(channelId, opts);
+  const { error } = await sb.from("youtube_channels").upsert({ affiliate_email: email, input_url: url, ...meta }, { onConflict: "affiliate_email" });
+  if (error) throw error;
+  return videos;
+}
 
+// Lê o canal, grava a foto do dia e os vídeos (youtube_videos). Devolve os dados do canal para quem chamou gravar.
+async function syncById(channelId: string, opts: SyncOpts = {}) {
+  const now = new Date().toISOString();
   const ch = (await yt("/channels", { part: "snippet,statistics,contentDetails,brandingSettings", id: channelId })).items?.[0];
   if (!ch) throw new Error("Canal não encontrado no YouTube");
   const st = ch.statistics ?? {};
   const row = {
-    affiliate_email: email, input_url: url, channel_id: channelId,
+    channel_id: channelId,
     title: ch.snippet?.title ?? null, handle: ch.snippet?.customUrl ?? null,
     thumbnail_url: bestThumb(ch.snippet?.thumbnails), country: ch.snippet?.country ?? null,
     channel_created: ch.snippet?.publishedAt ?? null,
@@ -177,34 +185,124 @@ async function syncChannel(email: string, url: string, known: any, opts: SyncOpt
       videos = rows.length;
     }
   }
-  const { error } = await sb.from("youtube_channels").upsert(row, { onConflict: "affiliate_email" });
-  if (error) throw error;
-  return videos;
+  return { meta: row, videos };
 }
 
-async function authorized(req: Request) {
+/* ---------------- Canais favoritos (menu Afiliados → Canais favoritos) ---------------- */
+// Ao favoritar, volta 12 meses (ou até a data do acesso, se for mais antiga) para mostrar se o canal já
+// falava da Flow antes da liberação.
+function favSince(accessAt: string | null) {
+  const year = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  return accessAt && accessAt < year ? accessAt : year;
+}
+const FAV_COLS = ["channel_id", "title", "handle", "thumbnail_url", "banner_url", "country", "description", "channel_created",
+  "subscribers", "hidden_subs", "total_views", "video_count", "fetched_at", "error"] as const;
+function favMeta(meta: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const k of FAV_COLS) if (k in meta) out[k] = meta[k];
+  return out;
+}
+
+async function syncFavorite(channelId: string, opts: SyncOpts = {}) {
+  try {
+    const { meta, videos } = await syncById(channelId, opts);
+    const { error } = await sb.from("yt_favorites").update(favMeta(meta)).eq("channel_id", channelId);
+    if (error) throw error;
+    return videos;
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e);
+    if (!msg.includes("YOUTUBE_API_KEY")) await sb.from("yt_favorites").update({ error: msg.slice(0, 300), fetched_at: new Date().toISOString() }).eq("channel_id", channelId);
+    throw e;
+  }
+}
+
+// Favoritar pelo link, @usuario ou ID do canal (o painel também grava a estrela direto na tabela e chama fav_sync).
+async function favAdd(body: any, userId: string | null) {
+  const ref = String(body.ref ?? "").trim().slice(0, 300);
+  if (!ref) throw new Error("Cole o link do canal, o @usuario ou o ID.");
+  const channelId = await resolveChannelId(ref);
+  const accessAt = typeof body.access_at === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.access_at) ? body.access_at : null;
+  const { data: existing } = await sb.from("yt_favorites").select("channel_id, access_at").eq("channel_id", channelId).maybeSingle();
+  if (!existing) {
+    const { error } = await sb.from("yt_favorites").insert({ channel_id: channelId, source: "manual", access_at: accessAt, added_by: userId });
+    if (error) throw error;
+  } else if (accessAt && !existing.access_at) {
+    await sb.from("yt_favorites").update({ access_at: accessAt }).eq("channel_id", channelId);
+  }
+  const videos = await syncFavorite(channelId, { since: favSince(accessAt ?? existing?.access_at ?? null) });
+  return { ok: true, channelId, existed: !!existing, videos };
+}
+
+async function favSync(body: any) {
+  const id = String(body.channelId ?? "");
+  if (!/^UC[\w-]{20,24}$/.test(id)) throw new Error("Canal inválido.");
+  const { data: fav } = await sb.from("yt_favorites").select("channel_id, access_at").eq("channel_id", id).maybeSingle();
+  if (!fav) throw new Error("Canal não está nos favoritos.");
+  const videos = await syncFavorite(id, body.deep ? { since: favSince(fav.access_at) } : {});
+  return { ok: true, channelId: id, videos };
+}
+
+// Rodada do cron: todos os favoritos (cerca de 3 unidades da cota por canal).
+async function syncAllFavorites() {
+  const { data } = await sb.from("yt_favorites").select("channel_id, fetched_at");
+  let ok = 0, videos = 0;
+  const errors: Record<string, string> = {};
+  for (const f of data ?? []) {
+    try {
+      // Favorito novo que ainda não foi lido: já busca o histórico.
+      videos += await syncFavorite(f.channel_id, f.fetched_at ? {} : { since: favSince(null) });
+      ok++;
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      if (msg.includes("YOUTUBE_API_KEY")) throw e;
+      errors[f.channel_id] = msg;
+    }
+  }
+  return { ok, videos, failed: Object.keys(errors).length, errors };
+}
+
+// Quem pode mexer nos favoritos: perfil admin ou com algum destes menus.
+async function canFavorite(userId: string) {
+  const { data } = await sb.from("app_admins").select("role, menus").eq("user_id", userId).maybeSingle();
+  if (!data) return false;
+  return data.role === "admin" || (data.menus ?? []).some((m: string) => ["af.favoritos", "af.youtube", "af.mercado"].includes(m));
+}
+
+// null = sem permissão; "cron" = pg_cron; senão o id do usuário do painel.
+async function caller(req: Request): Promise<string | null> {
   const cronSecret = req.headers.get("x-cron-secret");
   if (cronSecret) {
     const { data } = await sb.rpc("verify_sync_secret", { secret: cronSecret });
-    return data === true;
+    return data === true ? "cron" : null;
   }
   const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!jwt) return false;
+  if (!jwt) return null;
   const { data } = await sb.auth.getUser(jwt);
-  if (!data?.user) return false;
-  // Só administradores (app_admins) podem disparar a sincronização pelo painel.
+  if (!data?.user) return null;
+  // Só a equipe (app_admins) pode disparar a sincronização pelo painel.
   const { data: admin } = await sb.from("app_admins").select("user_id").eq("user_id", data.user.id).maybeSingle();
-  return !!admin;
+  return admin ? data.user.id : null;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-  if (!(await authorized(req))) return json({ error: "unauthorized" }, 401);
+  const who = await caller(req);
+  if (!who) return json({ error: "unauthorized" }, 401);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* corpo vazio (cron) */ }
+
+  // Canais favoritos: { action: "fav_add", ref, access_at? } ou { action: "fav_sync", channelId, deep? }.
+  if (body?.action === "fav_add" || body?.action === "fav_sync") {
+    if (who !== "cron" && !(await canFavorite(who))) return json({ ok: false, error: "Sem acesso aos canais favoritos." }, 403);
+    try {
+      return json(body.action === "fav_add" ? await favAdd(body, who === "cron" ? null : who) : await favSync(body));
+    } catch (e) {
+      return json({ ok: false, error: String((e as Error)?.message ?? e).slice(0, 300) });
+    }
+  }
   // { email, since } = atualizar só um influencer, voltando até a data (histórico do contrato).
   const only = typeof body?.email === "string" && body.email ? body.email.toLowerCase() : null;
   const opts: SyncOpts = typeof body?.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.since) ? { since: body.since } : {};
@@ -243,7 +341,9 @@ Deno.serve(async (req) => {
         );
       }
     }
-    result = { ok: true, channels: ok, failed: Object.keys(errors).length, videos, errors, seconds: Math.round((Date.now() - started) / 1000) };
+    let favorites: Record<string, unknown> | undefined;
+    if (!only) favorites = await syncAllFavorites();
+    result = { ok: true, channels: ok, failed: Object.keys(errors).length, videos, errors, favorites, seconds: Math.round((Date.now() - started) / 1000) };
   } catch (e) {
     result = { ok: false, error: String((e as Error)?.message ?? e) };
   }
