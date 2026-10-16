@@ -4,12 +4,12 @@
 // Cuidados:
 //   - resposta igual exista ou não a conta (não revela quem tem acesso);
 //   - limite de pedidos por e-mail e por IP (tabela auth_mail_log);
-//   - só contas da lista de acesso (app_admins) recebem o link;
+//   - só contas da equipe (app_admins) ou afiliados com acesso ao portal (partner_users) recebem o link;
 //   - se o Gmail ainda não foi configurado, devolve code "mail_not_configured" e o painel usa o envio padrão do Supabase.
 //
 // Secrets: GMAIL_APP_PASSWORD (e, opcional, GMAIL_USER). Ver mail.ts.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
-import { mailConfigured, PANEL_URL, recoveryEmail, sendMail } from "./mail.ts";
+import { mailConfigured, PANEL_URL, PARTNER_URL, recoveryEmail, sendMail } from "./mail.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
@@ -72,7 +72,11 @@ Deno.serve(async (req) => {
     const link = th ? `${safeRedirect(body.redirectTo)}?token_hash=${encodeURIComponent(th)}&type=recovery` : "";
     if (!error && uid && link) {
       const { data: admin } = await sb.from("app_admins").select("user_id").eq("user_id", uid).maybeSingle();
-      if (admin) await sendMail({ to: email, ...recoveryEmail(link) });
+      const { data: partner } = admin ? { data: null } :
+        await sb.from("partner_users").select("user_id").eq("user_id", uid).eq("active", true).maybeSingle();
+      // Afiliado sempre volta para o Portal do afiliado, de qualquer tela que tenha pedido.
+      const finalLink = partner ? `${PARTNER_URL}?token_hash=${encodeURIComponent(th)}&type=recovery` : link;
+      if (admin || partner) await sendMail({ to: email, ...recoveryEmail(finalLink) });
     }
   } catch (e) {
     console.error("auth-mail recover", (e as Error)?.message);

@@ -6,9 +6,10 @@
 //
 // Ações: list · create (envia o acesso por e-mail pelo Gmail da Flow) · grant · revoke · delete_user · reset_password
 //        set_access (perfil admin ou personalizado + menus liberados)
+//        partner_create · partner_update · partner_send_access · partner_delete (login do Portal do afiliado)
 // Só o perfil admin (app_admins.role = 'admin') usa esta função; acesso personalizado não gerencia a equipe.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
-import { accessEmail, mailConfigured, PANEL_URL, sendMail } from "./mail.ts";
+import { accessEmail, mailConfigured, PANEL_URL, PARTNER_URL, partnerEmail, sendMail } from "./mail.ts";
 
 const sb = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -76,14 +77,146 @@ const view = (u: any, a?: any) => ({
 });
 
 async function list(me: { id: string }) {
-  const [users, adm] = await Promise.all([allUsers(), sb.from("app_admins").select("user_id, created_at, role, menus")]);
+  const [users, adm, par] = await Promise.all([
+    allUsers(), sb.from("app_admins").select("user_id, created_at, role, menus"),
+    sb.from("partner_users").select("user_id, affiliate_email, login_email, active, show_customer_contact, created_at, last_seen_at"),
+  ]);
   if (adm.error) throw adm.error;
+  if (par.error) throw par.error;
   const since = new Map((adm.data ?? []).map((a) => [a.user_id, a]));
+  const partnerIds = new Set((par.data ?? []).map((p) => p.user_id));
   const members = users.filter((u) => since.has(u.id)).map((u) => view(u, since.get(u.id)))
     .sort((a, b) => String(a.email).localeCompare(String(b.email)));
-  const others = users.filter((u) => !since.has(u.id)).map((u) => view(u))
+  const others = users.filter((u) => !since.has(u.id) && !partnerIds.has(u.id)).map((u) => view(u))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  return { ok: true, me: me.id, members, others };
+  return { ok: true, me: me.id, members, others, partners: await partnerViews(users, par.data ?? []) };
+}
+
+/* ---------------- Portal do afiliado (/parceiro/) ----------------
+   Login próprio do afiliado, vinculado ao cadastro dele em affiliates (e-mail da Kiwify). Ele NÃO entra em app_admins:
+   só lê os próprios dados pelas funções portal_* do banco. */
+async function partnerViews(users: any[], rows: any[]) {
+  const byId = new Map(users.map((u) => [u.id, u]));
+  const emails = [...new Set(rows.map((r) => r.affiliate_email))];
+  const { data: affs } = emails.length ? await sb.from("affiliates").select("email, name, company_name, company_cnpj, director_cpf").in("email", emails) : { data: [] };
+  const aff = new Map((affs ?? []).map((a) => [a.email, a]));
+  return rows.map((r) => {
+    const u = byId.get(r.user_id), a = aff.get(r.affiliate_email);
+    return {
+      user_id: r.user_id, login_email: u?.email ?? r.login_email, affiliate_email: r.affiliate_email,
+      name: a?.name ?? null, company_name: a?.company_name ?? null, document: a?.company_cnpj || a?.director_cpf || null,
+      active: r.active, show_contact: r.show_customer_contact, created_at: r.created_at,
+      last_sign_in_at: u?.last_sign_in_at ?? null, last_seen_at: r.last_seen_at, confirmed: !!u?.email_confirmed_at,
+    };
+  }).sort((x, y) => String(x.name ?? x.affiliate_email).localeCompare(String(y.name ?? y.affiliate_email)));
+}
+
+// Acha o afiliado pelo e-mail de cadastro na Kiwify ou pelo CNPJ/CPF (só os dígitos).
+async function findAffiliate(raw: unknown) {
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (!s) throw new Fail("input", "Informe o e-mail de cadastro ou o CNPJ/CPF do afiliado.");
+  if (s.includes("@")) {
+    const { data } = await sb.from("affiliates").select("email, name").eq("email", s).maybeSingle();
+    if (!data) throw new Fail("input", "Nenhum afiliado com esse e-mail de cadastro na Kiwify.");
+    return data;
+  }
+  const digits = s.replace(/\D/g, "");
+  if (digits.length !== 11 && digits.length !== 14) throw new Fail("input", "CNPJ (14 dígitos) ou CPF (11 dígitos) inválido.");
+  const { data } = await sb.from("affiliates").select("email, name, company_cnpj, director_cpf, document")
+    .or(`company_cnpj.eq.${digits},director_cpf.eq.${digits},document.eq.${digits}`).limit(2);
+  let hits = data ?? [];
+  if (!hits.length) {
+    // Documento gravado com pontuação: compara só os dígitos.
+    const { data: all } = await sb.from("affiliates").select("email, name, company_cnpj, director_cpf, document").not("document", "is", null).limit(20000);
+    hits = (all ?? []).filter((a) => [a.company_cnpj, a.director_cpf, a.document].some((d) => String(d ?? "").replace(/\D/g, "") === digits)).slice(0, 2);
+  }
+  if (!hits.length) throw new Fail("input", "Nenhum afiliado com esse CNPJ/CPF.");
+  if (hits.length > 1) throw new Fail("input", "Mais de um afiliado com esse documento. Use o e-mail de cadastro.");
+  return { email: hits[0].email, name: hits[0].name };
+}
+
+async function sendPartnerAccess(email: string, name: string | null) {
+  if (!mailConfigured()) return { mailed: false, mailNote: "Envio de e-mail ainda não configurado (falta o secret GMAIL_APP_PASSWORD)." };
+  try {
+    const { data: ld, error: le } = await sb.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: PARTNER_URL } });
+    const th = ld?.properties?.hashed_token;
+    const link = th ? `${PARTNER_URL}?token_hash=${encodeURIComponent(th)}&type=recovery` : "";
+    if (le || !link) throw new Error(le?.message ?? "sem link");
+    await sendMail({ to: email, ...partnerEmail(name ?? "", email, link) });
+    return { mailed: true, mailNote: null };
+  } catch (e) {
+    return { mailed: false, mailNote: "O acesso foi criado, mas o e-mail não foi enviado: " + String((e as Error)?.message ?? e).slice(0, 120) };
+  }
+}
+
+async function partnerCreate(body: any, me: { id: string }) {
+  const aff = await findAffiliate(body.affiliate);
+  const login = String(body.loginEmail ?? "").trim().toLowerCase() || aff.email;
+  if (!EMAIL_RE.test(login) || login.length > 200) throw new Fail("input", "Informe um e-mail de login válido.");
+  let password = String(body.password ?? "");
+  const generated = !password;
+  if (generated) password = genPassword();
+  else if (password.length < MIN_PASSWORD) throw new Fail("input", `A senha precisa ter pelo menos ${MIN_PASSWORD} caracteres.`);
+
+  let userId = "", existed = false;
+  const { data, error } = await sb.auth.admin.createUser({ email: login, password, email_confirm: true });
+  if (error) {
+    if (!/already|registered|exists/i.test(error.message)) throw new Fail("auth", error.message);
+    const found = (await allUsers()).find((u) => String(u.email).toLowerCase() === login);
+    if (!found) throw new Fail("auth", error.message);
+    userId = found.id; existed = true;
+  } else userId = data.user.id;
+
+  // Conta da equipe não vira login de afiliado (as duas coisas ficam separadas).
+  const { data: team } = await sb.from("app_admins").select("user_id").eq("user_id", userId).maybeSingle();
+  if (team) throw new Fail("input", "Esse e-mail já é de alguém da equipe. Use outro e-mail para o login do afiliado.");
+
+  const { error: e2 } = await sb.from("partner_users").upsert({
+    user_id: userId, affiliate_email: aff.email, login_email: login, active: true,
+    show_customer_contact: body.showContact !== false, created_by: me.id,
+  }, { onConflict: "user_id" });
+  if (e2) throw e2;
+  const mail = body.sendEmail !== false ? await sendPartnerAccess(login, aff.name) : { mailed: false, mailNote: null };
+  return { ok: true, user_id: userId, login_email: login, affiliate_email: aff.email, name: aff.name, existed, password: existed ? null : password, generated, ...mail };
+}
+
+async function isPartner(id: string) {
+  const { data } = await sb.from("partner_users").select("user_id, login_email, affiliate_email").eq("user_id", id).maybeSingle();
+  if (!data) throw new Fail("input", "Esse login de afiliado não existe.");
+  return data;
+}
+
+async function partnerUpdate(body: any) {
+  const p = await isPartner(String(body.userId ?? ""));
+  const patch: Record<string, unknown> = {};
+  if (typeof body.active === "boolean") patch.active = body.active;
+  if (typeof body.showContact === "boolean") patch.show_customer_contact = body.showContact;
+  if (!Object.keys(patch).length) throw new Fail("input", "Nada para alterar.");
+  const { error } = await sb.from("partner_users").update(patch).eq("user_id", p.user_id);
+  if (error) throw error;
+  // Desativado: as funções portal_* deixam de devolver dados na hora, mesmo com a sessão ainda aberta.
+  return { ok: true };
+}
+
+async function partnerSendAccess(body: any) {
+  const p = await isPartner(String(body.userId ?? ""));
+  const { data: a } = await sb.from("affiliates").select("name").eq("email", p.affiliate_email).maybeSingle();
+  const { data: u } = await sb.auth.admin.getUserById(p.user_id);
+  const mail = await sendPartnerAccess(u?.user?.email ?? p.login_email, a?.name ?? null);
+  if (!mail.mailed) throw new Fail("mail", mail.mailNote ?? "E-mail não enviado.");
+  return { ok: true };
+}
+
+async function partnerDelete(body: any) {
+  const p = await isPartner(String(body.userId ?? ""));
+  const { data: team } = await sb.from("app_admins").select("user_id").eq("user_id", p.user_id).maybeSingle();
+  await sb.from("partner_users").delete().eq("user_id", p.user_id);
+  // A conta de login só é apagada se não for de alguém da equipe.
+  if (!team) {
+    const { error } = await sb.auth.admin.deleteUser(p.user_id);
+    if (error) throw new Fail("auth", error.message);
+  }
+  return { ok: true };
 }
 
 // Quantos perfis admin existem (precisa sobrar pelo menos um para gerenciar a equipe).
@@ -206,6 +339,10 @@ Deno.serve(async (req) => {
       case "delete_user": return json(await deleteUser(body, me));
       case "reset_password": return json(await resetPassword(body));
       case "set_access": return json(await setAccess(body, me));
+      case "partner_create": return json(await partnerCreate(body, me));
+      case "partner_update": return json(await partnerUpdate(body));
+      case "partner_send_access": return json(await partnerSendAccess(body));
+      case "partner_delete": return json(await partnerDelete(body));
       default: return json({ ok: false, code: "input", error: "Ação desconhecida." }, 400);
     }
   } catch (e) {

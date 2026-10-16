@@ -2,7 +2,7 @@
 //
 // O painel não chama o login do Supabase direto: manda e-mail/senha para cá. Esta função
 //   - bloqueia o IP (e o e-mail) após MAX_FAILS erros em WINDOW_MIN minutos;
-//   - valida a senha no Supabase Auth e só devolve a sessão para quem está em app_admins;
+//   - valida a senha no Supabase Auth e só devolve a sessão para quem está em app_admins ou tem acesso de afiliado (partner_users);
 //   - grava a tentativa em login_attempts (e-mail, IP, dispositivo) — a senha NUNCA é gravada
 //     nem enviada: um erro de digitação do próprio dono exporia a senha real;
 //   - avisa no Telegram: erro de login, bloqueio e login certo vindo de um IP novo.
@@ -120,9 +120,11 @@ Deno.serve(async (req) => {
     return json({ error: GENERIC_ERROR }, 401);
   }
 
-  // Senha certa, mas conta fora da lista de administradores: derruba a sessão.
+  // Senha certa, mas conta fora da equipe (app_admins) e sem acesso de afiliado ativo (partner_users): derruba a sessão.
   const { data: admin } = await sb.from("app_admins").select("user_id").eq("user_id", session.user?.id).maybeSingle();
-  if (!admin) {
+  const { data: partner } = admin ? { data: null } :
+    await sb.from("partner_users").select("user_id").eq("user_id", session.user?.id).eq("active", true).maybeSingle();
+  if (!admin && !partner) {
     await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: "POST", headers: { apikey: ANON_KEY, Authorization: `Bearer ${session.access_token}` } });
     await log(false, "conta sem permissão de administrador");
     await notify([
@@ -137,14 +139,14 @@ Deno.serve(async (req) => {
   // Login certo: avisa se é um IP que nunca entrou antes.
   const { count: knownIp } = await sb.from("login_attempts").select("id", { count: "exact", head: true })
     .eq("email", email).eq("ip", info.ip).eq("success", true);
-  await log(true, "ok");
+  await log(true, partner ? "ok (portal do afiliado)" : "ok");
   if (!knownIp) {
     await notify([
-      "✅ Painel Flow — acesso de um IP novo",
+      partner ? "✅ Portal do afiliado — acesso de um IP novo" : "✅ Painel Flow — acesso de um IP novo",
       `E-mail: ${email}`, `IP: ${info.ip}${info.country ? ` (${info.country})` : ""}`,
       `Dispositivo: ${device(info.user_agent)}`, `Horário: ${brt()}`,
-      "Se não foi você, troque a senha imediatamente.",
+      partner ? "Login de afiliado (só vê os próprios dados)." : "Se não foi você, troque a senha imediatamente.",
     ]);
   }
-  return json({ access_token: session.access_token, refresh_token: session.refresh_token, expires_in: session.expires_in });
+  return json({ access_token: session.access_token, refresh_token: session.refresh_token, expires_in: session.expires_in, kind: partner ? "partner" : "team" });
 });

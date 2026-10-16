@@ -52,6 +52,8 @@
   td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   tr:last-child td { border-bottom: 0; }
   td .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  #partners td .acts { min-width: 300px; }
+  #partners td:first-child { min-width: 170px; }
   .table-scroll { overflow-x: auto; }
   .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border: 1px solid var(--accent); color: var(--accent); }
   .tag.warn { border-color: var(--warning); color: var(--warning); }
@@ -176,6 +178,25 @@
       </form>
       <label class="mail-opt"><input type="checkbox" id="add-mail" checked> Enviar o acesso por e-mail (de flow@tbnegociosdigitais.com): endereço do painel, login e um link para a pessoa definir a própria senha.</label>
       <div id="add-result"></div>
+    </section>
+
+    <section class="panel" id="partners-panel">
+      <h2>Portal do afiliado</h2>
+      <p class="hint">Login para o afiliado (influencer) acompanhar <b>só os dados dele</b> em <a href="../parceiro/" target="_blank" rel="noopener">/parceiro/</a>: vendas e comissões por período (pagas, pendentes, recusadas, reembolsos e chargebacks), os clientes de cada venda, o contrato do Influencers Flow e o canal do YouTube. Ele não entra nos painéis da equipe, e o banco de dados não entrega nada de outros afiliados. Vincule pelo <b>e-mail de cadastro na Kiwify</b> ou pelo <b>CNPJ/CPF</b>.</p>
+      <form id="pt-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field" style="flex:2 1 280px"><label for="pt-aff">Afiliado (e-mail de cadastro ou CNPJ/CPF)</label><input id="pt-aff" list="pt-aff-list" required placeholder="afiliado@email.com ou 00.000.000/0001-00"><datalist id="pt-aff-list"></datalist></div>
+          <div class="field"><label for="pt-login">E-mail de login <small class="muted">(opcional)</small></label><input id="pt-login" type="email" placeholder="o mesmo do cadastro"></div>
+          <div class="field"><label for="pt-pw">Senha provisória</label>
+            <div class="pw-wrap"><input id="pt-pw" type="text" minlength="10" placeholder="deixe em branco para gerar" autocomplete="off"><button class="btn btn-sm" type="button" id="pt-gen">Gerar</button></div></div>
+          <button class="btn btn-primary" type="submit" id="pt-btn">Criar acesso ao portal</button>
+        </div>
+        <div id="pt-match" class="hint" style="margin:6px 0 0"></div>
+      </form>
+      <label class="mail-opt"><input type="checkbox" id="pt-contact" checked><span>Mostrar no portal o <b>e-mail e o WhatsApp dos clientes</b> das vendas dele (para ele recuperar vendas recusadas ou pendentes). Dá para mudar depois.</span></label>
+      <label class="mail-opt"><input type="checkbox" id="pt-mail" checked> Enviar o acesso por e-mail (de flow@tbnegociosdigitais.com): endereço do portal, login e um link para o afiliado definir a própria senha.</label>
+      <div id="pt-result"></div>
+      <div class="table-scroll" style="margin-top:14px"><table><thead><tr><th>Afiliado</th><th>Login</th><th>Contatos dos clientes</th><th>Último acesso</th><th>Situação</th><th></th></tr></thead><tbody id="partners"></tbody></table></div>
     </section>
 
     <section class="panel" id="others-panel" hidden>
@@ -388,6 +409,7 @@
         '<button class="btn btn-sm" data-act="reset" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Redefinir senha</button>' +
         (self ? "" : '<button class="btn btn-sm btn-danger" data-act="revoke" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Remover acesso</button>') + "</div></td></tr>";
     }).join("") : '<tr><td colspan="5" class="empty">Ninguém na lista.</td></tr>';
+    renderPartners();
     $("others-panel").hidden = !data.others.length;
     $("others").innerHTML = data.others.map(function (u) {
       return "<tr><td>" + esc(u.email) + "</td><td class=\"num\">" + fmtDate(u.created_at) + '</td><td class="num">' + ago(u.last_sign_in_at) + "</td>" +
@@ -395,6 +417,94 @@
         '<button class="btn btn-sm btn-danger" data-act="delete" data-id="' + esc(u.user_id) + '" data-email="' + esc(u.email) + '">Excluir conta</button></div></td></tr>';
     }).join("");
   }
+
+  /* ---------------- portal do afiliado ---------------- */
+  var PORTAL = location.origin + "/parceiro/";
+  var affList = null; // afiliados para o campo de busca (e-mail, nome, CNPJ/CPF)
+  function digits(s) { return String(s || "").replace(/\D/g, ""); }
+  function fmtDoc(d) {
+    d = digits(d);
+    if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+    return d;
+  }
+  async function loadAffiliates() {
+    if (affList) return;
+    var r = await sb.from("affiliates_relevant").select("email, name, company_name, company_cnpj, director_cpf").order("name").limit(5000);
+    affList = r.error ? [] : (r.data || []);
+    $("pt-aff-list").innerHTML = affList.map(function (a) {
+      return '<option value="' + esc(a.email) + '">' + esc((a.name || "") + (a.company_cnpj || a.director_cpf ? " · " + fmtDoc(a.company_cnpj || a.director_cpf) : "")) + "</option>";
+    }).join("");
+  }
+  function matchAffiliate(v) {
+    v = String(v || "").trim().toLowerCase();
+    if (!v || !affList) return null;
+    var d = digits(v);
+    return affList.filter(function (a) {
+      return a.email === v || (d.length >= 11 && (digits(a.company_cnpj) === d || digits(a.director_cpf) === d));
+    })[0] || null;
+  }
+  $("pt-aff").addEventListener("input", function () {
+    var a = matchAffiliate(this.value);
+    $("pt-match").innerHTML = a ? "✓ <b>" + esc(a.name || a.email) + "</b> · " + esc(a.email) + (a.company_cnpj || a.director_cpf ? " · " + esc(fmtDoc(a.company_cnpj || a.director_cpf)) : "") : "";
+  });
+  $("pt-aff").addEventListener("focus", function () { loadAffiliates(); });
+  $("pt-gen").addEventListener("click", function () { $("pt-pw").value = randomPw(); });
+
+  function renderPartners() {
+    var list = data.partners || [];
+    $("partners").innerHTML = list.length ? list.map(function (p) {
+      var id = esc(p.user_id), em = esc(p.login_email);
+      return "<tr" + (p.active ? "" : ' class="muted"') + "><td><b>" + esc(p.name || p.affiliate_email) + "</b><div class=\"muted\" style=\"font-size:12px\">" + esc(p.affiliate_email) + (p.document ? " · " + esc(fmtDoc(p.document)) : "") + "</div></td>" +
+        "<td>" + em + (p.confirmed ? "" : '<span class="tag warn">não confirmado</span>') + "</td>" +
+        '<td><label class="mail-opt" style="margin:0"><input type="checkbox" data-pt-contact="' + id + '"' + (p.show_contact ? " checked" : "") + "> mostrar</label></td>" +
+        '<td class="num">' + ago(p.last_seen_at || p.last_sign_in_at) + "</td>" +
+        "<td>" + (p.active ? '<span class="acc-chip all">ativo</span>' : '<span class="acc-chip">pausado</span>') + "</td>" +
+        '<td><div class="acts">' +
+          '<a class="btn btn-sm" href="../parceiro/?ver=' + encodeURIComponent(p.affiliate_email) + '" target="_blank" rel="noopener" title="Abre o portal como o afiliado vê">Ver portal</a>' +
+          '<button class="btn btn-sm" data-act="pt-send" data-id="' + id + '" data-email="' + em + '">Reenviar acesso</button>' +
+          '<button class="btn btn-sm" data-act="pt-reset" data-id="' + id + '" data-email="' + em + '">Redefinir senha</button>' +
+          '<button class="btn btn-sm" data-act="pt-toggle" data-id="' + id + '" data-email="' + em + '" data-on="' + (p.active ? "1" : "") + '">' + (p.active ? "Pausar" : "Reativar") + "</button>" +
+          '<button class="btn btn-sm btn-danger" data-act="pt-delete" data-id="' + id + '" data-email="' + em + '">Excluir</button>' +
+        "</div></td></tr>";
+    }).join("") : '<tr><td colspan="6" class="empty">Nenhum afiliado com acesso ao portal ainda.</td></tr>';
+  }
+
+  $("pt-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var btn = $("pt-btn"), pw = $("pt-pw").value;
+    if (pw && pw.length < 10) { toast("A senha precisa ter pelo menos 10 caracteres.", true); return; }
+    btn.disabled = true; btn.textContent = "Criando…"; $("pt-result").innerHTML = "";
+    var r = await call({ action: "partner_create", affiliate: $("pt-aff").value.trim(), loginEmail: $("pt-login").value.trim(), password: pw,
+      showContact: $("pt-contact").checked, sendEmail: $("pt-mail").checked });
+    btn.disabled = false; btn.textContent = "Criar acesso ao portal";
+    if (!r.ok) { toast(r.error || "Não foi possível criar.", true); return; }
+    $("pt-form").reset(); $("pt-match").innerHTML = "";
+    var who = esc(r.name || r.affiliate_email);
+    $("pt-result").innerHTML = r.existed
+      ? partnerBox("Portal liberado para " + who, r.login_email, null, "Esse e-mail já tinha conta, então a senha continua a mesma. Se o afiliado não lembra, use <b>Redefinir senha</b> ou <b>Reenviar acesso</b>.")
+      : partnerBox("Portal criado para " + who, r.login_email, r.password, "Esta senha aparece só agora. Envie por um canal seguro. Endereço do portal: " + esc(PORTAL));
+    if (r.mailed) $("pt-result").insertAdjacentHTML("beforeend", '<div class="msg ok">E-mail com o acesso enviado para ' + esc(r.login_email) + ".</div>");
+    else if (r.mailNote) $("pt-result").insertAdjacentHTML("beforeend", '<div class="msg error">' + esc(r.mailNote) + "</div>");
+    toast("Portal liberado.");
+    await reload();
+  });
+  function partnerBox(title, email, password, note) {
+    return '<div class="secret"><b>' + title + "</b>" +
+      '<div class="row">Portal: <code>' + esc(PORTAL) + "</code></div>" +
+      '<div class="row">Login: <code id="pt-secret-email">' + esc(email) + "</code></div>" +
+      (password ? '<div class="row">Senha provisória: <code id="pt-secret-pw">' + esc(password) + '</code> <button class="btn btn-sm" type="button" data-act="pt-copy">Copiar acesso</button></div>' : "") +
+      '<div class="muted" style="font-size:12.5px">' + note + "</div></div>";
+  }
+  document.addEventListener("change", async function (e) {
+    var cb = e.target.closest("input[data-pt-contact]");
+    if (!cb) return;
+    cb.disabled = true;
+    var r = await call({ action: "partner_update", userId: cb.dataset.ptContact, showContact: cb.checked });
+    cb.disabled = false;
+    if (!r.ok) { cb.checked = !cb.checked; toast(r.error || "Não foi possível salvar.", true); return; }
+    toast(cb.checked ? "O afiliado passa a ver e-mail e WhatsApp dos clientes." : "Contatos dos clientes escondidos no portal.");
+  });
 
   function secretBox(title, email, password, note) {
     return '<div class="secret"><b>' + esc(title) + "</b>" +
@@ -451,6 +561,33 @@
     if (act === "copy") {
       var txt = "Painel: " + location.origin + "/financeiro/\nE-mail: " + document.querySelector("#add-result .secret code").textContent + "\nSenha provisória: " + $("secret-pw").textContent;
       try { await navigator.clipboard.writeText(txt); toast("Copiado."); } catch (err) { toast("Não foi possível copiar; selecione o texto e copie.", true); }
+      return;
+    }
+    if (act === "pt-copy") {
+      var t = "Portal do afiliado: " + PORTAL + "\nLogin: " + $("pt-secret-email").textContent + "\nSenha provisória: " + $("pt-secret-pw").textContent;
+      try { await navigator.clipboard.writeText(t); toast("Copiado."); } catch (err) { toast("Não foi possível copiar; selecione o texto e copie.", true); }
+      return;
+    }
+    if (act.indexOf("pt-") === 0) {
+      var pr;
+      if (act === "pt-send") {
+        if (!confirm("Enviar de novo para " + email + " o e-mail com o endereço do portal e um link para definir a senha?")) return;
+        pr = await call({ action: "partner_send_access", userId: id });
+      } else if (act === "pt-reset") {
+        if (!confirm("Gerar uma nova senha provisória para " + email + "? A senha antiga deixa de valer.")) return;
+        pr = await call({ action: "reset_password", userId: id });
+        if (pr.ok) { $("pt-result").innerHTML = partnerBox("Nova senha do portal", email, pr.password, "Esta senha aparece só agora. Envie por um canal seguro."); $("pt-result").scrollIntoView({ behavior: "smooth", block: "center" }); }
+      } else if (act === "pt-toggle") {
+        var on = !!b.dataset.on;
+        if (on && !confirm("Pausar o portal de " + email + "? Ele deixa de ver os dados na hora (a conta continua existindo).")) return;
+        pr = await call({ action: "partner_update", userId: id, active: !on });
+      } else if (act === "pt-delete") {
+        if (!confirm("Excluir o acesso ao portal de " + email + "? A conta de login é apagada e não dá para desfazer.")) return;
+        pr = await call({ action: "partner_delete", userId: id });
+      }
+      if (!pr || !pr.ok) { toast((pr && pr.error) || "Erro.", true); return; }
+      toast(act === "pt-send" ? "E-mail enviado." : act === "pt-reset" ? "Senha redefinida." : "Pronto.");
+      if (act !== "pt-reset" && act !== "pt-send") await reload();
       return;
     }
     var r;

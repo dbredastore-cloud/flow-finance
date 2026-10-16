@@ -1,5 +1,6 @@
 /* Acesso por menu (Financeiro, Afiliados e Equipe).
-   Perfil de quem está logado vem de public.my_access(): role "admin" (tudo + Equipe) ou "custom" (só os menus
+   Perfil de quem está logado vem de public.my_access(): role "admin" (tudo + Equipe), "partner" (login de afiliado:
+   só o Portal do afiliado em /parceiro/) ou "custom" (só os menus
    liberados). As regras do banco (migration 20261015_menu_access.sql) garantem o mesmo nos dados; aqui o painel
    só esconde o que a pessoa não pode abrir.
    Marcação no HTML: data-menu="fin.health" (item de menu), data-page="afiliados" (link para outro painel),
@@ -55,12 +56,14 @@ window.FlowAccess = (function () {
   function email() { return me ? me.email : null; }
   function has() { return !!me; }
   function isAdmin() { return !!me && me.role === "admin"; }
+  function isPartner() { return !!me && me.role === "partner"; }
   function can(key) { return !!me && (me.role === "admin" || (me.menus || []).indexOf(key) >= 0); }
   function pageOf(page) { return CATALOG.filter(function (p) { return p.page === page; })[0]; }
   function allowed(page) { var p = pageOf(page); return p ? p.menus.filter(function (m) { return can(m[0]); }).map(function (m) { return m[0]; }) : []; }
   function canPage(page) { return allowed(page).length > 0; }
   // Primeiro painel liberado (para mandar a pessoa para onde ela pode entrar).
   function firstHref() {
+    if (isPartner()) return "../parceiro/"; // login de afiliado: só o Portal do afiliado
     var p = CATALOG.filter(function (x) { return canPage(x.page); })[0];
     return p ? p.href : null;
   }
@@ -82,5 +85,5 @@ window.FlowAccess = (function () {
     });
   }
 
-  return { CATALOG: CATALOG, load: load, email: email, has: has, isAdmin: isAdmin, can: can, canPage: canPage, allowed: allowed, firstHref: firstHref, label: label, apply: apply };
+  return { CATALOG: CATALOG, load: load, email: email, has: has, isAdmin: isAdmin, isPartner: isPartner, can: can, canPage: canPage, allowed: allowed, firstHref: firstHref, label: label, apply: apply };
 })();

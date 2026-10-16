@@ -186,6 +186,14 @@ function affiliateOf(sale: any) {
   return ac;
 }
 
+// WhatsApp/telefone do cliente (customer.mobile na Kiwify), só dígitos com DDI.
+function phoneOf(c: any): string | null {
+  const raw = String(c?.mobile ?? c?.phone ?? "").trim();
+  const d = raw.replace(/[^0-9]/g, "");
+  if (d.length < 10) return null;
+  return d.length <= 11 ? "55" + d : d;
+}
+
 async function saveSales(sales: any[]) {
   const rows: any[] = [];
   const affiliates = new Map<string, any>();
@@ -208,6 +216,7 @@ async function saveSales(sales: any[]) {
       commission: cents(ac.amount),
       customer_name: s.customer?.name ?? null,
       customer_email: s.customer?.email ?? null,
+      customer_phone: phoneOf(s.customer),
       sale_created_at: s.created_at,
       approved_at: iso(s.approved_date),
       refunded_at: iso(s.refunded_at),
@@ -257,13 +266,13 @@ async function syncWindow(
   }
 }
 
-async function syncBackfill(stats: { fetched: number; saved: number }) {
+async function syncBackfill(stats: { fetched: number; saved: number }, key = "backfill", limitDay?: string) {
   const today = new Date();
   const fresh: Cursor = {
-    end: day(today), page: 1, done: false, limit: day(addDays(today, -HISTORY_DAYS)),
+    end: day(today), page: 1, done: false, limit: limitDay ?? day(addDays(today, -HISTORY_DAYS)),
     span: 30, startedAt: today.toISOString(),
   };
-  const saved = await getState<Partial<Cursor>>("backfill", {});
+  const saved = await getState<Partial<Cursor>>(key, {});
   // Estado de uma versão antiga (sem span) não é confiável: recomeça do zero.
   const cur: Cursor = saved.span ? (saved as Cursor) : fresh;
   while (!cur.done && timeLeft()) {
@@ -277,12 +286,12 @@ async function syncBackfill(stats: { fetched: number; saved: number }) {
         cur.done = start <= limit;
         cur.span = Math.min(WINDOW_DAYS, cur.span + 1); // volta a crescer aos poucos
       } else cur.page = next;
-      await setState("backfill", cur);
+      await setState(key, cur);
     }, stats);
     if (res.status === "too_big") {
       cur.span = Math.max(0, Math.floor(((cur.span + 1) * 8000) / res.count) - 1);
       cur.page = 1;
-      await setState("backfill", cur);
+      await setState(key, cur);
       if (cur.span === 0 && res.count > MAX_ROWS_PER_QUERY) {
         throw new Error(`Mais de ${MAX_ROWS_PER_QUERY} vendas em um único dia (${cur.end}); a API da Kiwify não pagina além disso.`);
       }
@@ -353,10 +362,22 @@ Deno.serve(async (req) => {
     const backfill = await syncBackfill(stats);
     let recentComplete = false;
     if (backfill.done && timeLeft()) recentComplete = await syncRecent(stats, backfill.startedAt);
+    // Passada única para trazer o WhatsApp dos clientes das vendas antigas (coluna nova): relê o histórico
+    // desde a primeira venda com afiliado, no tempo que sobra de cada execução, sem atrasar as vendas recentes.
+    let phones: Record<string, unknown> | null = null;
+    if (backfill.done && recentComplete && timeLeft()) {
+      const ph = await getState<{ done?: boolean; end?: string }>("phone_backfill", {});
+      if (!ph.done) {
+        const { data: first } = await sb.from("affiliate_sales").select("sale_created_at").order("sale_created_at").limit(1).maybeSingle();
+        const lim = first?.sale_created_at ? day(addDays(new Date(first.sale_created_at), -1)) : undefined;
+        const c = await syncBackfill(stats, "phone_backfill", lim);
+        phones = { done: c.done, cursor: c.end };
+      } else phones = { done: true };
+    }
     result = {
       ok: true, affiliates, ...stats,
       backfill_done: backfill.done, backfill_cursor: backfill.end,
-      recent_complete: recentComplete, seconds: Math.round((Date.now() - started) / 1000),
+      recent_complete: recentComplete, phones, seconds: Math.round((Date.now() - started) / 1000),
     };
   } catch (e) {
     result = { ok: false, error: String((e as Error)?.message ?? e), ...stats };

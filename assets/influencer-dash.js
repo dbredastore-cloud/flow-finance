@@ -152,6 +152,15 @@ window.InfluencerDash = (function () {
   }
   async function load() {
     var my = S, ch = my.ctx.channel && my.ctx.channel.c;
+    // Portal do afiliado: os dados vêm prontos de uma função do banco (o afiliado não lê as tabelas).
+    if (my.ctx.load) {
+      var d = null;
+      try { d = await my.ctx.load(); } catch (e) { A.toast("Não foi possível ler os vídeos: " + (e.message || e), true); }
+      if (S !== my) return;
+      my.videos = (d && d.videos) || []; my.snaps = (d && d.snaps) || [];
+      render();
+      return;
+    }
     if (ch && ch.channel_id) {
       var r = await Promise.all([
         A.sb.from("youtube_videos").select("video_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short, description, tags")
@@ -171,7 +180,8 @@ window.InfluencerDash = (function () {
     $("fd-title").textContent = a.name || a.email;
     $("fd-back").textContent = S.ctx.backLabel || (nc() ? "← Voltar ao YouTube" : "← Voltar aos contratos");
     $("fd-acts").innerHTML =
-      (ch ? '<button class="btn" type="button" data-fd="refresh" title="Relê o canal e os últimos 100 vídeos no YouTube (cerca de 5 unidades da cota)">↻ Atualizar canal</button>' +
+      (ch && S.ctx.readOnly ? '<button class="btn" type="button" data-fd="csv">Exportar vídeos (CSV)</button>' : "") +
+      (ch && !S.ctx.readOnly ? '<button class="btn" type="button" data-fd="refresh" title="Relê o canal e os últimos 100 vídeos no YouTube (cerca de 5 unidades da cota)">↻ Atualizar canal</button>' +
         (nc() ? '<button class="btn" type="button" data-fd="deep" title="Volta 12 meses no tempo (até 500 vídeos; poucas unidades da cota)">⏪ Buscar 12 meses de histórico</button>'
           : '<button class="btn" type="button" data-fd="deep" title="Volta no tempo até o início do contrato (até 500 vídeos; poucas unidades da cota)">⏪ Buscar histórico do contrato</button>') +
         '<button class="btn" type="button" data-fd="csv">Exportar vídeos (CSV)</button>' : "") +
@@ -226,7 +236,7 @@ window.InfluencerDash = (function () {
     }
 
     /* aviso de histórico incompleto */
-    if (m.incomplete && noC) {
+    if (m.incomplete && noC && !S.ctx.readOnly) {
       body += '<div class="mr-fnote"><b>Só os vídeos mais recentes.</b> Temos ' + fmtInt(m.vids.length) + " dos " + fmtInt(ch.video_count) + " envios do canal (de " + fmtDate(m.oldest) +
         ' em diante). Clique em <b>⏪ Buscar 12 meses de histórico</b> para trazer mais vídeos (poucas unidades da cota do YouTube).</div>';
     } else if (m.incomplete) {

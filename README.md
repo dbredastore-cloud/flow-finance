@@ -94,6 +94,14 @@ Supabase → Project Settings → Edge Functions → Secrets:
   - `TRELLO_BOARD_IDS` (opcional, ids separados por vírgula; sem ele entram os boards abertos com "Flow" no nome);
   - `ANTHROPIC_API_KEY` (opcional, ver acima).
 
+## Portal do Afiliado (/parceiro/)
+
+- O afiliado (influencer) entra com login próprio e vê **só os dados dele**: vendas por período (aprovadas, pendentes, recusadas, reembolsos e chargebacks), cliente de cada venda com e-mail e WhatsApp (botão com mensagem pronta para recuperar a venda), comissão e %, vendas por dia, por produto, CSV, o contrato do Influencers Flow (termos, meta do bônus e fechamento mês a mês) e o canal do YouTube (com o painel completo do canal, só leitura).
+- **Criar o acesso:** tela Equipe → *Portal do afiliado*. Vincula pelo e-mail de cadastro na Kiwify ou pelo CNPJ/CPF, gera a senha provisória e envia o e-mail com o link para o afiliado definir a senha. Na lista: ver o portal como ele vê, reenviar o acesso, redefinir senha, pausar/reativar, excluir e ligar/desligar os contatos dos clientes.
+- **Segurança:** o afiliado não entra em `app_admins`, então todas as tabelas continuam fechadas para ele. Ele só lê pelas funções `portal_me`, `portal_sales`, `portal_contract` e `portal_youtube` (security definer), que descobrem o afiliado pelo login (`partner_users`) e ignoram qualquer e-mail vindo do navegador. A equipe com o menu Afiliados ou Influencers Flow pode abrir `/parceiro/?ver=<e-mail>` para ver como o afiliado vê. O líquido do produtor e as observações internas do contrato não saem para o portal. Login pela mesma função `auth-login` (bloqueio por força bruta, aviso no Telegram) e recuperação de senha pela `auth-mail`.
+- **WhatsApp do cliente:** `affiliate_sales.customer_phone`, gravado pelo `kiwify-sync` a partir de `customer.mobile`. As vendas antigas são relidas uma vez, no tempo que sobra de cada sincronização (`sync_state.phone_backfill`). Também aparece na ficha do afiliado (menu Afiliados), com o e-mail do cliente.
+- Migration: `20261016_partner_portal.sql`.
+
 ## Acesso por menu (tela Equipe)
 
 - Cada pessoa em `app_admins` tem um perfil: **Admin** (`role = 'admin'`, vê todos os menus e gerencia a Equipe) ou **Acesso personalizado** (`role = 'custom'`, vê só os menus em `menus`). Quem já tinha acesso antes desta mudança ficou como Admin.

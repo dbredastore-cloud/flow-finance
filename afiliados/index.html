@@ -242,6 +242,10 @@
   .drawer-head h3 { margin: 0; font-size: 18px; }
   .drawer-head .meta { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
   .mini-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 18px; }
+  .portal-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; }
+  .portal-acts .btn { width: auto; text-decoration: none; }
+  .wa-link { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; text-decoration: none; color: #1fae57; border: 1px solid color-mix(in oklab, #25d366 50%, transparent); background: color-mix(in oklab, #25d366 10%, transparent); }
+  .wa-link:hover { background: color-mix(in oklab, #25d366 20%, transparent); }
   /* Influencers Flow */
   .star { background: none; border: 0; padding: 0 6px 0 0; font-size: 16px; line-height: 1; cursor: pointer; color: var(--text-muted); vertical-align: -1px; transition: transform .15s, color .15s; }
   .star:hover { color: var(--accent); transform: scale(1.2); }
@@ -893,7 +897,7 @@
     var r = periodRange();
     state.sales = await fetchAll(function () {
       return sb.from("affiliate_sales")
-        .select("id, affiliate_email, affiliate_name, product_id, product_name, status, payment_method, amount, net_amount, commission, customer_name, customer_email, sale_created_at, refunded_at")
+        .select("id, affiliate_email, affiliate_name, product_id, product_name, status, payment_method, amount, net_amount, commission, customer_name, customer_email, customer_phone, sale_created_at, refunded_at")
         .gte("sale_created_at", r[0].toISOString()).lt("sale_created_at", r[1].toISOString())
         .order("sale_created_at", { ascending: false });
     });
@@ -929,6 +933,20 @@
 
   // % de comissão de uma venda. A Kiwify aplica o % sobre o valor depois das taxas dela,
   // que é o líquido do produtor + a comissão (ex.: 86,23 ÷ (344,91 + 86,23) = 20%).
+  // Botão do WhatsApp do cliente (Kiwify customer.mobile), com uma mensagem pronta conforme a situação da venda.
+  function customerWa(s) {
+    var d = String(s.customer_phone || "").replace(/\D/g, "");
+    if (!d) return '<span class="muted">—</span>';
+    var first = String(s.customer_name || "").trim().split(/\s+/)[0] || "", prod = s.product_name || "a ferramenta";
+    var hi = "Olá" + (first ? ", " + first : "") + "! Tudo bem? Aqui é da equipe Flow. ";
+    var txt = s.status === "refused" ? hi + "Vi que o pagamento do " + prod + " não foi aprovado. Posso te ajudar a concluir a compra?"
+      : APPROVED.indexOf(s.status) >= 0 ? hi + "Obrigado por adquirir o " + prod + "! Conseguiu acessar a ferramenta? Se tiver qualquer dificuldade, estou à disposição."
+      : REFUNDED.indexOf(s.status) >= 0 ? hi + "Vi que você pediu o reembolso do " + prod + ". Pode me contar o que aconteceu? Quero entender e te ajudar."
+      : hi + "Vi que a sua compra do " + prod + " está aguardando pagamento. Ficou alguma dúvida em que eu possa ajudar?";
+    var show = d.length === 13 && d.indexOf("55") === 0 ? "(" + d.slice(2, 4) + ") " + d.slice(4, 9) + "-" + d.slice(9) : "+" + d;
+    return '<a class="wa-link" href="https://wa.me/' + d + "?text=" + encodeURIComponent(txt) + '" target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp com mensagem pronta">' + esc(show) + "</a>";
+  }
+
   function salePct(s) {
     var c = Number(s.commission) || 0, base = (Number(s.net_amount) || 0) + c;
     return c > 0 && base > 0 ? Math.round((c / base) * 100) : null;
@@ -1868,6 +1886,8 @@
       '<div class="mini-kpis">' +
         kpi("Vendas", fmtInt(st.count)) + kpi("Faturamento", fmtBRL(st.amount)) + kpi("Comissão", fmtBRL(st.commission)) +
       "</div>" +
+      '<div class="portal-acts"><a class="btn btn-sm" href="../parceiro/?ver=' + encodeURIComponent(email) + '" target="_blank" rel="noopener" title="Abre o Portal do afiliado exatamente como este afiliado vê">👁 Ver portal do afiliado</a>' +
+        (window.FlowAccess.isAdmin() ? '<a class="btn btn-sm" href="../equipe/#partners-panel" title="Criar o login do afiliado na tela Equipe">Liberar acesso ao portal</a>' : "") + "</div>" +
       (a.id ? '<h4>Contato e redes</h4><form id="af-form"><div class="form-grid">' +
         field("whatsapp", "WhatsApp", "(11) 99999-9999") + field("instagram", "Instagram", "@perfil") +
         field("youtube", "YouTube", "@canal ou link") + field("facebook", "Facebook", "página ou link") +
@@ -1884,13 +1904,15 @@
       "</tbody></table></div>" +
       commissionHistoryHtml(a) +
       "<h4>Vendas no período (" + fmtInt(sales.length) + ")</h4>" +
-      '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">Status</th><th>Valor</th><th>Comissão</th><th>%</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Cliente</th><th class="l">WhatsApp</th><th class="l">Status</th><th>Valor</th><th>Comissão</th><th>%</th></tr></thead><tbody>' +
         (sales.length ? sales.map(function (s) {
           var p = salePct(s);
           return '<tr><td class="l num">' + fmtDate(s.sale_created_at) + '</td><td class="l">' + esc(s.product_name) + '</td><td class="l">' + esc(s.customer_name || s.customer_email || "") +
+            (s.customer_name && s.customer_email ? '<div class="muted" style="font-size:11.5px"><a href="mailto:' + esc(s.customer_email) + '">' + esc(s.customer_email) + "</a></div>" : "") +
+            '</td><td class="l">' + customerWa(s) +
             '</td><td class="l"><span class="status ' + statusClass(s.status) + '">' + esc(STATUS_LABEL[s.status] || s.status) + '</span></td><td class="num">' + fmtBRL(s.amount) + '</td><td class="num">' + fmtBRL(s.commission) +
             '</td><td class="num">' + (p != null ? p + "%" : "—") + "</td></tr>";
-        }).join("") : '<tr><td colspan="7" class="empty">Sem vendas no período.</td></tr>') +
+        }).join("") : '<tr><td colspan="8" class="empty">Sem vendas no período.</td></tr>') +
       "</tbody></table></div>";
     $("drawer").hidden = false;
     $("scrim").hidden = false;
@@ -2447,7 +2469,7 @@
   }
 
   /* Cache da aba (sessionStorage): some ao fechar a aba; nunca é a fonte da verdade. */
-  var CACHE_KEY = "flow_aff_cache_v3";
+  var CACHE_KEY = "flow_aff_cache_v4"; // v4: vendas com o WhatsApp do cliente
   function periodKey() { return state.period.id + "|" + (state.period.from || "") + "|" + (state.period.to || ""); }
   function readCache() {
     try {

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
+<title>Portal do Afiliado · Flow</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="preconnect" href="https://jagmnogcpxeujtsrrotd.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/flow-hud.css">
+<link rel="stylesheet" href="../assets/market-radar.css">
+<link rel="stylesheet" href="../assets/influencer-dash.css">
+<link rel="stylesheet" href="../assets/partner-portal.css">
+<script src="../assets/flow-theme.js"></script>
+<script src="../assets/flow-hud.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/secure-login.js"></script>
+<script src="../assets/influencer-dash.js"></script>
+</head>
+<body>
+
+<div id="status-screen" class="pp-screen" hidden>
+  <div class="login-card"><h1 id="status-title">Carregando…</h1><p class="sub" id="status-text">Conectando ao portal.</p>
+    <button type="button" class="btn" id="status-retry" hidden>Tentar de novo</button>
+    <button type="button" class="btn" id="status-logout" hidden>Sair</button></div>
+</div>
+
+<div id="login-screen" class="pp-screen" hidden>
+  <div class="login-card">
+    <div class="pp-brand"><span class="pp-mark"></span><b>Flow</b><small>Portal do Afiliado</small></div>
+    <h1>Entrar</h1>
+    <p class="sub">Acompanhe as suas vendas, comissões, contrato e canal.</p>
+    <form id="login-form">
+      <div class="field"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" required></div>
+      <button type="submit" class="btn btn-primary pp-block" id="login-submit">Entrar</button>
+      <div class="pp-center"><button type="button" class="pp-link" id="reset-link">Esqueci minha senha</button></div>
+      <div id="login-msg"></div>
+    </form>
+  </div>
+</div>
+
+<div id="recovery-screen" class="pp-screen" hidden>
+  <div class="login-card">
+    <h1>Definir sua senha</h1>
+    <p class="sub">Escolha a senha que você vai usar no portal.</p>
+    <form id="recovery-form">
+      <div class="field"><label for="rec-pw">Nova senha</label><input id="rec-pw" type="password" autocomplete="new-password" required></div>
+      <div class="field"><label for="rec-pw2">Confirmar nova senha</label><input id="rec-pw2" type="password" autocomplete="new-password" required></div>
+      <ul class="pp-checklist" id="pw-checklist">
+        <li data-rule="len">Mínimo de 10 caracteres</li><li data-rule="upper">Uma letra maiúscula</li><li data-rule="lower">Uma letra minúscula</li>
+        <li data-rule="num">Um número</li><li data-rule="sym">Um símbolo (ex: ! @ # $ %)</li><li data-rule="match">As senhas são iguais</li>
+      </ul>
+      <button type="submit" class="btn btn-primary pp-block" id="rec-submit" disabled>Salvar senha e entrar</button>
+      <div id="rec-msg"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="pp-top">
+    <div class="pp-brand"><span class="pp-mark"></span><b>Flow</b><small>Portal do Afiliado</small></div>
+    <div class="pp-who"><span id="who-name"></span><small id="who-sub"></small></div>
+    <button class="btn btn-ghost" id="logout-btn" type="button">Sair</button>
+  </header>
+  <div class="pp-preview" id="preview-bar" hidden></div>
+
+  <main class="pp-main">
+    <section class="pp-period">
+      <div class="pp-chips" id="period-chips" role="group" aria-label="Período"></div>
+      <div class="pp-custom" id="period-custom" hidden>
+        <label>De <input type="date" id="p-from"></label><label>até <input type="date" id="p-to"></label>
+      </div>
+      <span class="muted" id="period-label"></span>
+    </section>
+
+    <section class="pp-kpis" id="kpis"></section>
+
+    <section class="panel pp-panel">
+      <div class="pp-head"><h2>Vendas por dia</h2><span class="muted" id="chart-note"></span></div>
+      <div class="pp-chart" id="sales-chart"></div>
+    </section>
+
+    <section class="panel pp-panel">
+      <div class="pp-head"><h2>Por produto</h2></div>
+      <div class="table-scroll"><table class="pp-table"><thead><tr><th class="l">Produto</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% comissão</th></tr></thead><tbody id="products"></tbody></table></div>
+    </section>
+
+    <section class="panel pp-panel">
+      <div class="pp-head"><h2>Suas vendas</h2>
+        <div class="pp-tools"><input type="search" id="sales-q" placeholder="Buscar cliente ou produto…" aria-label="Buscar nas vendas"><button class="btn" type="button" id="sales-csv">Exportar CSV</button></div></div>
+      <div class="pp-chips" id="status-chips" role="group" aria-label="Situação da venda"></div>
+      <p class="muted pp-hint" id="contact-hint"></p>
+      <div class="table-scroll"><table class="pp-table" id="sales-table"><thead id="sales-head"></thead><tbody id="sales-body"></tbody></table></div>
+      <p class="muted pp-hint" id="sales-count"></p>
+    </section>
+
+    <section class="panel pp-panel" id="contract-panel" hidden></section>
+
+    <section class="panel pp-panel" id="channel-panel" hidden></section>
+
+    <p class="muted pp-foot">Dados da Kiwify (vendas e comissões) e da YouTube Data API (canal), atualizados automaticamente. Valor = valor pago pelo cliente; comissão = o que a Kiwify credita a você.</p>
+  </main>
+</div>
+<div id="toast" role="status"></div>
+<script src="../assets/partner-portal.js"></script>
+</body>
+</html>

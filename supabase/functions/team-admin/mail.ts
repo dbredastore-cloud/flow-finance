@@ -63,3 +63,19 @@ export function accessEmail(email: string, link: string) {
     text: `Você recebeu acesso ao painel Flow.\n\nEndereço: ${PANEL_URL}\nSeu login: ${email}\n\nDefina a sua senha pelo link (vale por 1 hora):\n${link}\n\nSe não esperava este acesso, ignore este e-mail.`,
   };
 }
+
+// Portal do afiliado: o afiliado vê só os próprios dados (vendas, contrato e canal).
+export const PARTNER_URL = "https://gestorflowtools.shop/parceiro/";
+
+export function partnerEmail(name: string, email: string, link: string) {
+  const who = name ? esc(name) : "você";
+  return {
+    subject: "Seu acesso ao Portal do Afiliado Flow",
+    html: layout("Seu Portal do Afiliado Flow está pronto", `Olá, ${who}! Liberamos o seu acesso ao portal onde você acompanha os seus resultados com a Flow.`,
+      [`<b>Endereço:</b> <a href="${PARTNER_URL}" style="color:#08733f">${PARTNER_URL}</a>`, `<b>Seu login:</b> ${esc(email)}`,
+       "Lá você vê as suas vendas e comissões por período, o seu contrato (se houver) e os números do seu canal. Só você vê os seus dados.",
+       "Para entrar, primeiro defina a sua senha pelo botão abaixo (o link vale por 1 hora)."],
+      "Definir minha senha", link, "Se você não esperava este acesso, ignore este e-mail."),
+    text: `Seu Portal do Afiliado Flow está pronto.\n\nEndereço: ${PARTNER_URL}\nSeu login: ${email}\n\nDefina a sua senha pelo link (vale por 1 hora):\n${link}\n\nSe não esperava este acesso, ignore este e-mail.`,
+  };
+}
