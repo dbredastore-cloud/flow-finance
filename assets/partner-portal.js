@@ -243,9 +243,8 @@
       var fams = {};
       ev.forEach(function (s) { fams[s.fam_name || s.product || "—"] = 1; });
       c.fams = Object.keys(fams);
-      // Acompanhamento do cliente = a marcação mais recente em qualquer evento dele.
+      // Acompanhamento do cliente (o banco manda o mesmo em todas as vendas dele, de qualquer período).
       c.fu = ev.filter(function (s) { return s.fu_at; }).sort(function (a, b) { return Date.parse(b.fu_at) - Date.parse(a.fu_at); })[0] || null;
-      c.anchor = c.fu ? c.fu.id : c.focus.id;
       c.newAfterFu = !!(c.fu && Date.parse(c.last.at) > Date.parse(c.fu.fu_at));
       c.done = !!(c.fu && c.fu.fu_done);
     });
@@ -383,7 +382,7 @@
   function contactOn() { return !!(S.me && (S.me.preview || S.me.show_contact)); }
 
   /* ---------------- acompanhamento de cada cliente (feito / pendente + observação) ---------------- */
-  // Só o próprio afiliado grava; a equipe (?ver=) vê em modo leitura. Fica gravado no evento-âncora do cliente.
+  // Só o próprio afiliado grava; a equipe (?ver=) vê em modo leitura. Fica gravado no cliente (histórico inteiro).
   function canEditFu() { return !!(S.me && !S.me.preview); }
   function clientOf(key) { return (S.clients || []).filter(function (c) { return c.key === key; })[0] || null; }
   function fuCell(c) {
@@ -404,12 +403,11 @@
       '<div class="pp-fu-row"><label class="pp-fu-chk"><input type="checkbox" id="fu-done"' + (c.done ? " checked" : "") + "> Marcar como feito</label>" +
       '<span class="pp-fu-sp"></span><button type="button" class="btn" data-fu-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-fu-save="' + esc(c.key) + '">Salvar</button></div></div>';
   }
+  // O acompanhamento é do cliente: vale para o histórico inteiro dele, em qualquer período.
   async function saveFu(c, done, note) {
-    var s = S.sales.filter(function (x) { return x.id === c.anchor; })[0];
-    if (!s) return false;
-    var r = await sb.rpc("portal_set_followup", { p_sale_id: s.id, p_done: !!done, p_note: note == null ? ((c.fu && c.fu.fu_note) || "") : note });
+    var r = await sb.rpc("portal_set_client_followup", { p_ckey: c.key, p_done: !!done, p_note: note == null ? ((c.fu && c.fu.fu_note) || "") : note });
     if (r.error) { toast("Não foi possível salvar: " + r.error.message, true); return false; }
-    s.fu_done = r.data.done; s.fu_note = r.data.note; s.fu_at = r.data.updated_at;
+    c.events.forEach(function (s) { s.fu_done = r.data.done; s.fu_note = r.data.note; s.fu_at = r.data.updated_at; });
     return true;
   }
   $("sales-body").addEventListener("click", async function (e) {
