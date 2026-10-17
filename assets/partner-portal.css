@@ -32,14 +32,15 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 .pp-brand b { font-family: var(--font-display); letter-spacing: .14em; text-transform: uppercase; font-size: 15px; }
 .pp-brand small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border-strong); }
 .pp-mark { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--accent), color-mix(in oklab, var(--accent) 30%, #000)); box-shadow: 0 0 14px -2px rgba(var(--accent-rgb), .7); }
-.pp-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.pp-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; padding: 12px clamp(16px, 2.2vw, 40px); background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .pp-who { margin-left: auto; text-align: right; line-height: 1.25; }
 .pp-who span { display: block; font-weight: 700; font-size: 14px; }
 .pp-who small { font-size: 12px; color: var(--text-muted); }
 .pp-top .btn { width: auto; }
 .pp-preview { padding: 9px 24px; font-size: 13px; background: color-mix(in oklab, var(--warning) 16%, transparent); border-bottom: 1px solid color-mix(in oklab, var(--warning) 40%, transparent); }
 
-.pp-main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 40px; display: grid; gap: 16px; }
+.pp-main { margin: 0 auto; padding: 20px clamp(16px, 2.2vw, 40px) 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.pp-main > * { min-width: 0; }
 .pp-period { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .pp-custom { display: flex; gap: 10px; font-size: 13px; color: var(--text-dim); }
 .pp-custom input { margin-left: 6px; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg, var(--bg)); color: var(--text); }
@@ -192,3 +193,12 @@ span.pp-fu { cursor: default; display: inline-block; }
 .pp-tag.good { color: var(--good); background: color-mix(in oklab, var(--good) 12%, transparent); }
 .pp-tag.bad { color: var(--critical); background: color-mix(in oklab, var(--critical) 10%, transparent); }
 .pp-fu-new { color: var(--warning); }
+
+/* ---------- telas largas: ocupa a largura toda; gráfico e produtos lado a lado ---------- */
+@media (min-width: 1500px) {
+  .pp-main { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+  .pp-main > * { grid-column: 1 / -1; }
+  .pp-main > .pp-chart-panel { grid-column: 1; }
+  .pp-main > .pp-products-panel { grid-column: 2; }
+}
+@media (min-width: 2200px) { .pp-main { max-width: 2400px; } }
