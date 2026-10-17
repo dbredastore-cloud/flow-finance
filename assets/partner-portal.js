@@ -29,7 +29,7 @@
 
   var qs = new URLSearchParams(location.search);
   var VER = (qs.get("ver") || "").trim().toLowerCase() || null; // visão da equipe
-  var S = { me: null, sales: [], period: "month", from: null, to: null, filter: "all", fu: "all", editing: null, text: "", sort: { key: "at", dir: -1 },
+  var S = { me: null, sales: [], clients: [], open: {}, period: "month", from: null, to: null, filter: "all", fu: "all", editing: null, text: "", sort: { key: "at", dir: -1 },
     contract: null, yt: null, extrasLoaded: false, loadSeq: 0 };
 
   /* ---------------- utilidades ---------------- */
@@ -214,27 +214,78 @@
   }
 
   /* ---------------- vendas ---------------- */
+  // Recusada/pendente "de verdade": o cliente não comprou depois a mesma ferramenta (por nenhum canal; o banco confere).
+  function openTry(s) { var g = groupOf(s.status); return (g === "refused" || g === "wait") && !s.bought_later_at; }
+  function recoveredTry(s) { var g = groupOf(s.status); return (g === "refused" || g === "wait") && !!s.bought_later_at; }
+
+  // Uma linha por cliente, com todos os eventos (tentativas, pagamentos, reembolsos…) dele no período.
+  function buildClients() {
+    var map = {}, list = [];
+    S.sales.forEach(function (s) {
+      var k = s.ckey || s.id, c = map[k];
+      if (!c) { c = map[k] = { key: k, events: [] }; list.push(c); }
+      c.events.push(s);
+    });
+    list.forEach(function (c) {
+      var ev = c.events.sort(function (a, b) { return Date.parse(b.at) - Date.parse(a.at); });
+      var pick = function (f) { for (var i = 0; i < ev.length; i++) if (ev[i][f]) return ev[i][f]; return null; };
+      c.last = ev[0]; c.name = pick("customer"); c.email = pick("customer_email"); c.phone = pick("customer_phone");
+      c.paid = ev.filter(function (s) { return groupOf(s.status) === "ok"; });
+      c.amount = sum(c.paid, function (s) { return s.amount; }); c.commission = sum(c.paid, function (s) { return s.commission; });
+      c.refusedOpen = ev.filter(function (s) { return groupOf(s.status) === "refused" && openTry(s); });
+      c.waitOpen = ev.filter(function (s) { return groupOf(s.status) === "wait" && openTry(s); });
+      c.recovered = ev.filter(recoveredTry);
+      c.refund = ev.filter(function (s) { return groupOf(s.status) === "refund"; });
+      c.cb = ev.filter(function (s) { return groupOf(s.status) === "cb"; });
+      c.st = c.refusedOpen.length ? "refused" : c.waitOpen.length ? "wait" : c.cb.length ? "cb" : c.refund.length ? "refund" : c.paid.length ? "ok" : groupOf(c.last.status);
+      // Evento que puxa a conversa: a tentativa em aberto mais recente; senão o último evento.
+      c.focus = c.refusedOpen[0] || c.waitOpen[0] || c.cb[0] || c.refund[0] || c.last;
+      var fams = {};
+      ev.forEach(function (s) { fams[s.fam_name || s.product || "—"] = 1; });
+      c.fams = Object.keys(fams);
+      // Acompanhamento do cliente = a marcação mais recente em qualquer evento dele.
+      c.fu = ev.filter(function (s) { return s.fu_at; }).sort(function (a, b) { return Date.parse(b.fu_at) - Date.parse(a.fu_at); })[0] || null;
+      c.anchor = c.fu ? c.fu.id : c.focus.id;
+      c.newAfterFu = !!(c.fu && Date.parse(c.last.at) > Date.parse(c.fu.fu_at));
+      c.done = !!(c.fu && c.fu.fu_done);
+    });
+    return list;
+  }
+  var CF = { // filtros por cliente
+    all: function () { return true; },
+    ok: function (c) { return c.paid.length > 0; },
+    refused: function (c) { return c.refusedOpen.length > 0; },
+    wait: function (c) { return c.waitOpen.length > 0; },
+    recovered: function (c) { return c.recovered.length > 0; },
+    refund: function (c) { return c.refund.length > 0; },
+    cb: function (c) { return c.cb.length > 0; }
+  };
+
   function renderSales() {
     var all = S.sales, by = {};
     GROUPS.forEach(function (g) { by[g[0]] = all.filter(function (s) { return groupOf(s.status) === g[0]; }); });
+    S.clients = buildClients();
+    var cl = S.clients, cnt = function (k) { return cl.filter(CF[k]).length; };
     var ok = by.ok, total = all.length;
     var comm = sum(ok, function (s) { return s.commission; }), amount = sum(ok, function (s) { return s.amount; });
     var pcts = ok.map(function (s) { return s.pct; }).filter(function (x) { return x != null; });
     var avgPct = pcts.length ? pcts.reduce(function (a, b) { return a + b; }, 0) / pcts.length : null;
+    var refRec = by.refused.filter(recoveredTry).length, waitRec = by.wait.filter(recoveredTry).length;
     var tile = function (k, label, value, sub, cls) {
       return '<button type="button" class="pp-kpi' + (cls ? " " + cls : "") + (S.filter === k ? " on" : "") + '" data-filter="' + k + '"><small>' + label + '</small><b class="num">' + value + "</b><span>" + sub + "</span></button>";
     };
     $("kpis").innerHTML =
-      tile("ok", "Vendas aprovadas", int(ok.length), total ? pct(ok.length / total) + " de todas as tentativas" : "nenhuma venda no período", "good big") +
+      tile("ok", "Vendas aprovadas", int(ok.length), total ? int(cnt("ok")) + " clientes · " + pct(ok.length / total) + " das tentativas" : "nenhuma venda no período", "good big") +
       tile("ok", "Faturamento", brl(amount), "valor pago pelos clientes", "big") +
       tile("ok", "Sua comissão", brl(comm), avgPct != null ? "média de " + Math.round(avgPct) + "% por venda" : "nas vendas aprovadas", "accent big") +
-      tile("wait", "Pendentes", int(by.wait.length), by.wait.length ? brl(sum(by.wait, function (s) { return s.commission; })) + " de comissão a confirmar" : "nada aguardando", "warn sm") +
-      tile("refused", "Recusadas", int(by.refused.length), by.refused.length ? "clientes que tentaram comprar" : "nenhuma recusa", "bad sm") +
+      tile("wait", "Pendentes sem pagamento", int(cnt("wait")), by.wait.length ? int(by.wait.length) + " tentativas · " + int(waitRec) + " pagaram depois" : "nada aguardando", "warn sm") +
+      tile("refused", "Recusadas sem compra", int(cnt("refused")), by.refused.length ? int(by.refused.length) + " tentativas · " + int(refRec) + " compraram depois" : "nenhuma recusa", "bad sm") +
       tile("refund", "Reembolsos", int(by.refund.length), by.refund.length ? brl(sum(by.refund, function (s) { return s.amount; })) + " devolvidos" : "nenhum reembolso", "sm") +
       tile("cb", "Chargebacks", int(by.cb.length), by.cb.length ? "contestações no cartão" : "nenhum chargeback", "sm");
 
-    $("status-chips").innerHTML = [["all", "Todas", total]].concat(GROUPS.map(function (g) { return [g[0], g[1], by[g[0]].length]; })).map(function (c) {
-      return '<button type="button" class="pp-chip' + (S.filter === c[0] ? " on" : "") + '" data-filter="' + c[0] + '">' + c[1] + " <small>" + c[2] + "</small></button>";
+    $("status-chips").innerHTML = [["all", "Todos os clientes"], ["ok", "Compraram"], ["refused", "Recusadas sem compra"], ["wait", "Pendentes sem pagamento"],
+      ["recovered", "Recuperados"], ["refund", "Reembolsos"], ["cb", "Chargebacks"]].map(function (c) {
+      return '<button type="button" class="pp-chip' + (S.filter === c[0] ? " on" : "") + '" data-filter="' + c[0] + '" title="' + esc(CHIP_TIP[c[0]]) + '">' + c[1] + " <small>" + cnt(c[0]) + "</small></button>";
     }).join("");
 
     renderChart(ok);
@@ -242,6 +293,15 @@
     renderFuChips();
     renderTable();
   }
+  var CHIP_TIP = {
+    all: "Todos os clientes com algum evento no período",
+    ok: "Clientes com pelo menos uma compra paga no período",
+    refused: "Tiveram o pagamento recusado e NÃO compraram depois a mesma ferramenta (por nenhum canal)",
+    wait: "Geraram boleto/Pix e NÃO pagaram depois a mesma ferramenta",
+    recovered: "Tiveram recusa ou pendência e compraram depois",
+    refund: "Clientes com reembolso no período",
+    cb: "Clientes com chargeback no período"
+  };
   document.addEventListener("click", function (e) {
     var f = e.target.closest("[data-filter]");
     if (!f || !S.me) return;
@@ -249,6 +309,7 @@
     renderSales();
     if (f.classList.contains("pp-kpi")) $("sales-table").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+
 
   function renderProducts(ok) {
     var by = {};
@@ -322,28 +383,31 @@
   function contactOn() { return !!(S.me && (S.me.preview || S.me.show_contact)); }
 
   /* ---------------- acompanhamento de cada cliente (feito / pendente + observação) ---------------- */
-  // Só o próprio afiliado grava; a equipe (?ver=) vê em modo leitura.
+  // Só o próprio afiliado grava; a equipe (?ver=) vê em modo leitura. Fica gravado no evento-âncora do cliente.
   function canEditFu() { return !!(S.me && !S.me.preview); }
-  function fuCell(s) {
-    var note = s.fu_note ? '<div class="pp-fu-note" title="' + esc(s.fu_note) + '">' + esc(s.fu_note.length > 90 ? s.fu_note.slice(0, 90) + "…" : s.fu_note) + "</div>" : "";
-    var when = s.fu_at ? '<div class="pp-sub">' + (s.fu_done ? "feito" : "anotado") + " em " + dtt(s.fu_at) + "</div>" : "";
+  function clientOf(key) { return (S.clients || []).filter(function (c) { return c.key === key; })[0] || null; }
+  function fuCell(c) {
+    var f = c.fu, note = f && f.fu_note ? '<div class="pp-fu-note" title="' + esc(f.fu_note) + '">' + esc(f.fu_note.length > 90 ? f.fu_note.slice(0, 90) + "…" : f.fu_note) + "</div>" : "";
+    var when = f ? '<div class="pp-sub">' + (f.fu_done ? "feito" : "anotado") + " em " + dtt(f.fu_at) + "</div>" : "";
+    var fresh = c.newAfterFu ? '<div class="pp-sub pp-fu-new" title="O cliente teve um evento depois da sua última marcação">● novo evento depois da marcação</div>' : "";
     if (!canEditFu()) {
-      return (s.fu_done ? '<span class="pp-fu done">✓ Feito</span>' : s.fu_at ? '<span class="pp-fu">Pendente</span>' : '<span class="muted">—</span>') + note + when;
+      return (c.done ? '<span class="pp-fu done">✓ Feito</span>' : f ? '<span class="pp-fu">Pendente</span>' : '<span class="muted">—</span>') + note + when + fresh;
     }
-    return '<div class="pp-fu-acts"><button type="button" class="pp-fu' + (s.fu_done ? " done" : "") + '" data-fu-toggle="' + esc(s.id) + '" aria-pressed="' + !!s.fu_done + '" title="' + (s.fu_done ? "Marcar como pendente" : "Marcar como feito (já tratei este cliente)") + '">' +
-      (s.fu_done ? "✓ Feito" : "○ Pendente") + "</button>" +
-      '<button type="button" class="pp-fu-btn" data-fu-edit="' + esc(s.id) + '" title="' + (s.fu_note ? "Editar a observação" : "Anotar o que foi tratado com este cliente") + '">' + (s.fu_note ? "✎ Editar" : "＋ Observação") + "</button></div>" + note + when;
+    return '<div class="pp-fu-acts"><button type="button" class="pp-fu' + (c.done ? " done" : "") + '" data-fu-toggle="' + esc(c.key) + '" aria-pressed="' + c.done + '" title="' + (c.done ? "Marcar como pendente" : "Marcar como feito (já tratei este cliente)") + '">' +
+      (c.done ? "✓ Feito" : "○ Pendente") + "</button>" +
+      '<button type="button" class="pp-fu-btn" data-fu-edit="' + esc(c.key) + '" title="' + (f && f.fu_note ? "Editar a observação" : "Anotar o que foi tratado com este cliente") + '">' + (f && f.fu_note ? "✎ Editar" : "＋ Observação") + "</button></div>" + note + when + fresh;
   }
-  function fuEditor(s) {
-    return '<div class="pp-fu-box"><label for="fu-note">O que foi tratado com <b>' + esc(s.customer || "este cliente") + "</b> (" + esc(s.product || "") + ")</label>" +
-      '<textarea id="fu-note" rows="3" maxlength="2000" placeholder="Ex.: chamei no WhatsApp em 16/10, cartão recusado; vai tentar no Pix amanhã.">' + esc(s.fu_note || "") + "</textarea>" +
-      '<div class="pp-fu-row"><label class="pp-fu-chk"><input type="checkbox" id="fu-done"' + (s.fu_done ? " checked" : "") + "> Marcar como feito</label>" +
-      '<span class="pp-fu-sp"></span><button type="button" class="btn" data-fu-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-fu-save="' + esc(s.id) + '">Salvar</button></div></div>';
+  function fuEditor(c) {
+    var f = c.fu;
+    return '<div class="pp-fu-box"><label for="fu-note">O que foi tratado com <b>' + esc(c.name || "este cliente") + "</b> (" + esc(c.fams.join(", ")) + ")</label>" +
+      '<textarea id="fu-note" rows="3" maxlength="2000" placeholder="Ex.: chamei no WhatsApp em 16/10, cartão recusado; vai tentar no Pix amanhã.">' + esc((f && f.fu_note) || "") + "</textarea>" +
+      '<div class="pp-fu-row"><label class="pp-fu-chk"><input type="checkbox" id="fu-done"' + (c.done ? " checked" : "") + "> Marcar como feito</label>" +
+      '<span class="pp-fu-sp"></span><button type="button" class="btn" data-fu-cancel>Cancelar</button><button type="button" class="btn btn-primary" data-fu-save="' + esc(c.key) + '">Salvar</button></div></div>';
   }
-  async function saveFu(id, done, note) {
-    var s = S.sales.filter(function (x) { return x.id === id; })[0];
+  async function saveFu(c, done, note) {
+    var s = S.sales.filter(function (x) { return x.id === c.anchor; })[0];
     if (!s) return false;
-    var r = await sb.rpc("portal_set_followup", { p_sale_id: id, p_done: !!done, p_note: note == null ? (s.fu_note || "") : note });
+    var r = await sb.rpc("portal_set_followup", { p_sale_id: s.id, p_done: !!done, p_note: note == null ? ((c.fu && c.fu.fu_note) || "") : note });
     if (r.error) { toast("Não foi possível salvar: " + r.error.message, true); return false; }
     s.fu_done = r.data.done; s.fu_note = r.data.note; s.fu_at = r.data.updated_at;
     return true;
@@ -351,9 +415,9 @@
   $("sales-body").addEventListener("click", async function (e) {
     var t = e.target.closest("[data-fu-toggle]");
     if (t) {
-      var s = S.sales.filter(function (x) { return x.id === t.dataset.fuToggle; })[0];
+      var c = clientOf(t.dataset.fuToggle);
       t.disabled = true;
-      if (await saveFu(s.id, !s.fu_done, null)) { toast(s.fu_done ? "Cliente marcado como feito." : "Cliente voltou para pendente."); renderSales(); }
+      if (c && await saveFu(c, !c.done, null)) { toast(!c.done ? "Cliente marcado como feito." : "Cliente voltou para pendente."); renderSales(); }
       else t.disabled = false;
       return;
     }
@@ -362,14 +426,25 @@
     if (e.target.closest("[data-fu-cancel]")) { S.editing = null; renderTable(); return; }
     var sv = e.target.closest("[data-fu-save]");
     if (sv) {
+      var cc = clientOf(sv.dataset.fuSave);
       sv.disabled = true;
-      if (await saveFu(sv.dataset.fuSave, $("fu-done").checked, $("fu-note").value)) { S.editing = null; toast("Observação salva."); renderSales(); }
+      if (cc && await saveFu(cc, $("fu-done").checked, $("fu-note").value)) { S.editing = null; toast("Observação salva."); renderSales(); }
       else sv.disabled = false;
+      return;
     }
+    // Clique na linha do cliente (fora de botões e links): abre/fecha os eventos dele.
+    if (e.target.closest("a, button, input, textarea, label, .pp-fu-edit, .pp-events")) return;
+    var tr = e.target.closest("tr[data-client]");
+    if (tr) toggleClient(tr.dataset.client);
   });
+  function toggleClient(key) {
+    if (S.open[key]) delete S.open[key]; else S.open[key] = true;
+    renderTable();
+  }
   $("sales-body").addEventListener("keydown", function (e) {
-    if (e.target.id === "fu-note" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { var b = document.querySelector("[data-fu-save]"); if (b) b.click(); }
-    if (e.key === "Escape" && S.editing) { S.editing = null; renderTable(); }
+    if (e.target.id === "fu-note" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { var b = document.querySelector("[data-fu-save]"); if (b) b.click(); return; }
+    if (e.key === "Escape" && S.editing) { S.editing = null; renderTable(); return; }
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("tr[data-client]")) { e.preventDefault(); toggleClient(e.target.dataset.client); }
   });
   $("fu-chips").addEventListener("click", function (e) {
     var b = e.target.closest("[data-fu]");
@@ -377,58 +452,86 @@
     S.fu = b.dataset.fu; renderSales();
   });
   function renderFuChips() {
-    var all = S.sales.filter(function (s) { return S.filter === "all" || groupOf(s.status) === S.filter; });
-    var done = all.filter(function (s) { return s.fu_done; }).length;
+    var all = (S.clients || []).filter(CF[S.filter] || CF.all);
+    var done = all.filter(function (c) { return c.done; }).length;
     $("fu-chips").innerHTML = '<span class="muted pp-fu-lbl">Acompanhamento:</span>' + [["all", "Todos", all.length], ["pending", "A tratar", all.length - done], ["done", "Feitos", done]].map(function (c) {
       return '<button type="button" class="pp-chip' + (S.fu === c[0] ? " on" : "") + '" data-fu="' + c[0] + '" aria-pressed="' + (S.fu === c[0]) + '">' + c[1] + " <small>" + c[2] + "</small></button>";
     }).join("");
   }
 
-  var COLS = [["at", "Data", "l"], ["customer", "Cliente", "l"], ["phone", "WhatsApp", "l"], ["product", "Produto", "l"], ["method", "Pagamento", "l"],
-    ["status", "Situação", "l"], ["amount", "Valor", ""], ["commission", "Comissão", ""], ["pct", "%", ""], ["fu", "Acompanhamento", "l"]];
+  /* ---------------- tabela de clientes ---------------- */
+  var WA_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.2-.4.3-.4.8-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.9 11.9 0 004.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 001.9-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>';
+  var ST_LABEL = { ok: "Comprou", refused: "Recusada · sem compra", wait: "Pendente · sem pagamento", refund: "Reembolso", cb: "Chargeback" };
+  var COLS = [["at", "Último evento", "l"], ["customer", "Cliente", "l"], ["phone", "WhatsApp", "l"], ["product", "Produto", "l"], ["events", "Eventos", "l"],
+    ["status", "Situação", "l"], ["amount", "Pago", ""], ["commission", "Comissão", ""], ["fu", "Acompanhamento", "l"]];
   function cols() { return COLS.filter(function (c) { return c[0] !== "phone" || contactOn(); }); }
   function filtered() {
-    var q = S.text.trim().toLowerCase();
-    return S.sales.filter(function (s) {
-      if (S.filter !== "all" && groupOf(s.status) !== S.filter) return false;
-      if (S.fu === "done" && !s.fu_done) return false;
-      if (S.fu === "pending" && s.fu_done) return false;
-      if (q && [s.customer, s.customer_email, s.product, s.customer_phone].join(" ").toLowerCase().indexOf(q) < 0) return false;
+    var q = S.text.trim().toLowerCase(), test = CF[S.filter] || CF.all;
+    return (S.clients || []).filter(function (c) {
+      if (!test(c)) return false;
+      if (S.fu === "done" && !c.done) return false;
+      if (S.fu === "pending" && c.done) return false;
+      if (q && [c.name, c.email, c.phone, c.fams.join(" "), c.events.map(function (s) { return s.product; }).join(" ")].join(" ").toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
   }
+  // Pílulas com o resumo dos eventos do cliente (ex.: 2 recusadas, 1 paga).
+  function eventPills(c) {
+    var n = {};
+    c.events.forEach(function (s) { var g = groupOf(s.status); n[g] = (n[g] || 0) + 1; });
+    var lbl = { ok: ["paga", "pagas"], wait: ["pendente", "pendentes"], refused: ["recusada", "recusadas"], refund: ["reembolso", "reembolsos"], cb: ["chargeback", "chargebacks"] };
+    return '<div class="pp-evp">' + ["refused", "wait", "ok", "refund", "cb"].filter(function (g) { return n[g]; }).map(function (g) {
+      return '<span class="pp-st mini ' + g + '">' + n[g] + " " + lbl[g][n[g] === 1 ? 0 : 1] + "</span>";
+    }).join("") + "</div>";
+  }
+  function eventsTable(c) {
+    return '<div class="pp-events"><table><thead><tr><th class="l">Data</th><th class="l">Produto</th><th class="l">Pagamento</th><th class="l">Situação</th><th>Valor</th><th>Comissão</th><th>%</th></tr></thead><tbody>' +
+      c.events.map(function (s) {
+        var g = groupOf(s.status), tag = "";
+        if (g === "refused" || g === "wait") tag = s.bought_later_at ? '<span class="pp-tag good">✓ ' + (g === "wait" ? "pagou" : "comprou") + " depois · " + dt(s.bought_later_at) + "</span>" : '<span class="pp-tag bad">sem compra depois</span>';
+        return "<tr><td class=\"l num\">" + dtt(s.at) + '</td><td class="l">' + esc(s.product || "—") + (s.tool ? '<div class="pp-sub">' + esc(s.tool) + "</div>" : "") + "</td>" +
+          '<td class="l">' + esc(METHOD[s.method] || s.method || "—") + '</td><td class="l"><span class="pp-st ' + g + '">' + esc(STATUS_LABEL[s.status] || s.status || "—") + "</span> " + tag +
+          (s.refunded_at ? '<div class="pp-sub">reembolso em ' + dt(s.refunded_at) + "</div>" : "") + "</td>" +
+          '<td class="num">' + brl(s.amount) + '</td><td class="num' + (g === "ok" ? " pp-good" : " pp-strike") + '">' + brl(s.commission) + '</td><td class="num">' + (s.pct != null ? s.pct + "%" : "—") + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
   function renderTable() {
     var list = filtered(), k = S.sort.key, dir = S.sort.dir;
-    var val = function (s) { return k === "at" ? Date.parse(s.at) : k === "amount" || k === "commission" || k === "pct" ? Number(s[k]) || 0 : k === "fu" ? (s.fu_done ? 2 : s.fu_note ? 1 : 0) : String(s[k === "phone" ? "customer_phone" : k] || "").toLowerCase(); };
+    var rank = { refused: 5, wait: 4, cb: 3, refund: 2, ok: 1 };
+    var val = function (c) {
+      return k === "at" ? Date.parse(c.last.at) : k === "amount" ? c.amount : k === "commission" ? c.commission : k === "events" ? c.events.length
+        : k === "status" ? rank[c.st] || 0 : k === "fu" ? (c.done ? 2 : c.fu ? 1 : 0) : k === "product" ? c.fams.join(" ").toLowerCase()
+        : String((k === "phone" ? c.phone : c.name) || "").toLowerCase();
+    };
     list.sort(function (a, b) { var x = val(a), y = val(b); return x < y ? -dir : x > y ? dir : 0; });
     var cs = cols();
     $("sales-head").innerHTML = "<tr>" + cs.map(function (c) {
       return '<th class="sortable ' + c[2] + '" data-sort="' + c[0] + '">' + c[1] + (S.sort.key === c[0] ? ' <span class="arrow">' + (dir < 0 ? "↓" : "↑") + "</span>" : "") + "</th>";
     }).join("") + "</tr>";
-    $("contact-hint").textContent = contactOn()
-      ? "Clique no WhatsApp para abrir a conversa com uma mensagem pronta (recusadas e pendentes são ótimas para recuperar a venda). Em Acompanhamento, marque cada cliente como feito e anote o que foi tratado."
-      : "Os contatos dos clientes não estão liberados no seu portal.";
-    $("sales-body").innerHTML = list.length ? list.slice(0, 1000).map(function (s) {
-      var g = groupOf(s.status);
+    $("contact-hint").textContent = (contactOn()
+      ? "Cada linha é um cliente: clique nela para ver todos os eventos dele. \"Recusadas sem compra\" mostra só quem não comprou depois a mesma ferramenta (por nenhum canal). O WhatsApp abre a conversa com uma mensagem pronta."
+      : "Cada linha é um cliente: clique nela para ver todos os eventos dele. Os contatos dos clientes não estão liberados no seu portal.") + " Em Acompanhamento, marque o cliente como feito e anote o que foi tratado.";
+    $("sales-body").innerHTML = list.length ? list.slice(0, 600).map(function (c) {
+      var open = !!S.open[c.key], f = c.focus;
       var cell = {
-        at: '<td class="l num">' + dtt(s.at) + "</td>",
-        customer: '<td class="l"><b>' + esc(s.customer || "—") + "</b>" + (contactOn() && s.customer_email ? '<div class="pp-sub"><a href="mailto:' + esc(s.customer_email) + '">' + esc(s.customer_email) + "</a></div>" : "") + "</td>",
-        phone: '<td class="l">' + (s.customer_phone ? '<a class="pp-wa" href="https://wa.me/' + esc(String(s.customer_phone).replace(/\D/g, "")) + "?text=" + encodeURIComponent(waText(s)) + '" target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp">' +
-          '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.2-.4.3-.4.8-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.9 11.9 0 004.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 001.9-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>' +
-          esc(phoneFmt(s.customer_phone)) + "</a>" : '<span class="muted">—</span>') + "</td>",
-        product: '<td class="l">' + esc(s.product || "—") + (s.tool ? '<div class="pp-sub">' + esc(s.tool) + "</div>" : "") + "</td>",
-        method: '<td class="l">' + esc(METHOD[s.method] || s.method || "—") + "</td>",
-        status: '<td class="l"><span class="pp-st ' + g + '">' + esc(STATUS_LABEL[s.status] || s.status || "—") + "</span>" + (s.refunded_at ? '<div class="pp-sub">em ' + dt(s.refunded_at) + "</div>" : "") + "</td>",
-        amount: '<td class="num">' + brl(s.amount) + "</td>",
-        commission: '<td class="num' + (g === "ok" ? " pp-good" : g === "refund" || g === "cb" || g === "refused" ? " pp-strike" : "") + '">' + brl(s.commission) + "</td>",
-        pct: '<td class="num">' + (s.pct != null ? s.pct + "%" : "—") + "</td>",
-        fu: '<td class="l pp-fu-cell">' + fuCell(s) + "</td>"
+        at: '<td class="l num"><span class="pp-caret' + (open ? " open" : "") + '" aria-hidden="true">▸</span>' + dtt(c.last.at) + "</td>",
+        customer: '<td class="l"><b>' + esc(c.name || "—") + "</b>" + (contactOn() && c.email ? '<div class="pp-sub"><a href="mailto:' + esc(c.email) + '">' + esc(c.email) + "</a></div>" : "") + "</td>",
+        phone: '<td class="l">' + (c.phone ? '<a class="pp-wa" href="https://wa.me/' + esc(String(c.phone).replace(/\D/g, "")) + "?text=" + encodeURIComponent(waText(f)) + '" target="_blank" rel="noopener noreferrer" title="Abrir conversa no WhatsApp com mensagem pronta">' +
+          WA_ICON + esc(phoneFmt(c.phone)) + "</a>" : '<span class="muted">—</span>') + "</td>",
+        product: '<td class="l">' + c.fams.map(esc).join("<br>") + "</td>",
+        events: '<td class="l">' + eventPills(c) + "</td>",
+        status: '<td class="l"><span class="pp-st ' + c.st + '">' + esc(ST_LABEL[c.st] || "—") + "</span>" + (c.recovered.length ? '<div class="pp-sub pp-good">recuperado: comprou depois</div>' : "") + "</td>",
+        amount: '<td class="num">' + (c.amount ? brl(c.amount) : '<span class="muted">—</span>') + "</td>",
+        commission: '<td class="num' + (c.commission ? " pp-good" : "") + '">' + (c.commission ? brl(c.commission) : '<span class="muted">—</span>') + "</td>",
+        fu: '<td class="l pp-fu-cell">' + fuCell(c) + "</td>"
       };
-      var row = '<tr class="pp-row ' + g + (s.fu_done ? " fu-done" : "") + '" data-sale="' + esc(s.id) + '">' + cs.map(function (c) { return cell[c[0]]; }).join("") + "</tr>";
-      if (S.editing === s.id) row += '<tr class="pp-fu-edit"><td colspan="' + cs.length + '">' + fuEditor(s) + "</td></tr>";
+      var row = '<tr class="pp-row pp-client ' + c.st + (c.done ? " fu-done" : "") + (open ? " open" : "") + '" data-client="' + esc(c.key) + '" tabindex="0" aria-expanded="' + open + '">' + cs.map(function (x) { return cell[x[0]]; }).join("") + "</tr>";
+      if (S.editing === c.key) row += '<tr class="pp-fu-edit"><td colspan="' + cs.length + '">' + fuEditor(c) + "</td></tr>";
+      if (open) row += '<tr class="pp-ev-row"><td colspan="' + cs.length + '">' + eventsTable(c) + "</td></tr>";
       return row;
-    }).join("") : '<tr><td colspan="' + cs.length + '" class="empty">Nenhuma venda com esse filtro no período.</td></tr>';
-    $("sales-count").textContent = list.length + " de " + S.sales.length + " vendas no período" + (list.length > 1000 ? " (mostrando as 1.000 primeiras; use a busca ou exporte o CSV)" : "") + ".";
+    }).join("") : '<tr><td colspan="' + cs.length + '" class="empty">Nenhum cliente com esse filtro no período.</td></tr>';
+    var nEv = list.reduce(function (s, c) { return s + c.events.length; }, 0);
+    $("sales-count").textContent = list.length + " de " + (S.clients || []).length + " clientes (" + nEv + " eventos)" + (list.length > 600 ? " · mostrando os 600 primeiros; use a busca ou exporte o CSV" : "") + ".";
   }
   $("sales-head").addEventListener("click", function (e) {
     var th = e.target.closest("th[data-sort]");
@@ -438,15 +541,22 @@
     renderTable();
   });
   $("sales-q").addEventListener("input", function (e) { S.text = e.target.value; renderTable(); });
+  // CSV: um evento por linha (dos clientes do filtro atual), com "comprou depois" e o acompanhamento do cliente.
   $("sales-csv").addEventListener("click", function () {
     var c = function (v) { var s = v == null ? "" : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    var head = ["Data", "Cliente"].concat(contactOn() ? ["E-mail do cliente", "WhatsApp"] : []).concat(["Produto", "Pagamento", "Situação", "Valor", "Comissão", "% comissão", "Acompanhamento", "Observação"]);
-    var rows = [head.map(c).join(",")].concat(filtered().map(function (s) {
-      return [dtt(s.at), s.customer].concat(contactOn() ? [s.customer_email, s.customer_phone ? "+" + s.customer_phone : ""] : [])
-        .concat([s.product, METHOD[s.method] || s.method, STATUS_LABEL[s.status] || s.status, Number(s.amount || 0).toFixed(2).replace(".", ","), Number(s.commission || 0).toFixed(2).replace(".", ","), s.pct != null ? s.pct + "%" : "", s.fu_done ? "feito" : "pendente", s.fu_note || ""]).map(c).join(",");
-    }));
+    var head = ["Data", "Cliente"].concat(contactOn() ? ["E-mail do cliente", "WhatsApp"] : []).concat(["Produto", "Pagamento", "Situação", "Comprou depois", "Valor", "Comissão", "% comissão", "Situação do cliente", "Acompanhamento", "Observação"]);
+    var rows = [head.map(c).join(",")];
+    filtered().forEach(function (cl) {
+      cl.events.forEach(function (s) {
+        var g = groupOf(s.status);
+        rows.push([dtt(s.at), cl.name].concat(contactOn() ? [cl.email, cl.phone ? "+" + cl.phone : ""] : [])
+          .concat([s.product, METHOD[s.method] || s.method, STATUS_LABEL[s.status] || s.status, g === "refused" || g === "wait" ? (s.bought_later_at ? "sim, " + dt(s.bought_later_at) : "não") : "",
+            Number(s.amount || 0).toFixed(2).replace(".", ","), Number(s.commission || 0).toFixed(2).replace(".", ","), s.pct != null ? s.pct + "%" : "",
+            ST_LABEL[cl.st] || "", cl.done ? "feito" : "pendente", cl.fu ? cl.fu.fu_note || "" : ""]).map(c).join(","));
+      });
+    });
     var blob = new Blob(["﻿" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = "minhas-vendas-" + ymd(S.from) + "-a-" + ymd(new Date(S.to.getTime() - DAY)) + ".csv";
+    a.href = URL.createObjectURL(blob); a.download = "meus-clientes-" + ymd(S.from) + "-a-" + ymd(new Date(S.to.getTime() - DAY)) + ".csv";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   });

@@ -171,3 +171,24 @@ span.pp-fu { cursor: default; display: inline-block; }
 .pp-fu-sp { flex: 1; }
 .pp-fu-chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
 .pp-fu-chk input { accent-color: var(--accent); }
+
+/* ---------- clientes agrupados (uma linha por cliente, eventos ao expandir) ---------- */
+.pp-client { cursor: pointer; }
+.pp-client:hover td { background: color-mix(in oklab, var(--accent) 5%, transparent); }
+.pp-client:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pp-client.open td { background: color-mix(in oklab, var(--accent) 7%, transparent); border-bottom-color: transparent; }
+.pp-caret { display: inline-block; width: 14px; margin-right: 4px; color: var(--text-muted); transition: transform .15s; }
+.pp-caret.open { transform: rotate(90deg); color: var(--accent); }
+.pp-evp { display: flex; flex-wrap: wrap; gap: 4px; }
+.pp-st.mini { padding: 1px 7px; font-size: 11px; }
+.pp-ev-row > td { padding: 0 10px 14px 34px; background: color-mix(in oklab, var(--accent) 4%, transparent); text-align: left; }
+.pp-events { border-left: 2px solid color-mix(in oklab, var(--accent) 45%, transparent); padding-left: 12px; overflow-x: auto; }
+.pp-events table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pp-events th { padding: 6px 8px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.pp-events th.l, .pp-events td.l { text-align: left; }
+.pp-events td { padding: 7px 8px; text-align: right; border-bottom: 1px dashed var(--border); vertical-align: top; }
+.pp-events tr:last-child td { border-bottom: 0; }
+.pp-tag { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pp-tag.good { color: var(--good); background: color-mix(in oklab, var(--good) 12%, transparent); }
+.pp-tag.bad { color: var(--critical); background: color-mix(in oklab, var(--critical) 10%, transparent); }
+.pp-fu-new { color: var(--warning); }
