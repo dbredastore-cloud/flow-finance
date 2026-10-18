@@ -17,9 +17,15 @@ Em **business.facebook.com**, confira se a Página e a conta do Instagram estão
 (**Configurações → Contas → Páginas** e **Contas do Instagram**).
 
 ## 4. Criar o app da Meta
-1. Entre em **developers.facebook.com → Meus apps → Criar app**.
-2. Tipo/caso de uso: **Outro → Empresa** (Business). Ligue ao portfólio da Flow.
-3. No app, adicione o produto **Instagram** e escolha a **API com login do Facebook** (Instagram Graph API).
+1. Em **developers.facebook.com**, clique em **Entrar** (canto superior direito) com o Facebook que administra a Página da Flow.
+   Na primeira vez aparece **Começar** (Get Started): conclua o cadastro de desenvolvedor (termos + confirmar telefone/e-mail).
+2. Clique em **Meus apps** (ou abra direto `developers.facebook.com/apps`) → **Criar app**.
+3. Caso de uso: **Outro** (Other) → avançar. Tipo de app: **Empresa** (Business) — só ele aceita o produto Instagram.
+4. Nome (ex.: "Flow Painel"), e-mail de contato e, se pedir, o **portfólio empresarial** da Flow.
+5. No painel do app, em **Adicionar produtos**, clique em **Configurar** no **Instagram** e use a
+   **API com Login do Facebook** (API setup with Facebook Login). Se pedir, adicione também o **Login do Facebook para Empresas**.
+6. Em modo de desenvolvimento o app já funciona para a conta da Flow; a política de privacidade e a análise da Meta só
+   entram na fase 2.
 
 ## 5. Gerar um token que não expira (usuário do sistema)
 1. Em **business.facebook.com → Configurações → Usuários → Usuários do sistema → Adicionar** (função Admin).
