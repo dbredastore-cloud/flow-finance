@@ -138,7 +138,7 @@ window.InfluencerDash = (function () {
   }
   async function start(contractId, ctx) {
     ensureShell();
-    S = { id: contractId, email: ctx.a.email, ctx: ctx, videos: null, snaps: [], scope: ctx.noContract && !ctx.since ? "all" : "contract", type: "all", text: "", sort: { key: "date", dir: -1 }, open: null, busy: false,
+    S = { id: contractId, email: ctx.a.email, ctx: ctx, videos: null, snaps: [], ig: null, scope: ctx.noContract && !ctx.since ? "all" : "contract", type: "all", text: "", sort: { key: "date", dir: -1 }, open: null, busy: false,
       range: { preset: "7d", from: null, to: null }, gran: "day", metric: "subs", qdate: "", dc: null };
     $("fd-full").hidden = false; document.body.classList.add("mr-noscroll"); $("fd-full").scrollTop = 0;
     renderBar();
@@ -157,9 +157,20 @@ window.InfluencerDash = (function () {
       var d = null;
       try { d = await my.ctx.load(); } catch (e) { A.toast("Não foi possível ler os vídeos: " + (e.message || e), true); }
       if (S !== my) return;
-      my.videos = (d && d.videos) || []; my.snaps = (d && d.snaps) || [];
+      my.videos = (d && d.videos) || []; my.snaps = (d && d.snaps) || []; my.ig = (d && d.ig) || null;
       render();
       return;
+    }
+    // Instagram do influencer (instagram-sync): perfil, posts e foto diária de seguidores.
+    if (!my.ctx.hideInsta && my.email) {
+      var ri = await Promise.all([
+        A.sb.from("instagram_accounts").select("username, name, profile_picture_url, followers_count, follows_count, media_count, source, fetched_at, error").eq("affiliate_email", my.email).maybeSingle(),
+        A.sb.from("instagram_media").select("id, media_type, media_product_type, caption, permalink, posted_at, like_count, comments_count, view_count, thumbnail_url, reach, saved, shares")
+          .eq("affiliate_email", my.email).order("posted_at", { ascending: false }).limit(300),
+        A.sb.from("instagram_snapshots").select("day, followers_count").eq("affiliate_email", my.email).order("day")
+      ]);
+      if (S !== my) return;
+      my.ig = ri[0].data ? { account: ri[0].data, media: ri[1].data || [], snaps: ri[2].data || [] } : null;
     }
     if (ch && ch.channel_id) {
       var r = await Promise.all([
@@ -185,6 +196,7 @@ window.InfluencerDash = (function () {
         (nc() ? '<button class="btn" type="button" data-fd="deep" title="Volta 12 meses no tempo (até 500 vídeos; poucas unidades da cota)">⏪ Buscar 12 meses de histórico</button>'
           : '<button class="btn" type="button" data-fd="deep" title="Volta no tempo até o início do contrato (até 500 vídeos; poucas unidades da cota)">⏪ Buscar histórico do contrato</button>') +
         '<button class="btn" type="button" data-fd="csv">Exportar vídeos (CSV)</button>' : "") +
+      (!S.ctx.readOnly && !S.ctx.hideInsta && S.ctx.instagram ? '<button class="btn" type="button" data-fd="ig-sync" title="Relê o perfil e os últimos 50 posts no Instagram">↻ Instagram</button>' : "") +
       (nc() ? "" : '<button class="btn" type="button" data-fd="edit">Editar contrato</button>') +
       (ch ? '<a class="btn btn-primary" href="' + esc(A.channelUrl(ch)) + '" target="_blank" rel="noopener noreferrer">Abrir no YouTube ↗</a>' : "");
   }
@@ -230,7 +242,7 @@ window.InfluencerDash = (function () {
 
     if (!ch) {
       body += '<section class="mr-fsec"><div class="mr-fnote">Este influencer não tem o link do canal do YouTube na ficha. Cadastre no menu <b>Afiliados</b> (clique no nome) e depois clique em <b>Atualizar YouTube</b> para trazer vídeos, views e métricas.</div></section>';
-      if (!S.ctx.hideInsta) body += instaSection();
+      if (!S.ctx.hideInsta) body += instaSection(m);
       $("fd-body").innerHTML = body;
       return;
     }
@@ -292,7 +304,7 @@ window.InfluencerDash = (function () {
           '<td class="num">' + mv.longs.length + '</td><td class="num">' + mv.shorts.length + '</td><td class="num">' + mv.flow.length + '</td>' +
           '<td class="num"><span class="status ' + (okV ? "ok" : r.current ? "wait" : "bad") + '">' + mv.longs.length + "/" + c.youtube_per_month + '</span></td>' +
           '<td class="num"><span class="status ' + (r.okStories ? "ok" : r.current ? "wait" : "bad") + '">' + r.stories + "/" + c.stories_per_month + '</span></td>' +
-          '<td class="num"><span class="status ' + (r.okReels ? "ok" : r.current ? "wait" : "bad") + '">' + r.reels + "/" + c.reels_per_month + '</span></td>' +
+          '<td class="num"><span class="status ' + (r.okReels ? "ok" : r.current ? "wait" : "bad") + '">' + r.reels + "/" + c.reels_per_month + '</span>' + igMonthHint(r) + '</td>' +
           '<td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.cost) + "</td></tr>";
       }).join("") + '</tbody></table></div><p class="mr-hint">Stories e reels são lançados à mão na tela dos contratos (o Instagram ainda não é lido automaticamente). Vídeos e Shorts vêm do YouTube.</p></section>';
 
@@ -303,7 +315,7 @@ window.InfluencerDash = (function () {
     body += '<section class="mr-fsec"><h3>Vídeos do canal</h3><div class="mr-tools" id="fd-tools"></div><div class="table-scroll"><table class="mr-table mr-vtable"><thead id="fd-vhead"></thead><tbody id="fd-vbody"></tbody></table></div><p class="mr-hint" id="fd-vcount"></p></section>';
 
     /* instagram */
-    if (!S.ctx.hideInsta) body += instaSection();
+    if (!S.ctx.hideInsta) body += instaSection(m);
     if (!noC && c.notes) body += '<section class="mr-fsec"><h3>Observações do contrato</h3><p style="margin:0;white-space:pre-wrap;color:var(--text-dim)">' + esc(c.notes) + "</p></section>";
     body += '<p class="mr-hint" style="text-align:center">Dados da YouTube Data API: estatísticas públicas do canal e dos vídeos. As views são as de hoje (não por período). "Menciona a Flow" é lido de título e descrição; o que é falado dentro do vídeo não é detectado.</p>';
     $("fd-body").innerHTML = body;
@@ -374,11 +386,67 @@ window.InfluencerDash = (function () {
   }
 
   /* ---------------- Instagram ---------------- */
-  function instaSection() {
-    var ig = S.ctx.instagram;
-    return '<section class="mr-fsec"><h3>Instagram <small class="muted">stories e reels</small></h3>' +
-      '<p class="mr-hint" style="margin:0 0 8px">' + (ig ? 'Perfil informado na ficha: <a href="' + esc(ig) + '" target="_blank" rel="noopener noreferrer">' + esc(ig.replace(/^https?:\/\/(www\.)?/, "")) + "</a>." : "Nenhum Instagram informado na ficha do influencer.") + "</p>" +
-      '<div class="mr-fnote">O Instagram ainda <b>não é lido automaticamente</b>: stories e reels entregues são lançados à mão na tela dos contratos. Para o painel buscar sozinho (posts, reels, curtidas, alcance, stories), o influencer precisa ter conta <b>profissional</b> (Comercial ou Criador) e autorizar o acesso uma vez pela API oficial da Meta. Posts e reels públicos de contas profissionais também podem ser lidos sem autorização, mas stories e alcance só com a autorização do dono.</div></section>';
+  /* ---------------- Instagram (instagram-sync) ---------------- */
+  var IG_TYPE = { REELS: "Reels", FEED: "Feed", STORY: "Story" };
+  function igKind(p) { return p.media_product_type === "REELS" ? "REELS" : p.media_product_type === "STORY" ? "STORY" : p.media_type === "CAROUSEL_ALBUM" ? "CAROUSEL" : "FEED"; }
+  function igKindLabel(k) { return k === "CAROUSEL" ? "Carrossel" : IG_TYPE[k] || "Feed"; }
+  // Posts do Instagram dentro de [a, b) (ms), por tipo.
+  function igIn(a, b) {
+    var list = ((S.ig && S.ig.media) || []).filter(function (p) { var t = Date.parse(p.posted_at); return t >= a && t < b; });
+    var by = { REELS: [], FEED: [], CAROUSEL: [], STORY: [] };
+    list.forEach(function (p) { by[igKind(p)].push(p); });
+    return { all: list, reels: by.REELS, feed: by.FEED.concat(by.CAROUSEL), carousel: by.CAROUSEL, stories: by.STORY };
+  }
+  // Reels que o Instagram mostra no mês (para conferir com o que foi lançado à mão no contrato).
+  function igMonthHint(r) {
+    if (!S.ig || !S.ig.account || !S.ig.account.username) return "";
+    var x = igIn(new Date(r.year, r.month - 1, 1).getTime(), new Date(r.year, r.month, 1).getTime());
+    return '<div class="muted" style="font-size:11px" title="Lido no Instagram: reels e posts do feed publicados no mês">IG: ' + x.reels.length + " reels · " + x.feed.length + " feed</div>";
+  }
+  function instaSection(m) {
+    var link = S.ctx.instagram, ig = S.ig, acc = ig && ig.account;
+    var head = '<section class="mr-fsec fd-ig"><h3>Instagram <small class="muted">' + (acc && acc.username ? "@" + esc(acc.username) : "posts, reels e engajamento") + "</small></h3>";
+    if (!acc || !acc.username) {
+      var why = acc && acc.error ? "<b>Não foi possível ler este perfil:</b> " + esc(acc.error) :
+        link ? "O perfil está na ficha, mas ainda não foi lido. A leitura automática começa assim que a conta do Instagram da Flow for conectada à API da Meta (o perfil do influencer precisa ser <b>profissional</b>: Comercial ou Criador)." :
+        "Nenhum Instagram informado na ficha do influencer.";
+      return head + (link ? '<p class="mr-hint" style="margin:0 0 8px">Perfil na ficha: <a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">' + esc(String(link).replace(/^https?:\/\/(www\.)?/, "")) + "</a></p>" : "") +
+        '<div class="mr-fnote">' + why + "</div></section>";
+    }
+    var media = ig.media || [], now = Date.now();
+    var w = m && !nc() ? m.w : { start: now - 30 * DAY, end: now };
+    var win = igIn(w.start, w.end + 1);
+    var recent = media.filter(function (p) { return !/STORY/.test(p.media_product_type || ""); }).slice(0, 12);
+    var base = recent.length ? recent : [];
+    var avgL = base.length ? sum(base, function (p) { return p.like_count; }) / base.length : null;
+    var avgC = base.length ? sum(base, function (p) { return p.comments_count; }) / base.length : null;
+    var reelsV = base.filter(function (p) { return igKind(p) === "REELS" && p.view_count != null; });
+    var avgV = reelsV.length ? sum(reelsV, function (p) { return p.view_count; }) / reelsV.length : null;
+    var eng = acc.followers_count && avgL != null ? (avgL + (avgC || 0)) / acc.followers_count : null;
+    var flowRe = /flow[\s\-_.]*(pages?|track(ing)?|spy)/i;
+    var flowPosts = win.all.filter(function (p) { return flowRe.test(p.caption || ""); });
+    var sn = ig.snaps || [], first = sn.filter(function (s) { return Date.parse(s.day + "T12:00:00") >= w.start - DAY; })[0] || sn[0];
+    var gain = first && acc.followers_count != null && first.followers_count != null && first.day !== (sn[sn.length - 1] || {}).day ? acc.followers_count - first.followers_count : null;
+    var period = nc() ? "últimos 30 dias" : "na vigência";
+    var kpis = '<div class="mr-fkpis">' +
+      kf("Seguidores", fmtInt(acc.followers_count), gain != null ? '<b class="' + (gain >= 0 ? "good" : "bad") + '">' + (gain >= 0 ? "+" : "") + fmtInt(gain) + "</b> desde " + new Date(first.day + "T12:00:00").toLocaleDateString("pt-BR") : "histórico começa agora") +
+      kf("Posts " + period, fmtInt(win.all.length - win.stories.length), fmtInt(win.reels.length) + " reels · " + fmtInt(win.feed.length) + " no feed" + (win.carousel.length ? " (" + win.carousel.length + " carrosséis)" : "")) +
+      kf("Curtidas médias", fmtN(avgL), "últimos " + base.length + " posts") +
+      kf("Comentários médios", fmtN(avgC), "últimos " + base.length + " posts") +
+      kf("Visualizações médias", avgV != null ? fmtN(avgV) : "—", reelsV.length ? "nos reels recentes" : "sem reels recentes") +
+      kf("Engajamento", eng != null ? pct(eng, 2) : "—", "(curtidas + comentários) ÷ seguidores") +
+      kf("Citam a Flow", fmtInt(flowPosts.length) + " de " + fmtInt(win.all.length), flowPosts.length ? "legenda com FlowPages, FlowTracking ou FlowSpy" : "nenhuma menção " + period, "Posts " + period + " com o nome de uma ferramenta Flow na legenda.") +
+      kf("Posts no perfil", fmtInt(acc.media_count), acc.fetched_at ? "lido em " + new Date(acc.fetched_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "") +
+      "</div>";
+    var grid = recent.length ? '<div class="fd-ig-grid">' + recent.map(function (p) {
+      var k = igKind(p), fx = flowRe.test(p.caption || "");
+      return '<a class="fd-ig-post" href="' + esc(p.permalink || "#") + '" target="_blank" rel="noopener noreferrer" title="' + esc(String(p.caption || "").slice(0, 300)) + '">' +
+        '<span class="fd-ig-thumb">' + (p.thumbnail_url ? '<img src="' + esc(p.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") + '<span class="fd-ig-kind ' + k.toLowerCase() + '">' + igKindLabel(k) + "</span>" + (fx ? '<span class="fd-ig-flow">Flow</span>' : "") + "</span>" +
+        '<span class="fd-ig-meta"><b>' + fmtDate(Date.parse(p.posted_at)) + "</b><span>♥ " + fmtN(p.like_count) + " · 💬 " + fmtN(p.comments_count) + (p.view_count != null ? " · ▶ " + fmtN(p.view_count) : "") + "</span></span>" +
+        '<span class="fd-ig-cap">' + esc(String(p.caption || "").slice(0, 90)) + "</span></a>";
+    }).join("") + "</div>" : '<div class="mr-fnote">Nenhum post encontrado no perfil.</div>';
+    var phase2 = acc.source === "oauth" ? "" : '<p class="mr-hint" style="margin:12px 0 0">Dados públicos do perfil (curtidas, comentários e visualizações). <b>Stories, alcance, salvamentos e compartilhamentos</b> entram quando o influencer conectar o Instagram dele pelo Portal do Afiliado.</p>';
+    return head + kpis + '<h4 class="mr-sub-h" style="margin-top:14px">Posts recentes</h4>' + grid + phase2 + "</section>";
   }
 
   /* ---------------- gráficos ---------------- */
@@ -805,6 +873,18 @@ window.InfluencerDash = (function () {
     await load();
   }
 
+  async function syncInstagram(btn) {
+    var my = S;
+    btn.disabled = true; btn.textContent = "Lendo o Instagram…";
+    var res = await A.sb.functions.invoke("instagram-sync", { body: { email: my.email } }), data = res.data || {};
+    if (res.error && !data.error) { try { data = await res.error.context.json(); } catch (e) { data = { error: res.error.message }; } }
+    if (S !== my) return;
+    if (!data.ok) A.toast(data.error || "Erro ao ler o Instagram.", true);
+    else if (data.failed) A.toast("Instagram: " + Object.keys(data.errors || {}).map(function (k) { return data.errors[k]; })[0], true);
+    else A.toast("Instagram atualizado: " + fmtInt(data.media) + " posts lidos.");
+    await load();
+  }
+
   function bind() {
     var box = $("fd-full"), tip = $("fd-tip");
     box.addEventListener("click", function (e) {
@@ -815,6 +895,7 @@ window.InfluencerDash = (function () {
         if (k === "refresh") return syncNow(false);
         if (k === "deep") return syncNow(true);
         if (k === "csv") return exportCsv();
+        if (k === "ig-sync") return syncInstagram(act);
         if (k === "edit") { var id = S.id; close(); A.edit(id); return; }
       }
       var rg = e.target.closest("[data-fd-range]");

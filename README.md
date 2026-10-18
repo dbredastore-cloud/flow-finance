@@ -47,6 +47,12 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Coleta: `youtube-sync` lê os favoritos a cada 6 h (junto dos influencers) e, ao favoritar, busca 12 meses de vídeos (`fav_add` / `fav_sync`); cerca de 3 a 5 unidades da cota do YouTube por canal por rodada. Vídeos e fotos diárias ficam em `youtube_videos` e `youtube_channel_snapshots`.
 - Banco: `yt_favorites`, visão `yt_favorites_summary` e função `flow_tool_hits` (migration `20261016_yt_favorites.sql`). Menu de acesso `af.favoritos` (tela Equipe); a estrela só aparece para quem tem esse menu.
 
+## Instagram dos influencers
+
+- `supabase/functions/instagram-sync/` lê o Instagram dos afiliados com o perfil na ficha (`affiliates.instagram`) a cada 6 h (cron `instagram-sync`) ou pelo botão **↻ Instagram** no dashboard do influencer. Fase 1: Business Discovery (dados públicos de contas profissionais: seguidores, posts, reels, curtidas, comentários, visualizações, legendas). Fase 2 (planejada): o influencer conecta o próprio Instagram pelo Portal do Afiliado (stories, alcance, salvamentos); as colunas já existem.
+- Tabelas `instagram_accounts`, `instagram_media`, `instagram_snapshots` e a função `portal_instagram` (migration `20261017_instagram.sql`). Aparece no dashboard do influencer (seção Instagram, com a contagem de reels/feed por mês ao lado das entregas do contrato) e no Portal do Afiliado (Seu Instagram).
+- Configuração da Meta (secrets `IG_ACCESS_TOKEN` e `IG_BUSINESS_ID`): passo a passo em `docs/instagram-meta.md`.
+
 ## Influencers Flow (menu do /afiliados/)
 
 - Influencers contratados: a estrela ☆ ao lado do nome (menu Afiliados ou ficha) cria o contrato em `influencer_contracts` (padrão: fixo, 30% de comissão, bônus de R$ 3.000 ao bater 150 vendas, 12 stories + 1 reels + 1 vídeo no YouTube por mês) e abre os termos para editar. Tirar a estrela só desativa; o histórico fica.

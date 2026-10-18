@@ -564,10 +564,46 @@
     var me = S.me;
     var r = await Promise.all([
       me.has_contract ? rpc("portal_contract").catch(function () { return null; }) : Promise.resolve(null),
-      me.has_channel ? rpc("portal_youtube").catch(function () { return null; }) : Promise.resolve(null)
+      me.has_channel ? rpc("portal_youtube").catch(function () { return null; }) : Promise.resolve(null),
+      me.has_instagram ? rpc("portal_instagram").catch(function () { return null; }) : Promise.resolve(null)
     ]);
-    S.contract = r[0]; S.yt = r[1]; S.extrasLoaded = true;
-    renderContract(); renderChannel();
+    S.contract = r[0]; S.yt = r[1]; S.ig = r[2]; S.extrasLoaded = true;
+    renderContract(); renderChannel(); renderInstagram();
+  }
+
+  /* ---------------- Instagram (dados públicos; fase 2: conectar a conta) ---------------- */
+  function igKind(p) { return p.media_product_type === "REELS" ? "reels" : p.media_product_type === "STORY" ? "story" : p.media_type === "CAROUSEL_ALBUM" ? "carousel" : "feed"; }
+  function renderInstagram() {
+    var el = $("instagram-panel");
+    if (!S.ig || !S.ig.account) { el.hidden = true; return; }
+    var a = S.ig.account, media = S.ig.media || [], now = Date.now();
+    var posts = media.filter(function (p) { return igKind(p) !== "story"; });
+    var last30 = posts.filter(function (p) { return now - Date.parse(p.posted_at) <= 30 * DAY; });
+    var recent = posts.slice(0, 12);
+    var avg = function (list, f) { return list.length ? sum(list, f) / list.length : null; };
+    var reels = recent.filter(function (p) { return igKind(p) === "reels" && p.view_count != null; });
+    var avgL = avg(recent, function (p) { return p.like_count; }), avgC = avg(recent, function (p) { return p.comments_count; });
+    var flowRe = /flow[\s\-_.]*(pages?|track(ing)?|spy)/i, flow90 = posts.filter(function (p) { return now - Date.parse(p.posted_at) <= 90 * DAY && flowRe.test(p.caption || ""); });
+    var sn = S.ig.snaps || [], first = sn.filter(function (x) { return Date.parse(x.day + "T12:00:00") >= now - 30 * DAY; })[0];
+    var growth = first && a.followers_count != null && first.followers_count != null ? a.followers_count - first.followers_count : null;
+    var LBL = { reels: "Reels", feed: "Feed", carousel: "Carrossel", story: "Story" };
+    el.hidden = false;
+    el.innerHTML = '<div class="pp-head"><h2>Seu Instagram</h2><span class="muted">@' + esc(a.username) + (a.fetched_at ? " · atualizado em " + dtt(a.fetched_at) : "") + "</span></div>" +
+      '<div class="pp-kpis pp-kpis-sm">' +
+        '<div class="pp-kpi static"><small>Seguidores</small><b class="num">' + short(a.followers_count) + "</b><span>" + (growth != null ? (growth >= 0 ? "+" : "") + int(growth) + " nos últimos 30 dias" : "&nbsp;") + "</span></div>" +
+        '<div class="pp-kpi static"><small>Posts em 30 dias</small><b class="num">' + int(last30.length) + "</b><span>" + int(last30.filter(function (p) { return igKind(p) === "reels"; }).length) + " reels · " + int(last30.filter(function (p) { return igKind(p) !== "reels"; }).length) + " no feed</span></div>" +
+        '<div class="pp-kpi static"><small>Curtidas médias</small><b class="num">' + short(avgL) + "</b><span>" + short(avgC) + " comentários por post</span></div>" +
+        '<div class="pp-kpi static"><small>Visualizações médias</small><b class="num">' + (reels.length ? short(avg(reels, function (p) { return p.view_count; })) : "—") + "</b><span>nos reels recentes</span></div>" +
+        '<div class="pp-kpi static accent"><small>Citam a Flow (90 dias)</small><b class="num">' + int(flow90.length) + "</b><span>legenda com FlowPages, FlowTracking ou FlowSpy</span></div>" +
+      "</div>" +
+      '<div class="fd-ig-grid">' + recent.map(function (p) {
+        var k = igKind(p);
+        return '<a class="fd-ig-post" href="' + esc(p.permalink || "#") + '" target="_blank" rel="noopener noreferrer" title="' + esc(String(p.caption || "").slice(0, 300)) + '">' +
+          '<span class="fd-ig-thumb">' + (p.thumbnail_url ? '<img src="' + esc(p.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") +
+          '<span class="fd-ig-kind ' + k + '">' + LBL[k] + "</span>" + (flowRe.test(p.caption || "") ? '<span class="fd-ig-flow">Flow</span>' : "") + "</span>" +
+          '<span class="fd-ig-meta"><b>' + dt(p.posted_at) + "</b><span>♥ " + short(p.like_count) + " · 💬 " + short(p.comments_count) + (p.view_count != null ? " · ▶ " + short(p.view_count) : "") + "</span></span></a>";
+      }).join("") + "</div>" +
+      (a.source === "oauth" ? "" : '<p class="muted pp-hint">Dados públicos do seu perfil. Em breve você poderá conectar o seu Instagram aqui para ver também stories, alcance, salvamentos e compartilhamentos.</p>');
   }
   function isShort(v) { return v.is_short != null ? v.is_short : (v.duration_s != null && v.duration_s <= 180); }
 
@@ -659,11 +695,11 @@
     var ch = S.yt.channel, ok = S.sales.filter(function (s) { return groupOf(s.status) === "ok"; });
     window.InfluencerDash.openCtx({
       a: { name: ch.title || S.me.name, email: "" }, c: null, info: null, noContract: true,
-      channel: { c: ch, long: { avgViews: null } }, instagram: null, hideInsta: true, readOnly: true,
+      channel: { c: ch, long: { avgViews: null } }, instagram: S.me.instagram || null, hideInsta: !S.ig, readOnly: true,
       socials: esc(S.me.name || ""), heroNote: "Seu canal no YouTube",
       sales: { count: ok.length, amount: sum(ok, function (s) { return s.amount; }), commission: sum(ok, function (s) { return s.commission; }), label: periodLabel() },
       backLabel: "← Voltar ao portal",
-      load: function () { return Promise.resolve({ videos: S.yt.videos || [], snaps: S.yt.snaps || [] }); }
+      load: function () { return Promise.resolve({ videos: S.yt.videos || [], snaps: S.yt.snaps || [], ig: S.ig }); }
     });
   }
   window.InfluencerDash.init({
