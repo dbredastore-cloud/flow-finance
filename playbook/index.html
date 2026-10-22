@@ -1,0 +1,3013 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Flow Tools Playbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,400&display=swap">
+<style>
+/* === TOKENS === */
+:root{
+  --bg:#f8f8fc;--bg2:#ffffff;--bg3:#eeeef6;--bg4:#e3e3ef;
+  --fg:#1a1a2e;--fg2:#44446a;--fg3:#777799;
+  --accent:#5b52f0;--accent2:#22c55e;--accent3:#ea6c1a;--accent4:#0ea5e9;--accent5:#e11d48;
+  --card:#ffffff;--border:#ddddf0;
+  --spy:#a78bfa;--track:#38bdf8;--pages:#4ade80;
+  --radius:12px;--radius-sm:8px;--radius-lg:16px;
+  --shadow:0 2px 12px rgba(0,0,0,.06);--shadow-lg:0 8px 32px rgba(0,0,0,.1);
+  --sidebar-w:240px;--topbar-h:56px;
+  color-scheme:light;
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--bg4:#22222e;
+    --fg:#e8e8f4;--fg2:#9999bb;--fg3:#55557a;
+    --accent:#6c63ff;--accent2:#4ade80;--accent3:#f97316;--accent4:#38bdf8;--accent5:#f43f5e;
+    --card:#13131c;--border:#2a2a3a;
+    --shadow:0 2px 12px rgba(0,0,0,.3);--shadow-lg:0 8px 32px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--bg4:#22222e;
+  --fg:#e8e8f4;--fg2:#9999bb;--fg3:#55557a;
+  --accent:#6c63ff;--accent2:#4ade80;--accent3:#f97316;--accent4:#38bdf8;--accent5:#f43f5e;
+  --card:#13131c;--border:#2a2a3a;
+  --shadow:0 2px 12px rgba(0,0,0,.3);--shadow-lg:0 8px 32px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f8f8fc;--bg2:#ffffff;--bg3:#eeeef6;--bg4:#e3e3ef;
+  --fg:#1a1a2e;--fg2:#44446a;--fg3:#777799;
+  --accent:#5b52f0;--accent2:#22c55e;--accent3:#ea6c1a;--accent4:#0ea5e9;--accent5:#e11d48;
+  --card:#ffffff;--border:#ddddf0;
+  color-scheme:light;
+}
+
+/* === BASE === */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px}
+body{
+  font-family:'DM Sans',system-ui,sans-serif;
+  background:var(--bg);color:var(--fg);
+  line-height:1.65;min-height:100vh;
+  padding-top:var(--topbar-h);
+  padding-left:max(0px,env(safe-area-inset-left,0px));
+  padding-right:max(0px,env(safe-area-inset-right,0px));
+}
+
+/* === TOPBAR === */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar-h);
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  padding:0 16px 0 max(16px,env(safe-area-inset-left,0px));
+  z-index:100;
+  padding-top:env(safe-area-inset-top,0px);
+}
+.topbar-logo{
+  font-family:'Fraunces',serif;font-size:1.1rem;font-weight:600;
+  background:linear-gradient(135deg,var(--accent),var(--accent4));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;white-space:nowrap;
+}
+.topbar-badge{
+  font-family:'DM Mono',monospace;font-size:.65rem;font-weight:500;
+  background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;
+  letter-spacing:.04em;
+}
+.topbar-spacer{flex:1}
+.topbar-search{
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:6px 12px;min-width:180px;max-width:260px;
+}
+.topbar-search input{
+  background:none;border:none;outline:none;color:var(--fg);
+  font-family:'DM Sans',sans-serif;font-size:.85rem;width:100%;
+}
+.topbar-search input::placeholder{color:var(--fg3)}
+.topbar-btn{
+  background:none;border:none;cursor:pointer;color:var(--fg2);
+  padding:6px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,color .15s;
+}
+.topbar-btn:hover{background:var(--bg3);color:var(--fg)}
+.menu-btn{display:none}
+@media(max-width:768px){.menu-btn{display:flex}.topbar-search{display:none}}
+
+/* === SIDEBAR === */
+.sidebar{
+  position:fixed;top:var(--topbar-h);left:0;bottom:0;
+  width:var(--sidebar-w);
+  background:var(--bg2);border-right:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;z-index:50;
+  transition:transform .25s ease;
+  padding-left:env(safe-area-inset-left,0px);
+}
+.sidebar-inner{padding:12px 0 24px}
+.nav-group{margin-bottom:4px}
+.nav-group-label{
+  font-family:'DM Mono',monospace;font-size:.65rem;font-weight:500;
+  text-transform:uppercase;letter-spacing:.1em;
+  color:var(--fg3);padding:12px 16px 4px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 16px;cursor:pointer;
+  font-size:.875rem;font-weight:400;color:var(--fg2);
+  border-radius:0;transition:background .12s,color .12s;
+  border:none;background:none;width:100%;text-align:left;
+}
+.nav-item:hover{background:var(--bg3);color:var(--fg)}
+.nav-item.active{
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  color:var(--accent);font-weight:500;
+  border-right:2px solid var(--accent);
+}
+.nav-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  background:var(--fg3);
+}
+.nav-item.active .nav-dot{background:var(--accent)}
+.nav-dot.spy{background:var(--spy)}
+.nav-dot.track{background:var(--track)}
+.nav-dot.pages{background:var(--pages)}
+.nav-dot.cultura{background:#f97316}
+.nav-dot.setor{background:#6c63ff}
+.nav-dot.analista{background:#f43f5e}
+.nav-dot.tools{background:#38bdf8}
+.nav-dot.onboarding{background:#4ade80}
+.nav-dot.glossario{background:#a78bfa}
+
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49;
+  }
+  .sidebar-overlay.show{display:block}
+}
+
+/* === MAIN CONTENT === */
+.main{
+  margin-left:var(--sidebar-w);
+  min-height:calc(100vh - var(--topbar-h));
+  padding:32px max(24px,env(safe-area-inset-right,0px)) 64px max(24px,env(safe-area-inset-left,0px));
+}
+@media(max-width:768px){.main{margin-left:0;padding:20px 16px 48px}}
+.page{display:none}
+.page.active{display:block}
+
+/* === TYPOGRAPHY === */
+h1{font-family:'Fraunces',serif;font-size:2rem;font-weight:600;line-height:1.2;
+   text-wrap:balance;margin-bottom:8px}
+h2{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;line-height:1.3;
+   text-wrap:balance;margin:32px 0 12px}
+h3{font-size:1.05rem;font-weight:600;line-height:1.4;text-wrap:balance;margin:24px 0 8px}
+h4{font-size:.9rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+   color:var(--fg3);margin:20px 0 6px}
+p{margin-bottom:12px;color:var(--fg2)}
+p:last-child{margin-bottom:0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:'DM Mono',monospace;font-size:.82em;
+     background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--fg)}
+
+/* === PAGE HEADER === */
+.page-header{margin-bottom:32px}
+.page-eyebrow{
+  font-family:'DM Mono',monospace;font-size:.7rem;font-weight:500;
+  text-transform:uppercase;letter-spacing:.1em;
+  color:var(--accent);margin-bottom:8px;
+}
+.page-desc{color:var(--fg2);font-size:.95rem;max-width:600px}
+.page-meta{
+  display:flex;align-items:center;gap:12px;margin-top:16px;
+  flex-wrap:wrap;
+}
+.chip{
+  font-family:'DM Mono',monospace;font-size:.68rem;
+  background:var(--bg3);border:1px solid var(--border);
+  padding:3px 10px;border-radius:20px;color:var(--fg2);
+  letter-spacing:.03em;
+}
+.chip.green{background:color-mix(in srgb,var(--accent2) 15%,transparent);
+  border-color:color-mix(in srgb,var(--accent2) 30%,transparent);color:var(--accent2)}
+.chip.blue{background:color-mix(in srgb,var(--accent4) 15%,transparent);
+  border-color:color-mix(in srgb,var(--accent4) 30%,transparent);color:var(--accent4)}
+.chip.orange{background:color-mix(in srgb,var(--accent3) 15%,transparent);
+  border-color:color-mix(in srgb,var(--accent3) 30%,transparent);color:var(--accent3)}
+.chip.red{background:color-mix(in srgb,var(--accent5) 15%,transparent);
+  border-color:color-mix(in srgb,var(--accent5) 30%,transparent);color:var(--accent5)}
+.chip.purple{background:color-mix(in srgb,var(--spy) 15%,transparent);
+  border-color:color-mix(in srgb,var(--spy) 30%,transparent);color:var(--spy)}
+
+/* === STAT CARDS === */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:20px 0}
+.stat-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);
+}
+.stat-card .stat-val{
+  font-family:'Fraunces',serif;font-size:2.2rem;font-weight:600;
+  line-height:1;margin-bottom:6px;
+}
+.stat-card .stat-label{font-size:.8rem;color:var(--fg3);text-transform:uppercase;
+  letter-spacing:.06em;font-family:'DM Mono',monospace}
+.stat-card .stat-sub{font-size:.8rem;color:var(--fg2);margin-top:4px}
+
+/* === SECTION CARDS === */
+.section-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:24px;box-shadow:var(--shadow);margin-bottom:16px;
+}
+.section-card h3{margin-top:0}
+
+/* === PRODUCT CARDS === */
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0}
+.product-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:24px;box-shadow:var(--shadow);cursor:pointer;
+  transition:box-shadow .2s,transform .15s;position:relative;overflow:hidden;
+}
+.product-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.product-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+}
+.product-card.spy::before{background:var(--spy)}
+.product-card.track::before{background:var(--track)}
+.product-card.pages::before{background:var(--pages)}
+.product-icon{
+  width:44px;height:44px;border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.4rem;margin-bottom:14px;
+}
+.product-card.spy .product-icon{background:color-mix(in srgb,var(--spy) 15%,transparent)}
+.product-card.track .product-icon{background:color-mix(in srgb,var(--track) 15%,transparent)}
+.product-card.pages .product-icon{background:color-mix(in srgb,var(--pages) 15%,transparent)}
+.product-card h3{margin:0 0 6px;font-size:1.05rem}
+.product-card p{font-size:.85rem;color:var(--fg2);margin:0}
+
+/* === FLOW DIAGRAM === */
+.flow-wrap{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0}
+.flow-box{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 16px;
+  font-size:.85rem;font-weight:500;white-space:nowrap;
+}
+.flow-box.accent{background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent)}
+.flow-box.green{background:color-mix(in srgb,var(--accent2) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent2) 30%,transparent);color:var(--accent2)}
+.flow-box.blue{background:color-mix(in srgb,var(--accent4) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent4) 30%,transparent);color:var(--accent4)}
+.flow-box.orange{background:color-mix(in srgb,var(--accent3) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent3) 30%,transparent);color:var(--accent3)}
+.flow-box.red{background:color-mix(in srgb,var(--accent5) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent5) 30%,transparent);color:var(--accent5)}
+.flow-arrow{color:var(--fg3);font-size:1.2rem;flex-shrink:0}
+
+/* === TABLES === */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);
+  border:1px solid var(--border);margin:16px 0}
+.styled-table{width:100%;border-collapse:collapse;font-size:.875rem}
+.styled-table th{
+  background:var(--bg3);color:var(--fg2);font-weight:600;
+  font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;
+  padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);
+}
+.styled-table td{
+  padding:11px 14px;border-bottom:1px solid var(--border);
+  color:var(--fg2);vertical-align:top;
+}
+.styled-table tr:last-child td{border-bottom:none}
+.styled-table tr:hover td{background:var(--bg3)}
+.badge{
+  display:inline-block;font-family:'DM Mono',monospace;font-size:.68rem;
+  padding:2px 8px;border-radius:20px;font-weight:500;
+}
+.badge-green{background:color-mix(in srgb,var(--accent2) 15%,transparent);color:var(--accent2)}
+.badge-blue{background:color-mix(in srgb,var(--accent4) 15%,transparent);color:var(--accent4)}
+.badge-orange{background:color-mix(in srgb,var(--accent3) 15%,transparent);color:var(--accent3)}
+.badge-red{background:color-mix(in srgb,var(--accent5) 15%,transparent);color:var(--accent5)}
+.badge-purple{background:color-mix(in srgb,var(--spy) 15%,transparent);color:var(--spy)}
+.badge-gray{background:var(--bg4);color:var(--fg3)}
+
+/* === CHECKLIST === */
+.checklist{list-style:none;margin:12px 0}
+.checklist li{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--border);
+  font-size:.9rem;color:var(--fg2);
+}
+.checklist li:last-child{border-bottom:none}
+.check-icon{
+  width:18px;height:18px;border-radius:50%;border:2px solid var(--border);
+  flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;color:transparent;
+}
+.check-icon.done{
+  background:var(--accent2);border-color:var(--accent2);color:#fff;
+}
+
+/* === ACCORDION === */
+.accordion{margin:8px 0}
+.accordion-item{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius-sm);margin-bottom:6px;overflow:hidden;
+}
+.accordion-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;cursor:pointer;
+  font-size:.9rem;font-weight:500;color:var(--fg);
+  background:none;border:none;width:100%;text-align:left;
+  transition:background .12s;
+}
+.accordion-header:hover{background:var(--bg3)}
+.accordion-arrow{color:var(--fg3);transition:transform .2s;flex-shrink:0}
+.accordion-body{
+  display:none;padding:0 16px 16px;
+  font-size:.875rem;color:var(--fg2);line-height:1.7;
+}
+.accordion-item.open .accordion-body{display:block}
+.accordion-item.open .accordion-arrow{transform:rotate(180deg)}
+
+/* === TIMELINE === */
+.timeline{margin:16px 0}
+.timeline-item{
+  display:flex;gap:16px;padding-bottom:24px;position:relative;
+}
+.timeline-item:not(:last-child) .timeline-line{
+  position:absolute;left:15px;top:32px;bottom:0;
+  width:2px;background:var(--border);
+}
+.timeline-dot{
+  width:32px;height:32px;border-radius:50%;
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border:2px solid var(--accent);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'DM Mono',monospace;font-size:.7rem;font-weight:600;color:var(--accent);
+  z-index:1;
+}
+.timeline-content{flex:1;min-width:0}
+.timeline-title{font-weight:600;margin-bottom:4px}
+.timeline-desc{font-size:.875rem;color:var(--fg2)}
+
+/* === RULE CARDS === */
+.rule-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin:16px 0}
+.rule-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);
+}
+.rule-card .rule-icon{font-size:1.5rem;margin-bottom:10px}
+.rule-card h3{margin:0 0 8px;font-size:.95rem}
+.rule-card p{font-size:.85rem;color:var(--fg2);margin:0}
+
+/* === KPI CARDS === */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 0}
+.kpi-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);
+}
+.kpi-card .kpi-num{
+  font-family:'Fraunces',serif;font-size:2rem;font-weight:600;
+  line-height:1;color:var(--accent);margin-bottom:4px;
+}
+.kpi-card .kpi-label{font-size:.78rem;color:var(--fg3);text-transform:uppercase;
+  letter-spacing:.07em;font-family:'DM Mono',monospace}
+.kpi-card .kpi-desc{font-size:.82rem;color:var(--fg2);margin-top:6px}
+
+/* === SLA CARDS === */
+.sla-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:16px 0}
+.sla-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;border-top:3px solid;box-shadow:var(--shadow);
+}
+.sla-card.critical{border-top-color:var(--accent5)}
+.sla-card.high{border-top-color:var(--accent3)}
+.sla-card.normal{border-top-color:var(--accent4)}
+.sla-card.low{border-top-color:var(--accent2)}
+.sla-card .sla-time{
+  font-family:'Fraunces',serif;font-size:1.8rem;font-weight:600;line-height:1;
+  margin-bottom:4px;
+}
+.sla-card .sla-type{font-size:.78rem;color:var(--fg3);text-transform:uppercase;
+  letter-spacing:.07em;font-family:'DM Mono',monospace}
+.sla-card .sla-desc{font-size:.83rem;color:var(--fg2);margin-top:8px}
+
+/* === TEAM CARDS === */
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 0}
+.team-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;text-align:center;box-shadow:var(--shadow);
+}
+.team-avatar{
+  width:56px;height:56px;border-radius:50%;margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;
+  color:#fff;
+}
+.team-card h3{margin:0 0 4px;font-size:.95rem}
+.team-card .team-role{font-size:.8rem;color:var(--fg3);margin-bottom:8px}
+.team-card .team-tags{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.team-tag{
+  font-size:.68rem;font-family:'DM Mono',monospace;
+  background:var(--bg3);border:1px solid var(--border);
+  padding:2px 8px;border-radius:20px;color:var(--fg2);
+}
+
+/* === DEMAND CARDS === */
+.demand-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;box-shadow:var(--shadow);margin-bottom:10px;
+  display:flex;gap:14px;align-items:flex-start;
+}
+.demand-card .demand-icon{font-size:1.4rem;flex-shrink:0}
+.demand-card h3{margin:0 0 4px;font-size:.9rem}
+.demand-card p{font-size:.83rem;color:var(--fg2);margin:0}
+
+/* === PHASE CARDS (Onboarding) === */
+.phase-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:16px 0}
+.phase-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow);border-top:3px solid;
+}
+.phase-card.week1{border-top-color:var(--accent4)}
+.phase-card.week2{border-top-color:var(--accent)}
+.phase-card.week3{border-top-color:var(--accent2)}
+.phase-card.week4{border-top-color:var(--spy)}
+.phase-card .phase-label{
+  font-family:'DM Mono',monospace;font-size:.68rem;font-weight:500;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--fg3);margin-bottom:6px;
+}
+.phase-card h3{margin:0 0 12px;font-size:.95rem}
+.phase-list{list-style:none}
+.phase-list li{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:.83rem;color:var(--fg2);padding:4px 0;
+}
+.phase-list li::before{
+  content:'→';color:var(--accent4);flex-shrink:0;margin-top:1px;
+}
+
+/* === MILESTONE CARDS (30/60/90) === */
+.milestone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin:20px 0}
+.milestone-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow);
+}
+.milestone-card .milestone-days{
+  font-family:'Fraunces',serif;font-size:2.5rem;font-weight:600;
+  line-height:1;margin-bottom:2px;
+}
+.milestone-card .milestone-label{
+  font-family:'DM Mono',monospace;font-size:.68rem;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--fg3);margin-bottom:12px;
+}
+.milestone-card .milestone-goal{
+  font-size:.9rem;font-weight:500;color:var(--fg);margin-bottom:10px;
+}
+.milestone-list{list-style:none}
+.milestone-list li{
+  font-size:.82rem;color:var(--fg2);padding:3px 0;
+  display:flex;align-items:flex-start;gap:6px;
+}
+.milestone-list li::before{content:'✓';color:var(--accent2);font-size:.75rem;flex-shrink:0;margin-top:2px}
+
+/* === CULTURA PILLAR CARDS === */
+.pillar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:20px 0}
+.pillar-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow);
+  border-top:3px solid;
+}
+.pillar-card:nth-child(1){border-top-color:var(--accent)}
+.pillar-card:nth-child(2){border-top-color:var(--accent3)}
+.pillar-card:nth-child(3){border-top-color:var(--accent4)}
+.pillar-card:nth-child(4){border-top-color:var(--accent2)}
+.pillar-card:nth-child(5){border-top-color:var(--spy)}
+.pillar-icon{font-size:1.8rem;margin-bottom:10px}
+.pillar-card h3{margin:0 0 8px;font-size:1rem}
+.pillar-card p{font-size:.85rem;color:var(--fg2);margin:0 0 12px}
+.pillar-examples{font-size:.78rem;color:var(--fg3);font-style:italic;border-top:1px solid var(--border);padding-top:10px}
+
+/* === GLOSSARY === */
+.glossary-item{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:16px;margin-bottom:8px;
+}
+.glossary-term{
+  font-family:'DM Mono',monospace;font-size:.85rem;font-weight:500;
+  color:var(--accent);margin-bottom:4px;
+}
+.glossary-def{font-size:.875rem;color:var(--fg2)}
+
+/* === SEARCH HIGHLIGHT === */
+.search-hidden{display:none!important}
+mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
+  color:inherit;padding:1px 2px;border-radius:3px}
+
+/* === DIVIDER === */
+.divider{height:1px;background:var(--border);margin:28px 0}
+
+/* === INFO BOX === */
+.info-box{
+  background:color-mix(in srgb,var(--accent4) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent4) 30%,transparent);
+  border-radius:var(--radius-sm);padding:14px 16px;margin:16px 0;
+  font-size:.875rem;color:var(--fg2);
+}
+.info-box.warning{
+  background:color-mix(in srgb,var(--accent3) 10%,transparent);
+  border-color:color-mix(in srgb,var(--accent3) 30%,transparent);
+}
+.info-box.success{
+  background:color-mix(in srgb,var(--accent2) 10%,transparent);
+  border-color:color-mix(in srgb,var(--accent2) 30%,transparent);
+}
+.info-box strong{color:var(--fg)}
+
+/* === LANG TOGGLE === */
+[data-lang="en"] .pt{display:none}
+[data-lang="pt"] .en{display:none}
+</style>
+
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<header class="topbar">
+  <button class="topbar-btn menu-btn" onclick="toggleSidebar()" aria-label="Menu">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect y="2" width="18" height="2" rx="1" fill="currentColor"/>
+      <rect y="8" width="18" height="2" rx="1" fill="currentColor"/>
+      <rect y="14" width="18" height="2" rx="1" fill="currentColor"/>
+    </svg>
+  </button>
+  <span class="topbar-logo">Flow Tools</span>
+  <span class="topbar-badge">v3.0.0</span>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M9.5 9.5L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <input type="text" placeholder="Buscar..." id="searchInput" oninput="handleSearch(this.value)">
+  </div>
+  <button class="topbar-btn" onclick="toggleTheme()" title="Alternar tema">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 1V2M8 14V15M1 8H2M14 8H15M3.22 3.22L3.93 3.93M12.07 12.07L12.78 12.78M3.22 12.78L3.93 12.07M12.07 3.93L12.78 3.22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/>
+    </svg>
+  </button>
+</header>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-inner">
+
+    <div class="nav-group">
+      <div class="nav-group-label">Plataforma</div>
+      <button class="nav-item active" onclick="showPage('overview')">
+        <span class="nav-dot"></span>Visão Geral
+      </button>
+      <button class="nav-item" onclick="showPage('flowspy')">
+        <span class="nav-dot spy"></span>FlowSpy
+      </button>
+      <button class="nav-item" onclick="showPage('flowtracking')">
+        <span class="nav-dot track"></span>FlowTracking
+      </button>
+      <button class="nav-item" onclick="showPage('flowpages')">
+        <span class="nav-dot pages"></span>FlowPages
+      </button>
+      <button class="nav-item" onclick="showPage('team')">
+        <span class="nav-dot"></span>Time
+      </button>
+      <button class="nav-item" onclick="showPage('demands')">
+        <span class="nav-dot"></span>Demandas
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Cultura & Equipe</div>
+      <button class="nav-item" onclick="showPage('cultura')">
+        <span class="nav-dot cultura"></span>Cultura Flow
+      </button>
+      <button class="nav-item" onclick="showPage('setor')">
+        <span class="nav-dot setor"></span>Sobre o Setor
+      </button>
+      <button class="nav-item" onclick="showPage('analista')">
+        <span class="nav-dot analista"></span>Analista de Produto
+      </button>
+      <button class="nav-item" onclick="showPage('ferramentas')">
+        <span class="nav-dot tools"></span>Ferramentas
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Processos</div>
+      <button class="nav-item" onclick="showPage('bugs')">
+        <span class="nav-dot"></span>Bugs
+      </button>
+      <button class="nav-item" onclick="showPage('improvements')">
+        <span class="nav-dot"></span>Melhorias
+      </button>
+      <button class="nav-item" onclick="showPage('features')">
+        <span class="nav-dot"></span>Funcionalidades
+      </button>
+      <button class="nav-item" onclick="showPage('fluxo')">
+        <span class="nav-dot orange"></span>Fluxo de Demandas
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Operações</div>
+      <button class="nav-item" onclick="showPage('standards')">
+        <span class="nav-dot"></span>Padrões
+      </button>
+      <button class="nav-item" onclick="showPage('slas')">
+        <span class="nav-dot"></span>SLAs
+      </button>
+      <button class="nav-item" onclick="showPage('routines')">
+        <span class="nav-dot"></span>Rotinas
+      </button>
+      <button class="nav-item" onclick="showPage('kpis')">
+        <span class="nav-dot"></span>KPIs
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Qualidade & Governança</div>
+      <button class="nav-item" onclick="showPage('qa')">
+        <span class="nav-dot"></span>QA Checklist
+      </button>
+      <button class="nav-item" onclick="showPage('governance')">
+        <span class="nav-dot"></span>Governança
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Estratégia</div>
+      <button class="nav-item" onclick="showPage('backlog')">
+        <span class="nav-dot"></span>Backlog
+      </button>
+      <button class="nav-item" onclick="showPage('roadmap')">
+        <span class="nav-dot"></span>Roadmap
+      </button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Referência</div>
+      <button class="nav-item" onclick="showPage('onboarding')">
+        <span class="nav-dot onboarding"></span>Onboarding
+      </button>
+      <button class="nav-item" onclick="showPage('glossario')">
+        <span class="nav-dot glossario"></span>Glossário
+      </button>
+    </div>
+
+  </div>
+</nav>
+
+<main class="main" id="main">
+
+<!-- ===================== PAGE: OVERVIEW ===================== -->
+<section class="page active" id="page-overview">
+  <div class="page-header">
+    <div class="page-eyebrow">Plataforma</div>
+    <h1>Flow Tools</h1>
+    <p class="page-desc">Playbook oficial do setor de produto. Tudo que você precisa saber para operar, evoluir e entregar com excelência as três ferramentas da Flow.</p>
+    <div class="page-meta">
+      <span class="chip green">v3.0.0</span>
+      <span class="chip blue">3 produtos ativos</span>
+      <span class="chip">TB Negócios Digitais</span>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--spy)">FlowSpy</div>
+      <div class="stat-label">Monitoramento</div>
+      <div class="stat-sub">Análise de concorrentes e mercado</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--track)">FlowTracking</div>
+      <div class="stat-label">Rastreamento</div>
+      <div class="stat-sub">Tracking de afiliados e campanhas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--pages)">FlowPages</div>
+      <div class="stat-label">Páginas</div>
+      <div class="stat-sub">Criação de páginas de afiliados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">Biancode</div>
+      <div class="stat-label">Parceiro Dev</div>
+      <div class="stat-sub">Sprint manager + 2 devs</div>
+    </div>
+  </div>
+
+  <h2>Os Três Produtos</h2>
+  <div class="product-grid">
+    <div class="product-card spy" onclick="showPage('flowspy')">
+      <div class="product-icon">🔍</div>
+      <h3 style="color:var(--spy)">FlowSpy</h3>
+      <p>Ferramenta de monitoramento de concorrentes e espionagem de estratégias de marketing digital. Permite que afiliados e produtores vejam o que está funcionando no mercado.</p>
+    </div>
+    <div class="product-card track" onclick="showPage('flowtracking')">
+      <div class="product-icon">📊</div>
+      <h3 style="color:var(--track)">FlowTracking</h3>
+      <p>Plataforma de rastreamento de campanhas de afiliados. Monitora cliques, conversões e ROI de links e campanhas de divulgação em tempo real.</p>
+    </div>
+    <div class="product-card pages" onclick="showPage('flowpages')">
+      <div class="product-icon">📄</div>
+      <h3 style="color:var(--pages)">FlowPages</h3>
+      <p>Criador de páginas otimizadas para afiliados. Permite criar landing pages, páginas de review e de comparação de produtos sem código.</p>
+    </div>
+  </div>
+
+  <h2>Fluxo de Operação</h2>
+  <div class="flow-wrap">
+    <div class="flow-box accent">Daniel (PM)</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Notion (Backlog)</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box blue">Biancode</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box green">Deploy</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box orange">Slack Mktg</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Usuários</div>
+  </div>
+
+  <h2>Princípios Fundamentais</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📐</div>
+      <h3>Dado antes de opinião</h3>
+      <p>Toda decisão de produto é embasada em dados de uso, pesquisa com usuários ou análise de mercado. Intuição complementa, nunca substitui.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🚀</div>
+      <h3>Velocidade com qualidade</h3>
+      <p>Entregar rápido não significa entregar mal. O QA é parte do fluxo, não um obstáculo. Nenhuma atualização vai ao ar sem validação.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">👤</div>
+      <h3>Foco no usuário</h3>
+      <p>O afiliado e o produtor são o centro de tudo. Cada funcionalidade nova passa pelo filtro: isso resolve um problema real do nosso usuário?</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔁</div>
+      <h3>Melhoria contínua</h3>
+      <p>Nenhum produto está acabado. Cada sprint é uma oportunidade de aprender, ajustar e evoluir com base em feedback real.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: FLOWSPY ===================== -->
+<section class="page" id="page-flowspy">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--spy)">Produto</div>
+    <h1 style="color:var(--spy)">FlowSpy</h1>
+    <p class="page-desc">Ferramenta de inteligência competitiva para o mercado de afiliados e marketing digital.</p>
+    <div class="page-meta">
+      <span class="chip purple">Monitoramento</span>
+      <span class="chip">Afiliados & Produtores</span>
+    </div>
+  </div>
+
+  <h2>O que é o FlowSpy</h2>
+  <div class="section-card">
+    <p>O FlowSpy é uma plataforma de espionagem de estratégias de marketing digital. Permite que afiliados e produtores monitorem criativos, landing pages, anúncios e estratégias dos concorrentes no mercado de infoprodutos e afiliação.</p>
+    <p>O produto se posiciona como ferramenta essencial para quem quer copiar o que está funcionando antes de investir em tráfego pago, reduzindo risco e acelerando resultados.</p>
+  </div>
+
+  <h2>Funcionalidades Core</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🎯 Monitoramento de Criativos
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Captura e catalogação de anúncios em execução. O usuário consegue ver quais criativos (imagens, vídeos, copies) seus concorrentes estão usando em campanhas pagas, por quanto tempo cada criativo está no ar, e inferir quais estão convertendo melhor.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔗 Spy de Landing Pages
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Visualização de páginas de vendas e captura da concorrência. Permite entender estruturas de oferta, elementos de persuasão, provas sociais e CTAs que estão sendo utilizados no mercado.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        📈 Análise de Tendências
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Identificação de nichos em alta, produtos mais promovidos e sazonalidades do mercado. Ajuda o usuário a entrar em nichos com demanda validada antes de criar conteúdo ou produto.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔍 Busca Avançada
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Filtros por nicho, plataforma, tipo de anúncio, tempo de veiculação e mais. Permite encontrar rapidamente padrões e inspirações para campanhas próprias.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Usuário Ideal (ICP)</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Perfil</th><th>Caso de Uso Principal</th><th>Valor Gerado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Afiliado iniciante</strong></td><td>Encontrar criativos para copiar e adaptar</td><td>Reduz curva de aprendizado e desperdício de verba</td></tr>
+        <tr><td><strong>Afiliado avançado</strong></td><td>Monitorar concorrência e identificar oportunidades</td><td>Vantagem competitiva e decisões mais rápidas</td></tr>
+        <tr><td><strong>Produtor digital</strong></td><td>Analisar como concorrentes posicionam produtos similares</td><td>Melhoria de oferta e posicionamento</td></tr>
+        <tr><td><strong>Gestor de tráfego</strong></td><td>Pesquisa de criativos e landing pages para clientes</td><td>Entrega de resultado mais rápido aos clientes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>KPIs do Produto</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-num" style="color:var(--spy)">DAU</div>
+      <div class="kpi-label">Usuários Ativos/Dia</div>
+      <div class="kpi-desc">Engagement diário com a plataforma</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num" style="color:var(--spy)">Churn</div>
+      <div class="kpi-label">Taxa de Cancelamento</div>
+      <div class="kpi-desc">Meta: manter abaixo de 5%/mês</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num" style="color:var(--spy)">NPS</div>
+      <div class="kpi-label">Net Promoter Score</div>
+      <div class="kpi-desc">Satisfação e indicação do produto</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num" style="color:var(--spy)">MRR</div>
+      <div class="kpi-label">Receita Recorrente</div>
+      <div class="kpi-desc">Crescimento mês a mês</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: FLOWTRACKING ===================== -->
+<section class="page" id="page-flowtracking">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--track)">Produto</div>
+    <h1 style="color:var(--track)">FlowTracking</h1>
+    <p class="page-desc">Plataforma de rastreamento de campanhas e links para afiliados e gestores de tráfego.</p>
+    <div class="page-meta">
+      <span class="chip blue">Rastreamento</span>
+      <span class="chip">Afiliados & Gestores de Tráfego</span>
+    </div>
+  </div>
+
+  <h2>O que é o FlowTracking</h2>
+  <div class="section-card">
+    <p>O FlowTracking é uma plataforma de rastreamento de links e campanhas de afiliados. Permite monitorar em tempo real o desempenho de cada link, fonte de tráfego, criativo e campanha, centralizando dados que normalmente ficam dispersos entre diferentes plataformas de anúncio.</p>
+    <p>O produto resolve o principal problema dos afiliados: saber exatamente de onde vêm suas vendas e qual criativo, público ou fonte gera o melhor ROI.</p>
+  </div>
+
+  <h2>Funcionalidades Core</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔗 Encurtador e Rastreador de Links
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Criação de links rastreáveis com parâmetros UTM automáticos. Cada clique é registrado com dados de origem, dispositivo, horário e geolocalização. Possibilita comparar diferentes fontes de tráfego de forma centralizada.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        📊 Dashboard de Performance em Tempo Real
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Painel unificado com cliques, conversões, CTR, CPC, CPA e ROI por campanha. O afiliado não precisa mais abrir 5 abas de diferentes plataformas para entender seus resultados.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔄 Rotação de Links (A/B)
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Teste A/B automático entre diferentes ofertas, páginas ou criativos. Um único link distribui o tráfego entre variações e aponta qual converte melhor, eliminando a dependência de testes manuais.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🛡️ Proteção de Links
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Cloak de links para evitar suspensão em plataformas de anúncio. Filtros de bots e cliques inválidos para que os dados de conversão sejam confiáveis e o budget não seja desperdiçado.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Usuário Ideal (ICP)</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Perfil</th><th>Caso de Uso Principal</th><th>Valor Gerado</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Afiliado com tráfego pago</strong></td><td>Saber qual anúncio e criativo gera mais venda</td><td>Otimização de budget e escala das campanhas vencedoras</td></tr>
+        <tr><td><strong>Gestor de tráfego</strong></td><td>Reportar resultados de campanhas para clientes</td><td>Dashboard unificado e relatórios profissionais</td></tr>
+        <tr><td><strong>Afiliado multi-nicho</strong></td><td>Gerenciar dezenas de campanhas simultaneamente</td><td>Organização e visibilidade total do portfólio</td></tr>
+        <tr><td><strong>Time de marketing</strong></td><td>Centralizar dados de múltiplas fontes</td><td>Decisões mais rápidas e baseadas em dados únicos</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Integrações Principais</h2>
+  <div class="flow-wrap">
+    <div class="flow-box blue">Meta Ads</div>
+    <div class="flow-box blue">Google Ads</div>
+    <div class="flow-box blue">TikTok Ads</div>
+    <div class="flow-box">Hotmart</div>
+    <div class="flow-box">Monetizze</div>
+    <div class="flow-box">Eduzz</div>
+    <div class="flow-box green">Kiwify</div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: FLOWPAGES ===================== -->
+<section class="page" id="page-flowpages">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--pages)">Produto</div>
+    <h1 style="color:var(--pages)">FlowPages</h1>
+    <p class="page-desc">Criador de páginas otimizadas para afiliados, sem necessidade de código ou design.</p>
+    <div class="page-meta">
+      <span class="chip green">Páginas</span>
+      <span class="chip">Afiliados & Criadores de Conteúdo</span>
+    </div>
+  </div>
+
+  <h2>O que é o FlowPages</h2>
+  <div class="section-card">
+    <p>O FlowPages é um construtor de páginas focado no mercado de afiliados. Permite criar landing pages de review, páginas de comparação de produtos, páginas de captura e páginas de redirecionamento sem precisar saber programar ou contratar um designer.</p>
+    <p>O diferencial do FlowPages é o foco no fluxo de conversão do afiliado: templates testados, integração com plataformas de pagamento e velocidade de carregamento otimizada para tráfego pago.</p>
+  </div>
+
+  <h2>Funcionalidades Core</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🎨 Editor Visual (Drag & Drop)
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Interface intuitiva para criar páginas sem código. Arraste e solte blocos de conteúdo, customize cores, fontes e layouts. Qualquer afiliado consegue criar uma página profissional em menos de 30 minutos.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        📱 Templates de Alta Conversão
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Biblioteca de templates testados para os principais casos de uso do afiliado: review de produto, comparação de preços, captura de leads, bônus exclusivos e muito mais. Templates otimizados para mobile e para SEO.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ⚡ Velocidade e Performance
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Páginas geradas com foco em Core Web Vitals. Carregamento rápido mesmo em conexões 3G. Fundamental para campanhas pagas onde a velocidade impacta diretamente o custo por clique e a taxa de conversão.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔗 Integração com FlowTracking
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Todas as páginas criadas no FlowPages se conectam automaticamente ao FlowTracking. Cada clique nos CTAs é rastreado, permitindo análise completa do funil do afiliado em um só lugar.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Tipos de Página Suportados</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">⭐</div>
+      <h3>Review de Produto</h3>
+      <p>Página de análise detalhada com pros e contras, nota, fotos e CTA para o link de afiliado.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">⚖️</div>
+      <h3>Comparação</h3>
+      <p>Tabela comparativa entre produtos do mesmo nicho, destacando o melhor custo-benefício.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🎁</div>
+      <h3>Página de Bônus</h3>
+      <p>Apresentação de bônus exclusivos para quem comprar pelo link do afiliado, aumentando a conversão.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📧</div>
+      <h3>Captura de Leads</h3>
+      <p>Formulário de cadastro com integração a ferramentas de e-mail marketing para construção de lista.</p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: TEAM ===================== -->
+<section class="page" id="page-team">
+  <div class="page-header">
+    <div class="page-eyebrow">Plataforma</div>
+    <h1>Time</h1>
+    <p class="page-desc">Pessoas e parceiros que constroem e operam as ferramentas Flow.</p>
+  </div>
+
+  <h2>Setor de Produto (TB Negócios Digitais)</h2>
+  <div class="team-grid">
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--accent)">D</div>
+      <h3>Daniel Breda</h3>
+      <div class="team-role">Product Manager</div>
+      <div class="team-tags">
+        <span class="team-tag">FlowSpy</span>
+        <span class="team-tag">FlowTracking</span>
+        <span class="team-tag">FlowPages</span>
+      </div>
+    </div>
+  </div>
+
+  <h2>Parceiro de Desenvolvimento</h2>
+  <div class="info-box">
+    <strong>Biancode</strong> é a empresa de desenvolvimento parceira responsável por implementar todas as demandas dos produtos Flow. A relação é de parceria técnica, não de squad interno.
+  </div>
+  <div class="team-grid">
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--accent4)">W</div>
+      <h3>Wolney</h3>
+      <div class="team-role">Sprint Manager / Biancode</div>
+      <div class="team-tags">
+        <span class="team-tag">Sprints</span>
+        <span class="team-tag">Priorização</span>
+        <span class="team-tag">Comunicação</span>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--accent3)">L</div>
+      <h3>Lincoln</h3>
+      <div class="team-role">Desenvolvedor / Biancode</div>
+      <div class="team-tags">
+        <span class="team-tag">Frontend</span>
+        <span class="team-tag">Backend</span>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--accent2)">I</div>
+      <h3>Iago</h3>
+      <div class="team-role">Desenvolvedor / Biancode</div>
+      <div class="team-tags">
+        <span class="team-tag">Frontend</span>
+        <span class="team-tag">Backend</span>
+      </div>
+    </div>
+  </div>
+
+  <h2>Liderança (TB Negócios Digitais)</h2>
+  <div class="info-box">
+    Tiago e Gabriel são os responsáveis pela aprovação estratégica. Atualmente as demandas operacionais ficam sob responsabilidade do Daniel. O objetivo é que, com mais capacidade, aprovações importantes comecem a ser roteadas para a liderança.
+  </div>
+  <div class="team-grid">
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--spy)">T</div>
+      <h3>Tiago</h3>
+      <div class="team-role">Liderança / TB Negócios Digitais</div>
+      <div class="team-tags">
+        <span class="team-tag">Estratégia</span>
+        <span class="team-tag">Aprovação</span>
+      </div>
+    </div>
+    <div class="team-card">
+      <div class="team-avatar" style="background:var(--accent5)">G</div>
+      <h3>Gabriel</h3>
+      <div class="team-role">Liderança / TB Negócios Digitais</div>
+      <div class="team-tags">
+        <span class="team-tag">Estratégia</span>
+        <span class="team-tag">Aprovação</span>
+      </div>
+    </div>
+  </div>
+
+  <h2>Time de Marketing</h2>
+  <div class="section-card">
+    <p>O time de marketing é notificado via canal dedicado no Slack sempre que uma atualização é liberada em qualquer produto Flow. Eles são responsáveis por comunicar os usuários sobre novas funcionalidades, melhorias e correções.</p>
+    <div class="flow-wrap" style="margin-top:14px">
+      <div class="flow-box green">Deploy realizado</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box accent">PM notifica Slack</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box blue">Marketing comunica usuários</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: DEMANDS ===================== -->
+<section class="page" id="page-demands">
+  <div class="page-header">
+    <div class="page-eyebrow">Plataforma</div>
+    <h1>Tipos de Demanda</h1>
+    <p class="page-desc">Categorias de trabalho que chegam ao backlog e como cada uma é tratada.</p>
+  </div>
+
+  <div class="demand-card">
+    <div class="demand-icon">🐛</div>
+    <div>
+      <h3>Bug</h3>
+      <p>Comportamento incorreto ou inesperado do sistema. Tem prioridade alta por impactar diretamente a experiência do usuário. Deve ser reportado com evidências (print, vídeo, passo a passo para reproduzir).</p>
+    </div>
+  </div>
+  <div class="demand-card">
+    <div class="demand-icon">✨</div>
+    <div>
+      <h3>Melhoria</h3>
+      <p>Aprimoramento de uma funcionalidade existente. Pode ser de UX, performance, clareza de dados ou fluxo. Geralmente vem de feedback de usuários ou de análise interna de uso.</p>
+    </div>
+  </div>
+  <div class="demand-card">
+    <div class="demand-icon">🚀</div>
+    <div>
+      <h3>Nova Funcionalidade</h3>
+      <p>Feature que não existe ainda no produto. Requer validação mais rigorosa antes de entrar no roadmap: existe demanda real? Quantos usuários pedem isso? Está alinhado com a estratégia?</p>
+    </div>
+  </div>
+  <div class="demand-card">
+    <div class="demand-icon">🔧</div>
+    <div>
+      <h3>Débito Técnico</h3>
+      <p>Refatoração de código, atualização de dependências ou melhoria de arquitetura sem impacto direto visível ao usuário. Necessária para manter a saúde e velocidade do sistema a longo prazo.</p>
+    </div>
+  </div>
+  <div class="demand-card">
+    <div class="demand-icon">🔗</div>
+    <div>
+      <h3>Integração</h3>
+      <p>Conexão com ferramenta, API ou plataforma externa. Requer análise técnica prévia da Biancode para estimar complexidade e dependências externas.</p>
+    </div>
+  </div>
+
+  <h2>Critérios de Priorização</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Critério</th><th>Peso</th><th>Perguntas-chave</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Impacto no usuário</strong></td><td><span class="badge badge-red">Alto</span></td><td>Quantos usuários afeta? Qual a severidade da dor?</td></tr>
+        <tr><td><strong>Alinhamento estratégico</strong></td><td><span class="badge badge-red">Alto</span></td><td>Contribui para o crescimento e retenção?</td></tr>
+        <tr><td><strong>Esforço de implementação</strong></td><td><span class="badge badge-orange">Médio</span></td><td>Quantos dias de dev? Tem dependências?</td></tr>
+        <tr><td><strong>Dados de demanda</strong></td><td><span class="badge badge-orange">Médio</span></td><td>Quantos usuários solicitaram? Tem pesquisa que valida?</td></tr>
+        <tr><td><strong>Risco técnico</strong></td><td><span class="badge badge-blue">Normal</span></td><td>Pode quebrar outras partes? Tem rollback?</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PAGE: CULTURA ===================== -->
+<section class="page" id="page-cultura">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--accent3)">Cultura & Equipe</div>
+    <h1>Cultura Flow</h1>
+    <p class="page-desc">Os valores, comportamentos e princípios que guiam como trabalhamos no setor de produto. Construída a partir da cultura TB, adaptada para o universo do desenvolvimento de software.</p>
+  </div>
+
+  <div class="info-box success">
+    <strong>Base:</strong> A Cultura Flow é derivada dos pilares da TB Negócios Digitais (Proatividade e Verdade) e expandida para o contexto de tecnologia e desenvolvimento de produto.
+  </div>
+
+  <h2>Os 5 Pilares Flow</h2>
+  <div class="pillar-grid">
+    <div class="pillar-card">
+      <div class="pillar-icon">📊</div>
+      <h3>Dado acima de opinião</h3>
+      <p>Toda decisão relevante de produto precisa ser embasada em dado, pesquisa ou evidência concreta. Opinião e intuição são pontos de partida, não conclusões.</p>
+      <div class="pillar-examples">Ex: antes de pedir uma nova feature, mostre quantos usuários pedem. Antes de dizer que algo está ruim, mostre o dado de onde estão saindo.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">⚡</div>
+      <h3>Velocidade com responsabilidade</h3>
+      <p>Entregamos rápido, mas não entregamos mal. A pressa que pula o QA cria débito que vai nos atrasar três vezes mais depois. Velocidade real é ciclo curto, qualidade mantida.</p>
+      <div class="pillar-examples">Ex: nunca pula etapa de teste só porque a entrega está atrasada. Se precisar de mais tempo, comunique antes, não depois.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">👤</div>
+      <h3>Usuário no centro</h3>
+      <p>O afiliado que usa nosso produto todo dia é a razão de existir do nosso trabalho. Cada funcionalidade, cada correção e cada melhoria deve ser avaliada pelo impacto real que tem na vida dele.</p>
+      <div class="pillar-examples">Ex: pesquisa de usuário não é opcional, é parte do processo. O feedback de quem usa vale mais do que qualquer suposição interna.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">💬</div>
+      <h3>Transparência total</h3>
+      <p>Comunicamos o que está acontecendo, o que está atrasado e o que está com problema antes de ser perguntado. Não existe "deixar para ver se resolve sozinho". Transparência cria confiança.</p>
+      <div class="pillar-examples">Ex: se um prazo não vai ser cumprido, avise no mesmo dia que perceber, não na véspera da entrega. Se algo quebrou em produção, comunique imediatamente.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-icon">🎯</div>
+      <h3>Ownership de ponta a ponta</h3>
+      <p>Quem pega uma tarefa é dono dela até o fim. Não existe "eu mandei para alguém" ou "fiz minha parte". Ownership significa acompanhar, cobrar e garantir que chegou onde precisava chegar.</p>
+      <div class="pillar-examples">Ex: se você abriu uma demanda no Notion, você acompanha até o deploy. Se você testou e aprovou, você responde pelo resultado em produção.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Comportamentos Esperados</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✅ Comunicação proativa
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Comunicar atualizações antes de serem solicitadas. Se algo mudou, atrasou ou tem um bloqueio, a pessoa responsável avisa primeiro. No Slack: uma mensagem objetiva com contexto + próximo passo. Nunca deixar alguém esperando sem retorno por mais de 4h em horário comercial.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✅ Feedback construtivo e contínuo
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Feedback não é só em reunião de avaliação. É no dia a dia, é em cima do trabalho entregue, é no momento certo. Feedback é um presente: dê com respeito, receba com abertura. Quem não dá feedback está falhando com o time.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✅ Autonomia com alinhamento
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Autonomia para executar não é autonomia para decidir tudo sozinho. Decisões que impactam outras pessoas ou outros processos precisam de alinhamento prévio. Antes de agir em algo estratégico, comunique. Depois, execute sem precisar ser microgerenciado.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✅ Documentação como cultura
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>O que não está documentado não existe para o time. Decisões importantes, aprendizados de pesquisas, resultados de testes e processos novos precisam estar registrados. O Notion é o nosso segundo cérebro coletivo. Use-o.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✅ Erros como aprendizado
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Erro acontece. O que não pode acontecer é o mesmo erro duas vezes. Quando algo dá errado, o protocolo é: 1) resolve o problema imediato, 2) comunica o time, 3) entende a causa raiz, 4) documenta o aprendizado. Sem culpar, sem esconder.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Código de Conduta</h2>
+  <div class="section-card">
+    <ul class="checklist">
+      <li><span class="check-icon done">✓</span>Tratar colegas e parceiros com respeito e empatia, independentemente do nível hierárquico</li>
+      <li><span class="check-icon done">✓</span>Hierarquia existe como facilitadora, não como bloqueadora. Use o canal certo, mas não deixe a burocracia travar o trabalho</li>
+      <li><span class="check-icon done">✓</span>Conflitos são resolvidos diretamente com a pessoa envolvida primeiro. Escale apenas se necessário</li>
+      <li><span class="check-icon done">✓</span>Informações de usuários, métricas e estratégias são confidenciais. Não compartilhe fora do contexto profissional</li>
+      <li><span class="check-icon done">✓</span>Diversidade de perspectivas é ativo, não obstáculo. A melhor ideia não tem dono</li>
+      <li><span class="check-icon done">✓</span>O tempo dos outros tem o mesmo valor que o seu. Reuniões com pauta, prazo respeitado, retornos no tempo combinado</li>
+    </ul>
+  </div>
+
+  <h2>Reconhecimento e Crescimento</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">🏆</div>
+      <h3>Reconhecimento Informal</h3>
+      <p>Bom trabalho é reconhecido na hora, publicamente quando pertinente. Elogio específico e sincero vale mais do que genérico. Cultura de celebrar entregas e aprendizados.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📚</div>
+      <h3>Desenvolvimento Contínuo</h3>
+      <p>A TB mantém biblioteca de cursos aberta. Para treinamentos externos relevantes para o produto, a empresa pode co-financiar. Trazer aprendizado de volta para o time é esperado.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔄</div>
+      <h3>Feedback Bidirecional</h3>
+      <p>Feedback não flui só de cima para baixo. O Analista de Produto pode e deve dar feedback ao PM. A liderança está aberta. Isso é parte da cultura.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: SETOR ===================== -->
+<section class="page" id="page-setor">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--accent)">Cultura & Equipe</div>
+    <h1>Sobre o Setor de Produto</h1>
+    <p class="page-desc">Como o setor de produto está estruturado, sua missão e como ele se conecta ao restante da TB Negócios Digitais.</p>
+  </div>
+
+  <h2>Missão do Setor</h2>
+  <div class="section-card">
+    <p>O setor de produto da TB Negócios Digitais é responsável por entregar ferramentas de software que empoderam afiliados e produtores digitais a tomarem decisões mais inteligentes e a operarem com mais eficiência no mercado digital.</p>
+    <p>Nossa missão é construir produtos que os usuários amam usar, que crescem de forma sustentável e que constroem vantagem competitiva real para quem os utiliza.</p>
+  </div>
+
+  <h2>Estrutura Atual</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">🎯</div>
+      <h3>PM (Daniel Breda)</h3>
+      <p>Gestão dos 3 produtos, priorização de backlog, pesquisa de mercado, fechamento de contratos com influencers, criação de demandas no Notion e passagem para a Biancode.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔬</div>
+      <h3>Analista de Produto (a contratar)</h3>
+      <p>Apoio ao PM em testes, validações, pesquisa com usuários, pesquisa competitiva, acompanhamento de influencers e gestão dos processos internos.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">💻</div>
+      <h3>Biancode (parceiro)</h3>
+      <p>Time de desenvolvimento externo. Wolney (sprint manager) + Lincoln e Iago (devs). Responsáveis pela implementação técnica de todas as demandas.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📣</div>
+      <h3>Marketing (parceiro interno)</h3>
+      <p>Time interno da TB notificado via Slack sobre cada atualização lançada, responsável por comunicar usuários e criar conteúdo sobre as features.</p>
+    </div>
+  </div>
+
+  <h2>Como o Setor se Conecta</h2>
+  <div class="section-card">
+    <h3>Com a Liderança (Tiago & Gabriel)</h3>
+    <p>Aprovações estratégicas de funcionalidades grandes, definição de direção dos produtos e alocação de recursos. O objetivo é aumentar progressivamente o volume de demandas que passam por essa aprovação.</p>
+    <div class="divider"></div>
+    <h3>Com a Biancode</h3>
+    <p>O PM (Daniel) cria as demandas no Notion com contexto, critérios de aceite e prioridade. O sprint manager (Wolney) organiza nas sprints com Lincoln e Iago. A comunicação acontece via Slack e reuniões de sprint.</p>
+    <div class="divider"></div>
+    <h3>Com o Time de Marketing</h3>
+    <p>Após cada deploy validado, o PM notifica o canal de marketing no Slack com o que foi atualizado, qual produto, e o que o usuário precisa saber. O marketing converte isso em comunicação para os usuários (e-mail, push, redes sociais).</p>
+    <div class="divider"></div>
+    <h3>Com os Influencers</h3>
+    <p>Parcerias com criadores de conteúdo que divulgam os produtos Flow. O PM fecha os contratos e acompanha as entregas. O Analista de Produto irá apoiar no acompanhamento das postagens e materiais produzidos.</p>
+  </div>
+
+  <h2>Slack: Canais Relevantes</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Canal</th><th>Finalidade</th><th>Quem usa</th></tr></thead>
+      <tbody>
+        <tr><td><code>#flow-updates</code></td><td>Notificação de deploys e atualizações</td><td>PM → Marketing</td></tr>
+        <tr><td><code>#flow-produto</code></td><td>Discussões sobre produto e features</td><td>PM + Analista</td></tr>
+        <tr><td><code>#flow-dev</code></td><td>Comunicação com Biancode</td><td>PM + Wolney + devs</td></tr>
+        <tr><td><code>#flow-bugs</code></td><td>Reporte e acompanhamento de bugs</td><td>PM + Analista + Biancode</td></tr>
+        <tr><td><code>#geral-tb</code></td><td>Comunicação geral da TB</td><td>Toda a empresa</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Notion: Organização do Trabalho</h2>
+  <div class="section-card">
+    <p>O Notion é o sistema central de gestão do setor de produto. Tudo que é ideia, demanda, pesquisa ou decisão importante vive no Notion antes de ir para qualquer outro lugar.</p>
+    <div class="flow-wrap" style="margin-top:14px">
+      <div class="flow-box">Ideia / Feedback</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box accent">Notion (Backlog)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box">Priorização</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box blue">Sprint Biancode</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box green">Deploy</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: ANALISTA ===================== -->
+<section class="page" id="page-analista">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--accent5)">Cultura & Equipe</div>
+    <h1>Analista de Produto</h1>
+    <p class="page-desc">Perfil completo do cargo, responsabilidades, competências e expectativas de entrega.</p>
+  </div>
+
+  <div class="info-box success">
+    <strong>Por que esse cargo existe:</strong> O PM hoje opera os 3 produtos sozinho. O Analista de Produto entra para multiplicar a capacidade do setor, assumindo responsabilidades operacionais e de pesquisa que hoje consomem tempo do PM e limitam o crescimento dos produtos.
+  </div>
+
+  <h2>Propósito do Cargo</h2>
+  <div class="section-card">
+    <p>O Analista de Produto é o braço direito do PM no dia a dia. Não é um cargo administrativo, nem apenas de suporte: é um papel de produto com autonomia crescente. A pessoa nessa posição precisa ter curiosidade genuína por produtos digitais, disciplina para acompanhar processos e energia para falar com usuários, concorrentes e influencers.</p>
+    <p>Com o tempo, o Analista de Produto é o candidato natural para crescer para um papel de PM Júnior ou para liderar a operação de um dos produtos Flow de forma independente.</p>
+  </div>
+
+  <h2>Responsabilidades Principais</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🧪 Teste e QA de Produto
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Executa os testes de aceitação de cada entrega da Biancode antes do deploy. Segue o QA Checklist do playbook, testa fluxos críticos nos 3 produtos, documenta eventuais problemas encontrados e aprova ou rejeita a entrega.</p>
+        <p><strong>Por que importa:</strong> Garante que o usuário não vai encontrar bugs nas novas atualizações. Cada bug em produção gera churn e demanda de suporte. Um bom QA preventivo vale 10x o tempo gasto.</p>
+        <p><strong>Entrega esperada:</strong> Relatório de QA por entrega, com status de cada item testado. Nenhum deploy vai ao ar sem QA assinado.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔍 Validação Pós-Deploy
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Após cada deploy em produção, realiza smoke test para confirmar que a atualização foi ao ar corretamente e não quebrou outros fluxos. Monitora o produto nas primeiras horas após a release.</p>
+        <p><strong>Por que importa:</strong> Deploys podem ter comportamentos diferentes em produção do que em homologação. A validação pós-deploy é a rede de segurança final.</p>
+        <p><strong>Entrega esperada:</strong> Confirmação no canal do Slack após cada deploy. Se encontrar problema, abertura imediata de bug com prioridade crítica.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔎 Pesquisa de Novas Funcionalidades
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Identifica funcionalidades que estão em alta no mercado ou que são pedidas pelos usuários e ainda não existem nos produtos Flow. Documenta cada oportunidade com justificativa de valor.</p>
+        <p><strong>Por que importa:</strong> O produto que não evolui perde para o concorrente. A pesquisa ativa de oportunidades garante que o roadmap esteja sempre à frente do mercado.</p>
+        <p><strong>Entrega esperada:</strong> Relatório mensal de oportunidades identificadas, com base em pesquisa de mercado e feedbacks de usuários. Cada oportunidade documentada no Notion com contexto e evidências.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        👥 Pesquisa com Usuários
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Conduz entrevistas, pesquisas de satisfação e formulários com usuários reais dos produtos Flow para entender suas necessidades, frustrações e desejos. Sintetiza os insights para o backlog.</p>
+        <p><strong>Por que importa:</strong> Nenhuma decisão de produto deveria ser feita sem ouvir quem usa. A pesquisa com usuários é o antídoto para construir funcionalidades que ninguém quer.</p>
+        <p><strong>Entrega esperada:</strong> Pelo menos 1 rodada de pesquisa por produto por trimestre. Síntese documentada no Notion com citações diretas e principais insights priorizados.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🏆 Pesquisa de Concorrência
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Monitora regularmente os principais concorrentes de cada produto Flow. Rastreia lançamentos de funcionalidades, mudanças de preço, estratégias de comunicação e pontos fortes e fracos em relação aos nossos produtos.</p>
+        <p><strong>Por que importa:</strong> O mercado de ferramentas para afiliados é dinâmico. Conhecer a concorrência permite antecipar movimentos, identificar gaps e posicionar melhor os produtos Flow.</p>
+        <p><strong>Entrega esperada:</strong> Relatório bimestral de análise competitiva por produto. Alertas imediatos quando um concorrente lança algo relevante.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🤝 Acompanhamento de Influencers
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Mantém contato ativo com os influencers parceiros para garantir que as postagens e materiais combinados estão sendo entregues. Coleta métricas das publicações e reporta ao PM.</p>
+        <p><strong>Por que importa:</strong> Parcerias com influencers têm prazo e compromissos. Sem acompanhamento, entregas atrasam ou não acontecem. A relação precisa ser mantida ativa para render frutos no longo prazo.</p>
+        <p><strong>Entrega esperada:</strong> Planilha de acompanhamento de influencers atualizada semanalmente. Notificação proativa ao PM de qualquer atraso ou problema.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ⚙️ Gestão de Processos Internos
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Garante que os processos do setor estão sendo seguidos: demandas no Notion atualizadas, SLAs sendo respeitados, rotinas acontecendo, backlog organizado. É o guardião do processo no dia a dia.</p>
+        <p><strong>Por que importa:</strong> Processo sem acompanhamento vira sugestão. A disciplina de processo é o que garante previsibilidade e qualidade de entrega no médio prazo.</p>
+        <p><strong>Entrega esperada:</strong> Backlog sempre atualizado. Alertas de SLA em risco. Atas de reuniões de sprint documentadas no Notion.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Competências Necessárias</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Competência</th><th>Nível Esperado</th><th>Por que importa</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Atenção a detalhes</strong></td>
+          <td><span class="badge badge-red">Essencial</span></td>
+          <td>QA e validações exigem olhar cuidadoso para encontrar o que está errado</td>
+        </tr>
+        <tr>
+          <td><strong>Comunicação escrita</strong></td>
+          <td><span class="badge badge-red">Essencial</span></td>
+          <td>Relatórios, mensagens de Slack, documentação e follow-up com influencers</td>
+        </tr>
+        <tr>
+          <td><strong>Organização e proatividade</strong></td>
+          <td><span class="badge badge-red">Essencial</span></td>
+          <td>Muitas frentes simultâneas. Sem organização, coisas caem</td>
+        </tr>
+        <tr>
+          <td><strong>Conhecimento básico de produto digital</strong></td>
+          <td><span class="badge badge-orange">Importante</span></td>
+          <td>Entender como funciona um SaaS, o que é UX/UI, fluxo de afiliados</td>
+        </tr>
+        <tr>
+          <td><strong>Leitura e análise de dados</strong></td>
+          <td><span class="badge badge-orange">Importante</span></td>
+          <td>Interpretar métricas básicas, ler dashboards, tirar insights de números</td>
+        </tr>
+        <tr>
+          <td><strong>Pesquisa e síntese</strong></td>
+          <td><span class="badge badge-orange">Importante</span></td>
+          <td>Pesquisa com usuários e de concorrência exigem metodologia e síntese clara</td>
+        </tr>
+        <tr>
+          <td><strong>Relacionamento interpessoal</strong></td>
+          <td><span class="badge badge-blue">Desejável</span></td>
+          <td>Contato com influencers e usuários exige comunicação acessível e empática</td>
+        </tr>
+        <tr>
+          <td><strong>Noções de tráfego e afiliação</strong></td>
+          <td><span class="badge badge-blue">Desejável</span></td>
+          <td>Entender o contexto do usuário ajuda a fazer perguntas melhores e encontrar insights</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>O que Não É Esse Cargo</h2>
+  <div class="info-box warning">
+    <strong>Para ficar claro:</strong> O Analista de Produto não é designer, não é desenvolvedor, não é gestor de redes sociais e não é suporte ao cliente. É um papel de produto com foco em qualidade, pesquisa e acompanhamento de processos. Quem entra nessa posição deve ter clareza sobre isso.
+  </div>
+
+  <h2>Primeiros 90 Dias (expectativa)</h2>
+  <div class="milestone-grid">
+    <div class="milestone-card">
+      <div class="milestone-days" style="color:var(--accent4)">30</div>
+      <div class="milestone-label">dias</div>
+      <div class="milestone-goal">Imersão e primeiros QAs</div>
+      <ul class="milestone-list">
+        <li>Conhece os 3 produtos profundamente como usuário</li>
+        <li>Leu e entende o playbook completo</li>
+        <li>Executou QA em pelo menos 2 entregas</li>
+        <li>Está operando as ferramentas (Notion, Slack, Loom)</li>
+        <li>Fez primeiro contato com influencers</li>
+      </ul>
+    </div>
+    <div class="milestone-card">
+      <div class="milestone-days" style="color:var(--accent)">60</div>
+      <div class="milestone-label">dias</div>
+      <div class="milestone-goal">Autonomia nas responsabilidades core</div>
+      <ul class="milestone-list">
+        <li>Executa QA de forma independente e consistente</li>
+        <li>Conduziu a primeira pesquisa com usuários</li>
+        <li>Entregou o primeiro relatório de análise competitiva</li>
+        <li>Está acompanhando influencers sem precisar ser lembrado</li>
+        <li>Está mantendo o backlog do Notion atualizado</li>
+      </ul>
+    </div>
+    <div class="milestone-card">
+      <div class="milestone-days" style="color:var(--accent2)">90</div>
+      <div class="milestone-label">dias</div>
+      <div class="milestone-goal">Contribuição estratégica</div>
+      <ul class="milestone-list">
+        <li>Trouxe pelo menos 1 insight que gerou demanda no backlog</li>
+        <li>Está gerando relatório mensal de oportunidades</li>
+        <li>PM depende menos da sua supervisão nas entregas</li>
+        <li>Tem uma perspectiva própria sobre os produtos</li>
+        <li>Identificou ao menos um processo que pode ser melhorado</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: FERRAMENTAS ===================== -->
+<section class="page" id="page-ferramentas">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--accent4)">Cultura & Equipe</div>
+    <h1>Ferramentas & Comunicação</h1>
+    <p class="page-desc">O stack de ferramentas do setor de produto e como cada uma é usada no dia a dia.</p>
+  </div>
+
+  <h2>Stack Principal</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📝</div>
+      <h3>Notion</h3>
+      <p>Central de gestão do setor. Backlog de demandas, documentação de pesquisas, rotinas e processos. Tudo que é decisão importante ou aprendizado relevante vive aqui.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">💬</div>
+      <h3>Slack</h3>
+      <p>Comunicação em tempo real com o time interno e com a Biancode. Canal primário para notificações de deploy, acompanhamento de bugs e alinhamentos rápidos.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🎥</div>
+      <h3>Loom</h3>
+      <p>Gravação de vídeos curtos para documentar bugs, explicar funcionalidades para a Biancode ou criar materiais de referência. Substitui longas descrições escritas quando o vídeo é mais claro.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🗓️</div>
+      <h3>Google Calendar</h3>
+      <p>Agendamento de reuniões de sprint, pesquisas com usuários e alinhamentos com liderança. Toda reunião tem pauta no convite.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Notion: Como Usar</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        📂 Estrutura do Workspace
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>O workspace do Notion tem uma área por produto (FlowSpy, FlowTracking, FlowPages) e áreas transversais (Pesquisa, Influencers, Processos). Cada produto tem seu backlog de demandas com status, prioridade e notas de contexto.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✍️ Como Criar uma Demanda
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p>Cada demanda no Notion precisa ter: <strong>título claro</strong> (o que precisa ser feito), <strong>tipo</strong> (bug / melhoria / feature / débito técnico), <strong>produto</strong> afetado, <strong>prioridade</strong> (crítica / alta / média / baixa), <strong>contexto</strong> (por que isso é importante, o que o usuário está experimentando hoje) e <strong>critérios de aceite</strong> (como vamos saber que isso foi entregue corretamente).</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔄 Ciclo de Status
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <div class="flow-wrap">
+          <div class="flow-box">Backlog</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box orange">Em Priorização</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box blue">Em Sprint</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box accent">Em QA</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-box green">Concluído</div>
+        </div>
+        <p style="margin-top:12px">O Analista de Produto é responsável por manter os status atualizados conforme as demandas avançam.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Slack: Boas Práticas</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Situação</th><th>Onde comunicar</th><th>Como comunicar</th></tr></thead>
+      <tbody>
+        <tr><td>Bug encontrado em produção</td><td><code>#flow-bugs</code></td><td>Prints/vídeo Loom + passos para reproduzir + produto afetado</td></tr>
+        <tr><td>Deploy realizado e validado</td><td><code>#flow-updates</code></td><td>✅ [Produto] - [O que foi atualizado] - [Data]</td></tr>
+        <tr><td>Bloqueio em sprint</td><td><code>#flow-dev</code></td><td>@wolney - [contexto] - [o que está bloqueado] - [o que precisa]</td></tr>
+        <tr><td>Dúvida rápida</td><td>DM direto</td><td>Objetivo, contexto em uma mensagem. Evite "oi" seguido de silêncio</td></tr>
+        <tr><td>Decisão importante</td><td>Canal relevante</td><td>Escreva como se fosse uma mini-ata: contexto, decisão, próximos passos</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Loom: Quando e Como Usar</h2>
+  <div class="section-card">
+    <p>Use o Loom quando a situação seria mais clara com um vídeo do que com texto. Casos de uso típicos no setor de produto:</p>
+    <ul class="checklist">
+      <li><span class="check-icon done">✓</span>Reportar um bug com comportamento visual (gravar a tela mostrando o problema)</li>
+      <li><span class="check-icon done">✓</span>Explicar uma nova feature para a Biancode que tem comportamento complexo</li>
+      <li><span class="check-icon done">✓</span>Fazer walkthrough de QA para documentar o que foi testado</li>
+      <li><span class="check-icon done">✓</span>Criar materiais de referência para influencers (como usar o produto)</li>
+    </ul>
+    <p style="margin-top:12px">Boas práticas: mantenha vídeos curtos (menos de 5 min), vá direto ao ponto, adicione timestamps se o vídeo for mais longo.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Comunicação com a Biancode</h2>
+  <div class="section-card">
+    <p><strong>Ponto de contato:</strong> Wolney é o sprint manager e o contato principal da Biancode. Toda comunicação técnica passa por ele antes de chegar em Lincoln ou Iago.</p>
+    <p><strong>Cadência:</strong> Reunião de sprint (início de sprint para alinhar o que entra), reunião de review (fim de sprint para ver o que foi entregue). Entre reuniões, o canal de Slack é suficiente para alinhamentos.</p>
+    <p><strong>O que enviar por Notion:</strong> Demandas detalhadas com contexto completo. Quanto melhor a demanda está descrita, menor a chance de retrabalho.</p>
+    <p><strong>O que enviar por Slack:</strong> Atualizações rápidas, esclarecimentos e alertas urgentes.</p>
+    <p><strong>O que enviar por Loom:</strong> Demonstrações de comportamento esperado ou de bug encontrado.</p>
+  </div>
+</section>
+
+<!-- ===================== PAGE: BUGS ===================== -->
+<section class="page" id="page-bugs">
+  <div class="page-header">
+    <div class="page-eyebrow">Processos</div>
+    <h1>Processo de Bugs</h1>
+    <p class="page-desc">Como identificar, reportar, priorizar e acompanhar a resolução de bugs nos produtos Flow.</p>
+  </div>
+
+  <h2>Classificação de Severidade</h2>
+  <div class="sla-grid">
+    <div class="sla-card critical">
+      <div class="sla-time" style="color:var(--accent5)">P0</div>
+      <div class="sla-type">Crítico</div>
+      <div class="sla-desc">Produto fora do ar ou funcionalidade core completamente quebrada. Impacta todos os usuários. Exige ação imediata.</div>
+    </div>
+    <div class="sla-card high">
+      <div class="sla-time" style="color:var(--accent3)">P1</div>
+      <div class="sla-type">Alto</div>
+      <div class="sla-desc">Funcionalidade importante quebrada com workaround difícil. Impacta uma parcela significativa dos usuários.</div>
+    </div>
+    <div class="sla-card normal">
+      <div class="sla-time" style="color:var(--accent4)">P2</div>
+      <div class="sla-type">Normal</div>
+      <div class="sla-desc">Bug que impacta a experiência mas tem workaround. Usuário consegue continuar usando o produto.</div>
+    </div>
+    <div class="sla-card low">
+      <div class="sla-time" style="color:var(--accent2)">P3</div>
+      <div class="sla-type">Baixo</div>
+      <div class="sla-desc">Bug cosmético, de texto ou que afeta poucos usuários em cenário específico. Mínimo impacto na operação.</div>
+    </div>
+  </div>
+
+  <h2>Fluxo de Reporte</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">1</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Identificar e documentar</div>
+        <div class="timeline-desc">Descreva o bug com: o que aconteceu, o que era esperado, passos para reproduzir, ambiente (browser/dispositivo), prints ou vídeo Loom. Quanto mais detalhado, mais rápido o dev resolve.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">2</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Criar demanda no Notion</div>
+        <div class="timeline-desc">Abra uma demanda no backlog do Notion com tipo "Bug", o produto afetado e a prioridade adequada. Inclua todos os detalhes do passo 1 no corpo da demanda.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">3</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Notificar no Slack</div>
+        <div class="timeline-desc">Para bugs P0 e P1, notifique imediatamente o PM e o Wolney no canal <code>#flow-bugs</code>. Para P2 e P3, a demanda no Notion já é suficiente para entrar no próximo sprint.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">4</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Acompanhar resolução</div>
+        <div class="timeline-desc">Monitore o status no Notion. Quando a Biancode marcar como resolvido, faça a validação do fix antes de fechar a demanda.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot">5</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Validar e fechar</div>
+        <div class="timeline-desc">Teste o fix em staging ou produção, confirme que o comportamento esperado foi restaurado e que nenhum outro fluxo foi afetado. Só então feche a demanda como "Concluído".</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Template de Reporte de Bug</h2>
+  <div class="section-card">
+    <p><strong>Título:</strong> [Produto] - Descrição curta e objetiva do bug</p>
+    <p><strong>Comportamento atual:</strong> O que está acontecendo de errado</p>
+    <p><strong>Comportamento esperado:</strong> O que deveria acontecer</p>
+    <p><strong>Passos para reproduzir:</strong></p>
+    <p>1. Acesse [URL ou tela]<br>2. Faça [ação]<br>3. Observe [resultado incorreto]</p>
+    <p><strong>Ambiente:</strong> Browser, sistema operacional, versão do produto</p>
+    <p><strong>Impacto:</strong> Quantos usuários afeta? Tem workaround?</p>
+    <p><strong>Evidências:</strong> Prints ou link do Loom</p>
+  </div>
+</section>
+
+<!-- ===================== PAGE: IMPROVEMENTS ===================== -->
+<section class="page" id="page-improvements">
+  <div class="page-header">
+    <div class="page-eyebrow">Processos</div>
+    <h1>Processo de Melhorias</h1>
+    <p class="page-desc">Como identificar, propor e validar melhorias nas funcionalidades existentes dos produtos Flow.</p>
+  </div>
+
+  <h2>O que é uma Melhoria</h2>
+  <div class="section-card">
+    <p>Uma melhoria é qualquer mudança em uma funcionalidade que já existe com o objetivo de torná-la mais útil, mais fácil de usar, mais rápida ou mais clara para o usuário. Diferente do bug, a melhoria não é um comportamento errado, é uma oportunidade de fazer algo bom ficar melhor.</p>
+  </div>
+
+  <h2>Fontes de Melhorias</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">👥</div>
+      <h3>Feedback de Usuários</h3>
+      <p>Reclamações, sugestões e confusões relatadas pelos usuários são a fonte mais valiosa. Cada feedback é uma pista sobre onde o produto pode melhorar.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📊</div>
+      <h3>Análise de Dados</h3>
+      <p>Funcionalidades pouco usadas, alto abandono em determinadas telas ou alta taxa de erro em algum fluxo indicam onde há oportunidade de melhoria.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔍</div>
+      <h3>Pesquisa Competitiva</h3>
+      <p>Ver como concorrentes implementam a mesma funcionalidade pode revelar abordagens melhores que o usuário já conhece de outro produto.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🧪</div>
+      <h3>Testes Internos</h3>
+      <p>Durante o QA e no uso cotidiano do produto, o Analista de Produto identifica pontos de fricção que podem ser eliminados.</p>
+    </div>
+  </div>
+
+  <h2>Fluxo de Aprovação</h2>
+  <div class="flow-wrap">
+    <div class="flow-box">Identificação</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box accent">Documentar no Notion</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box orange">PM revisa e prioriza</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box blue">Sprint Biancode</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box accent">QA</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box green">Deploy</div>
+  </div>
+
+  <h2>Critérios para uma Boa Proposta de Melhoria</h2>
+  <ul class="checklist">
+    <li><span class="check-icon done">✓</span>Descreve claramente qual problema do usuário está sendo resolvido</li>
+    <li><span class="check-icon done">✓</span>Tem evidência de que o problema é real (feedback, dado, pesquisa)</li>
+    <li><span class="check-icon done">✓</span>Propõe a melhoria de forma específica, não vaga ("melhorar a UX" não é uma melhoria, "adicionar tooltip explicativo no campo X" é)</li>
+    <li><span class="check-icon done">✓</span>Não introduz complexidade desnecessária para resolver o problema</li>
+    <li><span class="check-icon done">✓</span>Tem critérios de aceite claros para o QA poder validar</li>
+  </ul>
+</section>
+
+<!-- ===================== PAGE: FEATURES ===================== -->
+<section class="page" id="page-features">
+  <div class="page-header">
+    <div class="page-eyebrow">Processos</div>
+    <h1>Processo de Novas Funcionalidades</h1>
+    <p class="page-desc">Como identificar, validar, especificar e implementar novas features nos produtos Flow.</p>
+  </div>
+
+  <h2>Antes de Pedir uma Nova Feature</h2>
+  <div class="info-box warning">
+    <strong>Regra de ouro:</strong> Nova funcionalidade só entra no roadmap depois de responder: existe demanda real? Quantos usuários pedem isso? Está alinhado com a estratégia do produto? Vale o custo de implementação e manutenção?
+  </div>
+
+  <h2>Processo de Descoberta</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">1</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Identificar a oportunidade</div>
+        <div class="timeline-desc">A oportunidade pode vir de pesquisa com usuários, análise de concorrência, demanda acumulada no suporte ou visão estratégica do produto. Documente a origem.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">2</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Validar a demanda</div>
+        <div class="timeline-desc">Antes de entrar no roadmap, valide: quantos usuários pedem? Existe dado que suporta? Se possível, faça uma pesquisa rápida com 3 a 5 usuários para confirmar o problema antes de propor a solução.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">3</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Especificar a feature</div>
+        <div class="timeline-desc">Crie uma demanda no Notion com: contexto do problema, solução proposta, comportamento esperado, critérios de aceite e mockups ou fluxos quando necessário. Quanto mais clara a especificação, melhor a implementação.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">4</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Estimar esforço com a Biancode</div>
+        <div class="timeline-desc">Antes de comprometer com o usuário ou com a liderança, alinhe com o Wolney a complexidade técnica e o esforço estimado. Evita promessas que não podem ser cumpridas no prazo.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot">5</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Priorizar e entrar no roadmap</div>
+        <div class="timeline-desc">Com a demanda validada e o esforço estimado, posicione no roadmap em relação às outras demandas. Use a matriz de impacto vs esforço como referência.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Matriz Impacto vs Esforço</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Quadrante</th><th>Impacto</th><th>Esforço</th><th>Ação</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Quick Wins 🚀</strong></td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-green">Baixo</span></td><td>Prioridade máxima. Fazer já.</td></tr>
+        <tr><td><strong>Grandes Apostas 🎯</strong></td><td><span class="badge badge-green">Alto</span></td><td><span class="badge badge-red">Alto</span></td><td>Planejar bem antes de executar. Vale a pena.</td></tr>
+        <tr><td><strong>Fill-ins 🔧</strong></td><td><span class="badge badge-orange">Baixo</span></td><td><span class="badge badge-green">Baixo</span></td><td>Fazer quando tiver espaço no sprint.</td></tr>
+        <tr><td><strong>Evitar ❌</strong></td><td><span class="badge badge-orange">Baixo</span></td><td><span class="badge badge-red">Alto</span></td><td>Questionar se realmente faz sentido fazer.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: FLUXO DE DEMANDAS ===================== -->
+<section class="page" id="page-fluxo">
+  <div class="page-header">
+    <div class="page-eyebrow" style="color:var(--accent3)">Processos</div>
+    <h1>Fluxo Real de Demandas</h1>
+    <p class="page-desc">Do surgimento de uma ideia até a entrega ao usuário: como uma demanda percorre todo o setor de produto.</p>
+  </div>
+
+  <div class="info-box">
+    <strong>Este é o fluxo real</strong> que acontece hoje na operação. Entender cada etapa e saber onde você está em cada demanda é fundamental para trabalhar no setor de produto.
+  </div>
+
+  <h2>Visão Geral do Fluxo</h2>
+  <div class="flow-wrap" style="flex-direction:column;align-items:flex-start">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="flow-box accent">Origem da ideia</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box">Notion (backlog)</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box orange">Priorização PM</div>
+    </div>
+    <div style="margin-left:48px;color:var(--fg3);font-size:1.2rem">↓</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="flow-box blue">Sprint Biancode</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box">Desenvolvimento</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box accent">QA (Analista)</div>
+    </div>
+    <div style="margin-left:48px;color:var(--fg3);font-size:1.2rem">↓</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="flow-box green">Deploy em produção</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box orange">Validação pós-deploy</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box">Slack Mktg</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-box green">Usuários</div>
+    </div>
+  </div>
+
+  <h2>Etapas em Detalhe</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">1</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Origem da Ideia</div>
+        <div class="timeline-desc">A demanda pode surgir de: feedback de usuário, pesquisa de mercado, análise de concorrência, pedido da liderança ou observação interna. Toda ideia, independente de quem trouxe, precisa ser documentada. Ideia não documentada não existe.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">2</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Criação no Notion</div>
+        <div class="timeline-desc">O PM (ou o Analista de Produto) cria a demanda no backlog do Notion com todas as informações necessárias: tipo, produto, prioridade, contexto e critérios de aceite. Demandas vagas travam o desenvolvimento.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">3</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Priorização pelo PM</div>
+        <div class="timeline-desc">O PM decide a prioridade relativa da demanda em relação ao que já está no backlog. Bugs P0/P1 entram na sprint imediatamente. Features e melhorias são priorizadas por impacto x esforço e entram no próximo sprint disponível.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">4</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Repasse para a Biancode</div>
+        <div class="timeline-desc">O PM passa a demanda para o Wolney (sprint manager da Biancode) com link da demanda do Notion e contexto adicional se necessário. O Wolney organiza na sprint com Lincoln e Iago e confirma prazo estimado.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">5</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Desenvolvimento (Biancode)</div>
+        <div class="timeline-desc">Lincoln e Iago implementam a demanda. Durante o desenvolvimento, podem surgir dúvidas técnicas que precisam de esclarecimento do PM. O canal <code>#flow-dev</code> no Slack é usado para isso. Dúvidas respondidas com agilidade evitam atrasos.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">6</div>
+      <div class="timeline-content">
+        <div class="timeline-title">QA pelo Analista de Produto</div>
+        <div class="timeline-desc">Quando a Biancode conclui e disponibiliza em ambiente de teste, o Analista de Produto executa o QA completo conforme o checklist. Testa os critérios de aceite, busca comportamentos inesperados e regressões em fluxos existentes. Resultado: aprovado (segue para deploy) ou reprovado (volta para a Biancode com lista de ajustes documentada).</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">7</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Deploy em Produção</div>
+        <div class="timeline-desc">Após QA aprovado, a Biancode realiza o deploy em produção. O PM é notificado quando o deploy é realizado. Para releases maiores, o horário de deploy é planejado para minimizar impacto (evitar horários de pico de uso).</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">8</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Validação Pós-Deploy</div>
+        <div class="timeline-desc">O Analista de Produto faz smoke test em produção logo após o deploy para confirmar que tudo foi ao ar corretamente. Primeiras horas são monitoradas. Se aparecer problema, bug P0 é aberto imediatamente.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">9</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Comunicação ao Time de Marketing</div>
+        <div class="timeline-desc">O PM notifica o canal de marketing no Slack com o que foi atualizado: produto, o que mudou, o que o usuário vai ver diferente. O marketing usa essa informação para criar a comunicação externa (e-mail, push, redes sociais).</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot">10</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Demanda Fechada</div>
+        <div class="timeline-desc">Após validação em produção e comunicação ao marketing, a demanda é fechada no Notion como "Concluído" com data de conclusão. Aprendizados relevantes são documentados para referência futura.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Aprovações e Responsabilidades</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Tipo de Demanda</th><th>Quem aprova</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td>Bug P0/P1</td><td>PM (Daniel)</td><td>Ação imediata, sem burocracia</td></tr>
+        <tr><td>Bug P2/P3</td><td>PM (Daniel)</td><td>Entra no próximo sprint</td></tr>
+        <tr><td>Melhoria e features pequenas</td><td>PM (Daniel)</td><td>Sob responsabilidade do PM</td></tr>
+        <tr><td>Features grandes ou estratégicas</td><td>Liderança (Tiago/Gabriel)</td><td>Objetivo crescente: passar mais para a liderança</td></tr>
+        <tr><td>Mudança de roadmap significativa</td><td>Liderança (Tiago/Gabriel)</td><td>Sempre requer alinhamento</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PAGE: STANDARDS ===================== -->
+<section class="page" id="page-standards">
+  <div class="page-header">
+    <div class="page-eyebrow">Operações</div>
+    <h1>Padrões do Produto</h1>
+    <p class="page-desc">Padrões de qualidade, nomenclatura e comportamento que todos os produtos Flow devem seguir.</p>
+  </div>
+
+  <h2>Padrões de Qualidade</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">⚡</div>
+      <h3>Performance</h3>
+      <p>Páginas carregando em menos de 3 segundos. Core Web Vitals no verde. Nenhuma funcionalidade deve degradar a performance percebida pelo usuário.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📱</div>
+      <h3>Responsividade</h3>
+      <p>Todas as telas funcionam em mobile, tablet e desktop. O Analista de Produto testa em pelo menos 2 resoluções durante o QA.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔒</div>
+      <h3>Segurança</h3>
+      <p>Dados de usuários protegidos. Autenticação segura. Vulnerabilidades conhecidas tratadas com prioridade. A Biancode segue as práticas de segurança acordadas.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">♿</div>
+      <h3>Acessibilidade básica</h3>
+      <p>Contraste adequado de cores, textos legíveis, hierarquia visual clara. Não precisa ser WCAG AAA, mas deve ser usável por todos.</p>
+    </div>
+  </div>
+
+  <h2>Padrões de Linguagem e Nomenclatura</h2>
+  <div class="section-card">
+    <p>Consistência na linguagem dentro do produto cria confiança no usuário. Quando os termos mudam de tela para tela, o usuário perde a referência.</p>
+    <ul class="checklist">
+      <li><span class="check-icon done">✓</span>Português brasileiro em toda a interface, sem anglicismos desnecessários</li>
+      <li><span class="check-icon done">✓</span>Tom direto e claro, sem jargões que o usuário não vai entender</li>
+      <li><span class="check-icon done">✓</span>Nomenclatura de funcionalidades consistente entre a plataforma, documentação e comunicação</li>
+      <li><span class="check-icon done">✓</span>Mensagens de erro explicativas: dizem o que aconteceu e o que o usuário deve fazer</li>
+      <li><span class="check-icon done">✓</span>Labels de botões descrevem ações, não estados ("Exportar relatório", não "Confirmar")</li>
+    </ul>
+  </div>
+
+  <h2>Padrões de Comunicação de Atualização</h2>
+  <div class="section-card">
+    <p>Quando uma funcionalidade muda ou é adicionada, o usuário precisa saber de forma clara e objetiva. O padrão de comunicação deve seguir:</p>
+    <ul class="checklist">
+      <li><span class="check-icon done">✓</span>O que mudou (nome da funcionalidade/tela)</li>
+      <li><span class="check-icon done">✓</span>Por que mudou ou foi adicionado (o problema que resolve)</li>
+      <li><span class="check-icon done">✓</span>O que o usuário precisa fazer (se precisar de ação)</li>
+      <li><span class="check-icon done">✓</span>Onde encontrar mais informação se tiver dúvida</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== PAGE: SLAs ===================== -->
+<section class="page" id="page-slas">
+  <div class="page-header">
+    <div class="page-eyebrow">Operações</div>
+    <h1>SLAs do Setor</h1>
+    <p class="page-desc">Acordos de nível de serviço que definem tempos de resposta e resolução para diferentes tipos de demanda.</p>
+  </div>
+
+  <h2>SLAs de Resposta a Bugs</h2>
+  <div class="sla-grid">
+    <div class="sla-card critical">
+      <div class="sla-time" style="color:var(--accent5)">2h</div>
+      <div class="sla-type">P0 — Crítico</div>
+      <div class="sla-desc">Iniciar ação em até 2h após identificação. Produto fora do ar ou funcionalidade core quebrada.</div>
+    </div>
+    <div class="sla-card high">
+      <div class="sla-time" style="color:var(--accent3)">8h</div>
+      <div class="sla-type">P1 — Alto</div>
+      <div class="sla-desc">Análise e priorização em até 8h. Funcionalidade importante comprometida com grande impacto.</div>
+    </div>
+    <div class="sla-card normal">
+      <div class="sla-time" style="color:var(--accent4)">48h</div>
+      <div class="sla-type">P2 — Normal</div>
+      <div class="sla-desc">Entrada no backlog e priorização em até 48h. Impacto moderado, tem workaround disponível.</div>
+    </div>
+    <div class="sla-card low">
+      <div class="sla-time" style="color:var(--accent2)">1 sem</div>
+      <div class="sla-type">P3 — Baixo</div>
+      <div class="sla-desc">Entrada no backlog na próxima semana. Bug cosmético ou de impacto mínimo.</div>
+    </div>
+  </div>
+
+  <h2>SLAs de QA e Validação</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Atividade</th><th>SLA</th><th>Responsável</th></tr></thead>
+      <tbody>
+        <tr><td>QA de entrega da Biancode (pequena)</td><td>1 dia útil</td><td>Analista de Produto</td></tr>
+        <tr><td>QA de entrega da Biancode (média)</td><td>2 dias úteis</td><td>Analista de Produto</td></tr>
+        <tr><td>QA de release major</td><td>3 dias úteis</td><td>Analista + PM</td></tr>
+        <tr><td>Validação pós-deploy</td><td>2h após deploy</td><td>Analista de Produto</td></tr>
+        <tr><td>Resposta a dúvidas da Biancode</td><td>4h em horário comercial</td><td>PM</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>SLAs de Pesquisa e Relatórios</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Entregável</th><th>Frequência</th><th>Responsável</th></tr></thead>
+      <tbody>
+        <tr><td>Relatório de análise competitiva (por produto)</td><td>Bimestral</td><td>Analista de Produto</td></tr>
+        <tr><td>Rodada de pesquisa com usuários (por produto)</td><td>Trimestral</td><td>Analista de Produto</td></tr>
+        <tr><td>Relatório de oportunidades de features</td><td>Mensal</td><td>Analista de Produto</td></tr>
+        <tr><td>Atualização de planilha de influencers</td><td>Semanal</td><td>Analista de Produto</td></tr>
+        <tr><td>Revisão de backlog e priorização</td><td>Quinzenal</td><td>PM + Analista</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PAGE: ROUTINES ===================== -->
+<section class="page" id="page-routines">
+  <div class="page-header">
+    <div class="page-eyebrow">Operações</div>
+    <h1>Rotinas do Setor</h1>
+    <p class="page-desc">Cadência de reuniões, revisões e rituais que mantêm o setor de produto funcionando de forma previsível.</p>
+  </div>
+
+  <h2>Cadência Semanal</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot" style="font-size:.65rem">SEG</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Planning de Sprint (com Biancode)</div>
+        <div class="timeline-desc">Revisão do que está no backlog prioritizado, confirmação de esforço, definição do que entra no sprint da semana. PM + Analista + Wolney. Duração: 45 minutos.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot" style="font-size:.65rem">DIÁR</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Check-in rápido (Slack)</div>
+        <div class="timeline-desc">Não é reunião. É uma mensagem diária no Slack: o que foi feito ontem, o que vai ser feito hoje, tem algum bloqueio? PM e Analista mantêm o canal ativo e transparente.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot" style="font-size:.65rem">SEX</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Review de Sprint (com Biancode)</div>
+        <div class="timeline-desc">A Biancode apresenta o que foi entregue no sprint. PM e Analista validam ao vivo as principais entregas. O que não foi entregue é reavaliado para a próxima sprint. Duração: 30-45 minutos.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Cadência Mensal</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📊</div>
+      <h3>Revisão de KPIs</h3>
+      <p>Análise dos KPIs dos 3 produtos. O que está crescendo, o que está estagnado, o que precisa de ação. Documentado no Notion com comparativo do mês anterior.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🗺️</div>
+      <h3>Revisão de Roadmap</h3>
+      <p>Revisão do estado do roadmap: o que foi entregue, o que mudou de prioridade, o que entrou ou saiu. Comunicado à liderança quando relevante.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔍</div>
+      <h3>Relatório de Oportunidades</h3>
+      <p>Analista de Produto entrega relatório consolidado com oportunidades de features identificadas no mês: pesquisa com usuários, análise competitiva, feedbacks recebidos.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🤝</div>
+      <h3>Alinhamento com Liderança</h3>
+      <p>Update para Tiago e Gabriel sobre o estado dos produtos, principais entregas do mês e decisões que precisam de aprovação. Objetivo é aumentar a frequência à medida que o setor cresce.</p>
+    </div>
+  </div>
+
+  <h2>Ritual de Retrospectiva (Bimestral)</h2>
+  <div class="section-card">
+    <p>A cada dois meses, o setor de produto (PM + Analista) faz uma retrospectiva do período:</p>
+    <ul class="checklist">
+      <li><span class="check-icon done">✓</span>O que funcionou bem e deve ser mantido</li>
+      <li><span class="check-icon done">✓</span>O que não funcionou e deve ser mudado</li>
+      <li><span class="check-icon done">✓</span>O que o setor vai tentar fazer diferente no próximo período</li>
+      <li><span class="check-icon done">✓</span>Feedback mútuo entre PM e Analista</li>
+    </ul>
+    <p style="margin-top:12px">Resultado documentado no Notion. Ações de melhoria têm responsável e prazo.</p>
+  </div>
+</section>
+
+<!-- ===================== PAGE: KPIs ===================== -->
+<section class="page" id="page-kpis">
+  <div class="page-header">
+    <div class="page-eyebrow">Operações</div>
+    <h1>KPIs do Setor</h1>
+    <p class="page-desc">Indicadores chave que mostram a saúde dos produtos e do setor de produto.</p>
+  </div>
+
+  <h2>KPIs de Produto (por ferramenta)</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-num">MRR</div>
+      <div class="kpi-label">Receita Recorrente</div>
+      <div class="kpi-desc">Crescimento mês a mês. Reflete saúde do negócio e eficácia das iniciativas de produto.</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">Churn</div>
+      <div class="kpi-label">Taxa de Cancelamento</div>
+      <div class="kpi-desc">Percentual de usuários que cancelaram no mês. Alta churn = problema de valor ou experiência.</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">DAU/MAU</div>
+      <div class="kpi-label">Engajamento</div>
+      <div class="kpi-desc">Usuários ativos por dia / por mês. Proxy de stickiness do produto.</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">NPS</div>
+      <div class="kpi-label">Satisfação do Usuário</div>
+      <div class="kpi-desc">Net Promoter Score. Medido trimestralmente via pesquisa.</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">LTV</div>
+      <div class="kpi-label">Lifetime Value</div>
+      <div class="kpi-desc">Tempo médio de retenção x receita média por usuário.</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">CSAT</div>
+      <div class="kpi-label">Satisfação Pontual</div>
+      <div class="kpi-desc">Satisfação em interações específicas: suporte, onboarding, novas features.</div>
+    </div>
+  </div>
+
+  <h2>KPIs do Processo de Produto</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Indicador</th><th>Meta</th><th>Por que acompanhar</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Bugs em produção / mês</strong></td><td>Tendência decrescente</td><td>Reflete qualidade do QA e da implementação</td></tr>
+        <tr><td><strong>Tempo médio de resolução de bug P0/P1</strong></td><td>P0: &lt; 4h | P1: &lt; 24h</td><td>Velocidade de resposta a problemas críticos</td></tr>
+        <tr><td><strong>Entregas da sprint no prazo</strong></td><td>&gt; 80%</td><td>Previsibilidade da Biancode e qualidade das especificações</td></tr>
+        <tr><td><strong>Demandas com QA aprovado de 1ª</strong></td><td>&gt; 70%</td><td>Qualidade das especificações e do desenvolvimento</td></tr>
+        <tr><td><strong>Backlog atualizado</strong></td><td>100% das demandas com status atualizado</td><td>Visibilidade do que está acontecendo no setor</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: QA ===================== -->
+<section class="page" id="page-qa">
+  <div class="page-header">
+    <div class="page-eyebrow">Qualidade & Governança</div>
+    <h1>QA Checklist</h1>
+    <p class="page-desc">Checklist de validação de qualidade para cada entrega da Biancode antes do deploy em produção.</p>
+  </div>
+
+  <div class="info-box">
+    <strong>Responsável pelo QA:</strong> Analista de Produto. O PM é acionado apenas em casos de dúvida sobre critérios de aceite ou quando a entrega tem impacto estratégico alto.
+  </div>
+
+  <h2>Checklist Geral (toda entrega)</h2>
+  <ul class="checklist">
+    <li><span class="check-icon">○</span>Os critérios de aceite definidos na demanda foram todos atendidos</li>
+    <li><span class="check-icon">○</span>A funcionalidade se comporta conforme descrito na especificação</li>
+    <li><span class="check-icon">○</span>Testado em desktop (Chrome, Safari, Firefox)</li>
+    <li><span class="check-icon">○</span>Testado em mobile (iOS e Android)</li>
+    <li><span class="check-icon">○</span>Nenhum erro de console visível relacionado à entrega</li>
+    <li><span class="check-icon">○</span>Performance não degradou visivelmente após a mudança</li>
+    <li><span class="check-icon">○</span>Textos sem erros de digitação ou linguagem incorreta</li>
+    <li><span class="check-icon">○</span>Fluxos adjacentes à mudança não foram quebrados (teste de regressão)</li>
+    <li><span class="check-icon">○</span>Comportamentos de erro estão funcionando corretamente</li>
+    <li><span class="check-icon">○</span>Se aplicável: dados estão salvando e carregando corretamente</li>
+  </ul>
+
+  <h2>Checklist por Tipo de Entrega</h2>
+  <div class="accordion">
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🐛 Bug Fix
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <ul class="checklist">
+          <li><span class="check-icon">○</span>O comportamento incorreto reportado no bug não ocorre mais</li>
+          <li><span class="check-icon">○</span>Testado com os passos para reproduzir descritos na demanda</li>
+          <li><span class="check-icon">○</span>Testado em diferentes usuários/contas se o bug era específico</li>
+          <li><span class="check-icon">○</span>Funcionalidades relacionadas não foram afetadas pelo fix</li>
+          <li><span class="check-icon">○</span>Se era P0/P1: validação em produção imediatamente após deploy</li>
+        </ul>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        ✨ Melhoria de UX/Funcionalidade
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <ul class="checklist">
+          <li><span class="check-icon">○</span>A melhoria realmente tornou a experiência melhor (usar o produto)</li>
+          <li><span class="check-icon">○</span>Consistência visual com o restante do produto mantida</li>
+          <li><span class="check-icon">○</span>Nomenclatura e textos alinhados com os padrões do produto</li>
+          <li><span class="check-icon">○</span>Comportamento em estados de erro e carregamento tratados</li>
+          <li><span class="check-icon">○</span>Sem quebra de funcionalidades anteriores no mesmo fluxo</li>
+        </ul>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🚀 Nova Funcionalidade
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <ul class="checklist">
+          <li><span class="check-icon">○</span>Fluxo completo testado do início ao fim (happy path)</li>
+          <li><span class="check-icon">○</span>Fluxos alternativos e de erro testados</li>
+          <li><span class="check-icon">○</span>Dados persistem e carregam corretamente após refresh</li>
+          <li><span class="check-icon">○</span>Permissões e acesso funcionam conforme especificado</li>
+          <li><span class="check-icon">○</span>Funcionamento em diferentes tamanhos de dados (conta vazia vs conta com dados)</li>
+          <li><span class="check-icon">○</span>Integração com outras partes do produto não foi quebrada</li>
+          <li><span class="check-icon">○</span>Documentação interna atualizada se necessário</li>
+        </ul>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔗 Integração com Plataforma Externa
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <ul class="checklist">
+          <li><span class="check-icon">○</span>Fluxo de autenticação/autorização com a plataforma externa testado</li>
+          <li><span class="check-icon">○</span>Dados chegando corretamente da plataforma externa</li>
+          <li><span class="check-icon">○</span>Comportamento quando a API externa está lenta ou fora do ar tratado</li>
+          <li><span class="check-icon">○</span>Limites de rate limit considerados</li>
+          <li><span class="check-icon">○</span>Desconexão e reconexão com a plataforma funcionando</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>Resultado do QA</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Resultado</th><th>Ação</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-green">✅ Aprovado</span></td>
+          <td>Comunicar ao PM e ao Wolney. Deploy pode ser realizado.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-orange">⚠️ Aprovado com ressalvas</span></td>
+          <td>Pode ir para produção com pequenos itens documentados para correção no próximo sprint.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-red">❌ Reprovado</span></td>
+          <td>Comunicar ao Wolney com lista de itens a corrigir. Deploy bloqueado até nova rodada de QA.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PAGE: GOVERNANCE ===================== -->
+<section class="page" id="page-governance">
+  <div class="page-header">
+    <div class="page-eyebrow">Qualidade & Governança</div>
+    <h1>Governança</h1>
+    <p class="page-desc">Princípios de governança do setor de produto: tomada de decisão, responsabilidades e accountability.</p>
+  </div>
+
+  <h2>Modelo de Decisão</h2>
+  <div class="section-card">
+    <p>O setor de produto opera com autonomia para decisões operacionais e técnicas no nível do produto. Decisões estratégicas e com impacto significativo no roadmap ou no investimento são submetidas à liderança.</p>
+  </div>
+
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Tipo de Decisão</th><th>Autoridade</th><th>Como comunicar</th></tr></thead>
+      <tbody>
+        <tr><td>Bug fix de qualquer nível</td><td>PM (Daniel)</td><td>Documenta no Notion, notifica via Slack se P0/P1</td></tr>
+        <tr><td>Melhoria incremental</td><td>PM (Daniel)</td><td>Documenta no Notion e passa para sprint</td></tr>
+        <tr><td>Nova funcionalidade pequena</td><td>PM (Daniel)</td><td>Documenta com contexto, passa para sprint</td></tr>
+        <tr><td>Nova funcionalidade grande</td><td>PM + Liderança</td><td>Apresentação de proposta para Tiago/Gabriel</td></tr>
+        <tr><td>Mudança de posicionamento ou pricing</td><td>Liderança</td><td>Proposta formal com análise</td></tr>
+        <tr><td>Contrato com influencer</td><td>PM (Daniel)</td><td>Documenta no Notion, liderança é informada</td></tr>
+        <tr><td>Mudança de parceiro técnico</td><td>Liderança</td><td>Decisão estratégica, requer alinhamento</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Accountability do Setor</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📋</div>
+      <h3>Backlog sempre atualizado</h3>
+      <p>Toda demanda tem status refletindo a realidade. O Notion é a fonte de verdade. Se não está no Notion, não existe oficialmente.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📊</div>
+      <h3>KPIs reportados mensalmente</h3>
+      <p>O PM reporta os KPIs dos produtos para a liderança mensalmente. Surpresas negativas precisam ser comunicadas antes, não na reunião de review.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔄</div>
+      <h3>Processo seguido consistentemente</h3>
+      <p>Pulamos o processo quando estamos com pressa. O resultado é mais retrabalho depois. Processo existe para proteger a velocidade no longo prazo.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🤝</div>
+      <h3>Parceiros tratados com respeito</h3>
+      <p>A Biancode e os influencers são parceiros, não fornecedores genéricos. Relações de longo prazo se constroem com respeito mútuo e comunicação clara.</p>
+    </div>
+  </div>
+
+  <h2>Gestão de Conhecimento</h2>
+  <div class="section-card">
+    <p>O conhecimento do setor não pode ficar só na cabeça das pessoas. A documentação é o que garante que novas contratações conseguem se integrar rapidamente e que o setor não perde velocidade quando alguém sai.</p>
+    <ul class="checklist" style="margin-top:12px">
+      <li><span class="check-icon done">✓</span>Decisões importantes documentadas no Notion com contexto e raciocínio</li>
+      <li><span class="check-icon done">✓</span>Aprendizados de pesquisas registrados e acessíveis</li>
+      <li><span class="check-icon done">✓</span>Este playbook atualizado quando processos mudam</li>
+      <li><span class="check-icon done">✓</span>Contratos com influencers organizados e acessíveis</li>
+      <li><span class="check-icon done">✓</span>Histórico de decisões de roadmap disponível para referência</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== PAGE: BACKLOG ===================== -->
+<section class="page" id="page-backlog">
+  <div class="page-header">
+    <div class="page-eyebrow">Estratégia</div>
+    <h1>Gestão de Backlog</h1>
+    <p class="page-desc">Como o backlog dos produtos Flow é organizado, priorizado e mantido saudável.</p>
+  </div>
+
+  <h2>Princípios do Backlog</h2>
+  <div class="info-box">
+    <strong>Backlog saudável</strong> não é backlog enorme. É um backlog priorizado, com demandas bem descritas, onde os itens do topo estão prontos para entrar em sprint a qualquer momento.
+  </div>
+
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">🎯</div>
+      <h3>Sempre priorizado</h3>
+      <p>O topo do backlog contém o que tem mais impacto agora. A prioridade é revisada quinzenalmente ou quando algo muda no negócio.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📝</div>
+      <h3>Bem especificado</h3>
+      <p>Demanda no topo do backlog está pronta para sprint: tem contexto, critérios de aceite e informação suficiente para o dev implementar sem precisar perguntar o óbvio.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🧹</div>
+      <h3>Limpo regularmente</h3>
+      <p>Demandas que não fazem mais sentido são arquivadas. Backlog com 200 itens sem prioridade é um ruído, não um ativo.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔍</div>
+      <h3>Baseado em evidência</h3>
+      <p>Cada item tem contexto de por que está no backlog. "Alguém pediu" não é contexto suficiente. Quantas pessoas? Qual o impacto se não fizermos?</p>
+    </div>
+  </div>
+
+  <h2>Estrutura do Backlog no Notion</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Coluna</th><th>O que registrar</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Título</strong></td><td>Nome claro e objetivo da demanda</td></tr>
+        <tr><td><strong>Produto</strong></td><td>FlowSpy / FlowTracking / FlowPages</td></tr>
+        <tr><td><strong>Tipo</strong></td><td>Bug / Melhoria / Feature / Débito técnico / Integração</td></tr>
+        <tr><td><strong>Prioridade</strong></td><td>Crítica / Alta / Média / Baixa</td></tr>
+        <tr><td><strong>Status</strong></td><td>Backlog / Em priorização / Em sprint / Em QA / Concluído</td></tr>
+        <tr><td><strong>Contexto</strong></td><td>Por que isso é importante? Qual problema resolve?</td></tr>
+        <tr><td><strong>Critérios de aceite</strong></td><td>Como saberemos que foi entregue corretamente?</td></tr>
+        <tr><td><strong>Esforço estimado</strong></td><td>Pequeno / Médio / Grande (validado com Biancode)</td></tr>
+        <tr><td><strong>Data de conclusão</strong></td><td>Preenchida quando concluído</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PAGE: ROADMAP ===================== -->
+<section class="page" id="page-roadmap">
+  <div class="page-header">
+    <div class="page-eyebrow">Estratégia</div>
+    <h1>Roadmap</h1>
+    <p class="page-desc">Visão de médio prazo do que cada produto Flow está planejando entregar.</p>
+  </div>
+
+  <div class="info-box warning">
+    <strong>Importante:</strong> O roadmap é uma intenção, não um contrato. Prioridades mudam. O que está no roadmap reflete o melhor julgamento hoje, mas pode ser ajustado conforme aprendemos mais com usuários e mercado.
+  </div>
+
+  <h2>Princípios do Roadmap Flow</h2>
+  <div class="section-card">
+    <p>Um bom roadmap conta uma história: o produto está indo de A para B, e cada item no caminho faz sentido dentro dessa narrativa. Roadmap que é apenas uma lista de features não tem estratégia.</p>
+    <ul class="checklist" style="margin-top:12px">
+      <li><span class="check-icon done">✓</span>Cada feature no roadmap tem uma razão clara de existir</li>
+      <li><span class="check-icon done">✓</span>O roadmap é construído de trás para frente: qual é o objetivo do produto nos próximos 6 meses?</li>
+      <li><span class="check-icon done">✓</span>Existe equilíbrio entre features novas, melhorias e débito técnico</li>
+      <li><span class="check-icon done">✓</span>O roadmap é revisado mensalmente com dados reais de uso e feedback</li>
+      <li><span class="check-icon done">✓</span>A liderança está alinhada com a direção estratégica</li>
+    </ul>
+  </div>
+
+  <h2>Horizontes do Roadmap</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Horizonte</th><th>Prazo</th><th>Nível de certeza</th><th>Detalhamento</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Now (Agora)</strong></td>
+          <td>0-4 semanas</td>
+          <td><span class="badge badge-green">Alto</span></td>
+          <td>Em sprint ou prestes a entrar. Especificação completa.</td>
+        </tr>
+        <tr>
+          <td><strong>Next (Próximo)</strong></td>
+          <td>1-3 meses</td>
+          <td><span class="badge badge-orange">Médio</span></td>
+          <td>Priorizado e validado. Pode mudar de ordem.</td>
+        </tr>
+        <tr>
+          <td><strong>Later (Depois)</strong></td>
+          <td>3-6 meses</td>
+          <td><span class="badge badge-blue">Baixo</span></td>
+          <td>Ideia estratégica. Pode mudar completamente.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>O Roadmap Atual</h2>
+  <div class="section-card">
+    <p>O roadmap detalhado e atualizado de cada produto está no Notion, na área de cada ferramenta. Este playbook não replica o roadmap porque ele muda com frequência. Acesse o Notion para a versão mais recente.</p>
+    <p>O que está aqui são os princípios de como o roadmap é construído e gerenciado, não o conteúdo em si.</p>
+  </div>
+</section>
+
+
+<!-- ===================== PAGE: ONBOARDING ===================== -->
+<section class="page" id="page-onboarding">
+  <div class="page-header">
+    <div class="page-eyebrow">Referência</div>
+    <h1>Onboarding</h1>
+    <p class="page-desc">Plano de integração para novos membros do setor de produto Flow. Semana a semana, com objetivos claros para os primeiros 90 dias.</p>
+  </div>
+
+  <div class="info-box">
+    <strong>Para o novo colaborador:</strong> Este plano existe para que você não precise adivinhar o que se espera de você. Siga o ritmo, faça perguntas, e ao final de 90 dias você terá clareza total sobre o produto, o processo e o seu papel no time.
+  </div>
+
+  <h2>Mês 1 — Aprender e Observar</h2>
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="phase-label">Semana 1</div>
+      <h3>Ambientação</h3>
+      <p>Conhecer as ferramentas, os produtos e as pessoas. Não há entrega esperada — só absorver.</p>
+      <ul>
+        <li>Leitura completa deste playbook</li>
+        <li>Acesso a Notion, Slack, Loom configurados</li>
+        <li>Testar FlowSpy, FlowTracking e FlowPages como usuário</li>
+        <li>1:1 de alinhamento com Daniel</li>
+        <li>Assistir gravações Loom de demandas recentes</li>
+      </ul>
+    </div>
+    <div class="phase-card">
+      <div class="phase-label">Semana 2</div>
+      <h3>Primeiros Processos</h3>
+      <p>Entender como o trabalho acontece na prática: o fluxo de demandas, o sprint, a comunicação com a Biancode.</p>
+      <ul>
+        <li>Acompanhar planning semanal com Wolney</li>
+        <li>Ler as últimas 10 demandas concluídas no Notion</li>
+        <li>Fazer QA de pelo menos 1 entrega em ambiente de staging</li>
+        <li>Entender a estrutura do backlog de cada produto</li>
+        <li>Conhecer os Slack channels do time</li>
+      </ul>
+    </div>
+    <div class="phase-card">
+      <div class="phase-label">Semana 3</div>
+      <h3>Mão na Massa</h3>
+      <p>Começar a executar tarefas reais com acompanhamento. Erros são bem-vindos, desde que aprendidos.</p>
+      <ul>
+        <li>Executar QA completo de uma entrega do sprint</li>
+        <li>Redigir o relatório de uma entrega no Slack de marketing</li>
+        <li>Fazer 2-3 entrevistas com usuários das ferramentas Flow</li>
+        <li>Documentar aprendizados no Notion</li>
+        <li>Apresentar findings da pesquisa para Daniel</li>
+      </ul>
+    </div>
+    <div class="phase-card">
+      <div class="phase-label">Semana 4</div>
+      <h3>Revisão do Primeiro Mês</h3>
+      <p>Consolidar o aprendizado, identificar gaps e calibrar expectativas para os próximos 60 dias.</p>
+      <ul>
+        <li>Reunião de review 30 dias com Daniel</li>
+        <li>Documento pessoal: o que aprendi, o que ainda não entendo</li>
+        <li>Mapear concorrentes diretos de cada produto Flow</li>
+        <li>Primeiro rascunho de análise competitiva</li>
+        <li>Confirmar ferramentas e acessos OK</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Mês 2 — Contribuir com Autonomia</h2>
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="phase-label">Semanas 5-6</div>
+      <h3>Pesquisa de Mercado</h3>
+      <p>Assumir a responsabilidade de pesquisa com usuários e análise de concorrência.</p>
+      <ul>
+        <li>Conduzir ciclo completo de pesquisa com usuários (5+ entrevistas)</li>
+        <li>Entrega: relatório de insights com oportunidades priorizadas</li>
+        <li>Análise de 2 concorrentes por produto com comparativo de features</li>
+        <li>Propor 3 melhorias baseadas nos dados coletados</li>
+      </ul>
+    </div>
+    <div class="phase-card">
+      <div class="phase-label">Semanas 7-8</div>
+      <h3>QA e Demandas</h3>
+      <p>Conduzir QA de forma independente e começar a ajudar na especificação de demandas.</p>
+      <ul>
+        <li>QA autônomo de todas as entregas do sprint</li>
+        <li>Redigir especificação de 2-3 melhorias no Notion</li>
+        <li>Acompanhar follow-up com influencers da semana</li>
+        <li>Reunião de review 60 dias com Daniel</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Mês 3 — Operar com Independência</h2>
+  <div class="phase-grid">
+    <div class="phase-card">
+      <div class="phase-label">Semanas 9-12</div>
+      <h3>Operação Plena</h3>
+      <p>Ser responsável pelas suas áreas sem precisar de supervisão contínua. Daniel é ponto de alinhamento, não de aprovação operacional.</p>
+      <ul>
+        <li>Ciclo completo de pesquisa mensal operando</li>
+        <li>QA de todos os sprints sem supervisão</li>
+        <li>Pipeline de influencers organizado e atualizado</li>
+        <li>Backlog dos produtos com contribuições relevantes</li>
+        <li>Apresentação 90 dias para Daniel e liderança</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Metas 30 / 60 / 90 Dias</h2>
+  <div class="milestone-grid">
+    <div class="milestone-card">
+      <div class="milestone-day">30</div>
+      <h3>Entender</h3>
+      <ul>
+        <li>Conhece os 3 produtos Flow por dentro</li>
+        <li>Entende o fluxo de demandas do início ao fim</li>
+        <li>Realizou QA de pelo menos 2 entregas</li>
+        <li>Fez as primeiras entrevistas com usuários</li>
+        <li>Se sente confortável com Notion e Slack</li>
+      </ul>
+    </div>
+    <div class="milestone-card">
+      <div class="milestone-day">60</div>
+      <h3>Contribuir</h3>
+      <ul>
+        <li>Conduz QA de forma autônoma</li>
+        <li>Entregou ciclo completo de pesquisa com usuários</li>
+        <li>Tem análise competitiva dos principais concorrentes</li>
+        <li>Propôs melhorias baseadas em dados que foram aprovadas</li>
+        <li>Gerencia follow-up com influencers sem supervisão</li>
+      </ul>
+    </div>
+    <div class="milestone-card">
+      <div class="milestone-day">90</div>
+      <h3>Operar</h3>
+      <ul>
+        <li>Tem rotinas próprias estabelecidas e funcionando</li>
+        <li>É referência interna para perguntas sobre os produtos</li>
+        <li>Pipeline de pesquisa e QA rodando de forma previsível</li>
+        <li>Contribuiu para o backlog com insights que geraram entregas</li>
+        <li>Daniel confia nas suas decisões operacionais</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: GLOSSÁRIO ===================== -->
+<section class="page" id="page-glossario">
+  <div class="page-header">
+    <div class="page-eyebrow">Referência</div>
+    <h1>Glossário</h1>
+    <p class="page-desc">Termos usados no dia a dia do setor de produto Flow, no mercado de afiliados e no desenvolvimento de software.</p>
+  </div>
+
+  <h2>Termos Internos Flow</h2>
+  <div class="glossary-list">
+    <div class="glossary-item">
+      <div class="glossary-term">Biancode</div>
+      <div class="glossary-def">Empresa parceira de desenvolvimento responsável pela implementação técnica dos produtos Flow. Wolney é o sprint manager; Lincoln e Iago são os desenvolvedores.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Sprint</div>
+      <div class="glossary-def">Ciclo quinzenal de desenvolvimento. O sprint começa com um planning onde as demandas são selecionadas do backlog e atribuídas à Biancode.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Demanda</div>
+      <div class="glossary-def">Qualquer item de trabalho para a Biancode: bug, melhoria, feature ou débito técnico. Todas as demandas são criadas e gerenciadas no Notion.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Critério de aceite</div>
+      <div class="glossary-def">Condição que precisa ser atendida para que uma demanda seja considerada concluída. É definido pelo PM na especificação e validado pelo QA.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">QA (Quality Assurance)</div>
+      <div class="glossary-def">Processo de validação de qualidade realizado após cada entrega da Biancode, antes do deploy em produção. Responsabilidade do Analista de Produto.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Deploy</div>
+      <div class="glossary-def">Publicação de uma atualização em produção, tornando-a disponível para todos os usuários. Só acontece depois do QA aprovado.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Backlog</div>
+      <div class="glossary-def">Lista priorizada de tudo que precisa ser feito nos produtos. Fica no Notion e é gerenciado pelo PM. O que está no topo está próximo de entrar em sprint.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Roadmap</div>
+      <div class="glossary-def">Visão de médio prazo do que cada produto vai entregar. Horizonte dividido em Now (0-4 semanas), Next (1-3 meses) e Later (3-6 meses).</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">KPI</div>
+      <div class="glossary-def">Key Performance Indicator. Métricas que medem a saúde dos produtos: MRR, Churn, DAU/MAU, NPS, LTV, CSAT.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Staging</div>
+      <div class="glossary-def">Ambiente de testes onde as atualizações são validadas antes de irem para produção. O QA é sempre feito em staging.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Influencer Flow</div>
+      <div class="glossary-def">Criador de conteúdo com quem a TB tem contrato de divulgação dos produtos Flow. O Analista de Produto é responsável pelo acompanhamento das entregas.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Canal #updates-flow</div>
+      <div class="glossary-def">Canal do Slack usado para comunicar ao time de marketing todas as atualizações lançadas nos produtos, para que eles possam comunicar os usuários.</div>
+    </div>
+  </div>
+
+  <h2>Termos de Produto e Desenvolvimento</h2>
+  <div class="glossary-list">
+    <div class="glossary-item">
+      <div class="glossary-term">Bug</div>
+      <div class="glossary-def">Comportamento incorreto ou inesperado em um produto. Classificados por severidade: P0 (crítico), P1 (alto), P2 (médio), P3 (baixo).</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Feature</div>
+      <div class="glossary-def">Nova funcionalidade a ser adicionada ao produto. Diferente de uma melhoria, uma feature adiciona algo que não existia antes.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Débito técnico</div>
+      <div class="glossary-def">Problemas na arquitetura ou código que precisam ser resolvidos para manter a saúde técnica do produto, mesmo que não sejam visíveis ao usuário.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">UX (User Experience)</div>
+      <div class="glossary-def">Experiência do usuário ao interagir com o produto. Uma boa UX é intuitiva, eficiente e agradável. UX ruim é quando o usuário não consegue fazer o que precisa.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Regressão</div>
+      <div class="glossary-def">Quando uma atualização quebra algo que estava funcionando antes. O QA inclui testes de regressão para evitar isso.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Happy path</div>
+      <div class="glossary-def">O fluxo principal e esperado de uso de uma funcionalidade, sem erros ou casos extremos. O QA começa pelo happy path e depois testa os casos alternativos.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">SLA (Service Level Agreement)</div>
+      <div class="glossary-def">Acordo de nível de serviço que define o prazo máximo para resposta e resolução de um problema. Ex: bug P0 tem SLA de 2 horas.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">NPS (Net Promoter Score)</div>
+      <div class="glossary-def">Métrica de satisfação de usuário. Medida pela pergunta "De 0 a 10, quanto você recomendaria este produto?" Score acima de 50 é considerado bom.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Churn</div>
+      <div class="glossary-def">Taxa de cancelamento de assinaturas em um período. Churn alto indica problema de retenção: o produto não está entregando valor suficiente.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">MRR (Monthly Recurring Revenue)</div>
+      <div class="glossary-def">Receita recorrente mensal. Principal indicador financeiro de produtos por assinatura. Crescimento de MRR é o objetivo central do setor de produto.</div>
+    </div>
+  </div>
+
+  <h2>Termos do Mercado de Afiliados</h2>
+  <div class="glossary-list">
+    <div class="glossary-item">
+      <div class="glossary-term">Afiliado</div>
+      <div class="glossary-def">Pessoa que promove produtos de terceiros e recebe comissão por cada venda gerada. Os produtos Flow servem esse público como ferramentas de trabalho.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Hotmart / Kiwify / Monetizze</div>
+      <div class="glossary-def">Plataformas de produtos digitais onde os produtores vendem e os afiliados promovem. Algumas integrações dos produtos Flow são com essas plataformas.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Link de afiliado</div>
+      <div class="glossary-def">URL única que identifica o afiliado em cada venda. O FlowTracking ajuda a rastrear o desempenho desses links.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Sub-afiliado</div>
+      <div class="glossary-def">Afiliado recrutado por outro afiliado. O recrutador ganha comissão sobre as vendas do sub-afiliado em estruturas de multi-nível.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Funil</div>
+      <div class="glossary-def">Sequência de páginas e comunicações que guiam o visitante até a compra. O FlowPages é usado para criar e gerenciar esses funis.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Copy</div>
+      <div class="glossary-def">Texto persuasivo usado em páginas, anúncios e e-mails para converter visitantes em compradores. Parte central da estratégia de afiliados.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Conversão</div>
+      <div class="glossary-def">Quando um visitante realiza a ação desejada, geralmente uma compra. Taxa de conversão é o percentual de visitantes que convertem.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">CPA (Cost per Acquisition)</div>
+      <div class="glossary-def">Custo de aquisição por cliente. Quanto o afiliado gasta em tráfego para gerar uma venda.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">ROI (Return on Investment)</div>
+      <div class="glossary-def">Retorno sobre o investimento. Métrica fundamental para afiliados que fazem tráfego pago.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Pixel</div>
+      <div class="glossary-def">Código de rastreamento instalado em páginas para medir conversões e criar audiências para anúncios. Gerenciado pelo FlowSpy.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+
+<script>
+// ── Navigation ──────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('page-' + id);
+  if (target) {
+    target.classList.add('active');
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  document.querySelectorAll('.sidebar-link').forEach(a => {
+    a.classList.toggle('active', a.getAttribute('data-page') === id);
+  });
+  // close sidebar on mobile
+  if (window.innerWidth < 768) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+  // update hash
+  history.replaceState(null, '', '#' + id);
+}
+
+// ── Sidebar toggle ───────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ── Theme toggle ─────────────────────────────────────────────────────
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('ft-theme', next); } catch(e) {}
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.innerHTML = isDark
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+}
+
+// ── Accordion ────────────────────────────────────────────────────────
+function toggleAccordion(btn) {
+  const item = btn.closest('.accordion-item');
+  const isOpen = item.classList.contains('open');
+  // close all in same group
+  btn.closest('.accordion').querySelectorAll('.accordion-item').forEach(i => i.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+
+// ── Search ───────────────────────────────────────────────────────────
+function handleSearch(e) {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) { clearSearch(); return; }
+  const links = document.querySelectorAll('.sidebar-link');
+  links.forEach(a => {
+    const text = a.textContent.toLowerCase();
+    a.style.opacity = text.includes(q) ? '1' : '0.35';
+  });
+}
+
+function clearSearch() {
+  document.querySelectorAll('.sidebar-link').forEach(a => a.style.opacity = '');
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // restore theme
+  let theme = 'dark';
+  try { theme = localStorage.getItem('ft-theme') || 'dark'; } catch(e) {}
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon();
+
+  // wire sidebar links
+  document.querySelectorAll('.sidebar-link[data-page]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      showPage(a.getAttribute('data-page'));
+    });
+  });
+
+  // wire search
+  const searchInput = document.getElementById('sidebar-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', handleSearch);
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { searchInput.value = ''; clearSearch(); }
+    });
+  }
+
+  // load from hash or default
+  const hash = location.hash.replace('#', '');
+  const validPages = ['overview','flowspy','flowtracking','flowpages','team','demands',
+    'cultura','setor','analista','ferramentas','bugs','improvements','features','fluxo',
+    'standards','slas','routines','kpis','qa','governance','backlog','roadmap',
+    'onboarding','glossario'];
+  showPage(validPages.includes(hash) ? hash : 'overview');
+});
+</script>
+</body>
+</html>
+
+</body></html>
