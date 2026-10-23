@@ -564,8 +564,18 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
   <div class="sidebar-inner">
 
     <div class="nav-group">
+      <div class="nav-group-label">Fundação</div>
+      <button class="nav-item active" onclick="showPage('comece')">
+        <span class="nav-dot orange"></span>Comece Aqui
+      </button>
+      <button class="nav-item" onclick="showPage('organizacao')">
+        <span class="nav-dot orange"></span>Organização
+      </button>
+    </div>
+
+    <div class="nav-group">
       <div class="nav-group-label">Plataforma</div>
-      <button class="nav-item active" onclick="showPage('overview')">
+      <button class="nav-item" onclick="showPage('overview')">
         <span class="nav-dot"></span>Visão Geral
       </button>
       <button class="nav-item" onclick="showPage('flowspy')">
@@ -668,8 +678,228 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 
 <main class="main" id="main">
 
+<!-- ===================== PAGE: COMECE AQUI ===================== -->
+<section class="page active" id="page-comece">
+  <div class="page-header">
+    <div class="page-eyebrow">Fundação</div>
+    <h1>Comece Aqui</h1>
+    <p class="page-desc">Por que este playbook existe, para quem ele é e como usá-lo no dia a dia. Leia esta página antes de qualquer outra.</p>
+    <div class="page-meta">
+      <span class="chip">Leitura: 5 min</span>
+      <span class="chip blue">Para quem entra no setor</span>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <strong>Para quem é:</strong> você que acabou de entrar no setor de produto da Flow. O objetivo é que, em pouco tempo, você consiga executar o trabalho do setor seguindo o que está escrito aqui, sem precisar perguntar ao Daniel como cada coisa é feita.
+  </div>
+
+  <h2>Por que este playbook existe</h2>
+  <div class="section-card">
+    <p>Um setor que só funciona quando uma pessoa específica está presente não é um setor, é um gargalo. Hoje boa parte do conhecimento sobre como os produtos Flow são operados está na cabeça do Daniel. Este playbook tira esse conhecimento de lá e coloca num lugar onde qualquer pessoa do time pode consultar.</p>
+    <p>A ideia é simples: <strong>o resultado vem do sistema, não de quem executa.</strong> Se o processo está bem escrito, uma pessoa nova consegue entregar com a mesma qualidade de quem está aqui há anos.</p>
+  </div>
+
+  <h2>Onde queremos chegar</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th></th><th>Hoje</th><th>Em 12 meses</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Quem executa</strong></td><td>O Daniel executa a maior parte das tarefas</td><td>O time executa seguindo as instruções do playbook</td></tr>
+        <tr><td><strong>Papel do Daniel</strong></td><td>Executor e ponto de consulta para tudo</td><td>Revisor: confere se as coisas estão rodando certo</td></tr>
+        <tr><td><strong>Conhecimento</strong></td><td>Na cabeça das pessoas</td><td>Escrito aqui, atualizado pelo próprio time</td></tr>
+        <tr><td><strong>Pessoa nova</strong></td><td>Aprende perguntando</td><td>Aprende lendo e fazendo</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>As regras do playbook</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">1️⃣</div>
+      <h3>Siga primeiro, melhore depois</h3>
+      <p>Todo mundo segue o processo como está escrito. Se você acha que um passo está errado ou sobrando, siga mesmo assim e proponha a mudança. Atalho silencioso quebra o sistema para todo mundo.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">2️⃣</div>
+      <h3>Se não está escrito, não é processo</h3>
+      <p>Fez algo que se repete e não está aqui? Documente. O que só existe na memória de alguém se perde quando essa pessoa sai ou esquece.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">3️⃣</div>
+      <h3>Curto e usável</h3>
+      <p>Os processos cobrem os passos que fazem diferença no resultado, não cada clique. Checklists têm só os itens críticos, aqueles que é perigoso esquecer.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">4️⃣</div>
+      <h3>Toda dúvida melhora o playbook</h3>
+      <p>Se você precisou perguntar ao Daniel como fazer algo, é sinal de que falta alguma coisa aqui. Anote a pergunta e a resposta para que entrem na próxima versão.</p>
+    </div>
+  </div>
+
+  <h2>Como usar</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">1</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Na primeira semana: leia tudo, na ordem do menu</div>
+        <div class="timeline-desc">Comece pelos produtos e pelo time, depois os processos. O plano completo de integração está em <a href="#" onclick="showPage('onboarding');return false">Onboarding</a>.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">2</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Antes de executar uma tarefa: abra a página do processo</div>
+        <div class="timeline-desc">Bug, melhoria, nova funcionalidade, deploy: cada tipo de trabalho tem a sua página. Consulte antes de começar, não depois.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">3</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Use os checklists sempre</div>
+        <div class="timeline-desc">Mesmo quando você já sabe de cor. O checklist existe justamente para os dias de pressa e cansaço.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">4</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Achou algo desatualizado ou faltando? Registre</div>
+        <div class="timeline-desc">Anote o que estava errado e o que deveria estar escrito, e leve para o Daniel. O playbook é revisado com base nesses registros.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>As bases deste playbook</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📘</div>
+      <h3>O Mito do Empreendedor</h3>
+      <p>Michael Gerber. O negócio como um sistema documentado, que entrega o mesmo resultado independente de quem executa.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📗</div>
+      <h3>Tração</h3>
+      <p>Gino Wickman. Processos centrais simples e seguidos por todos, indicadores semanais e um ritmo fixo de reuniões.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📙</div>
+      <h3>Checklist Manifesto</h3>
+      <p>Atul Gawande. Checklists curtos, com os passos críticos, para não errar o que já se sabe fazer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PAGE: ORGANIZAÇÃO ===================== -->
+<section class="page" id="page-organizacao">
+  <div class="page-header">
+    <div class="page-eyebrow">Fundação</div>
+    <h1>Organização</h1>
+    <p class="page-desc">Quem faz o quê no setor de produto, o que cada um pode decidir sozinho e em que momentos o trabalho passa pelo Daniel.</p>
+  </div>
+
+  <div class="info-box">
+    <strong>Cargos antes de pessoas:</strong> aqui estão descritos os papéis do setor, não as pessoas que os ocupam hoje. Se alguém sai ou entra, o papel continua o mesmo e as responsabilidades não se perdem.
+  </div>
+
+  <h2>Os papéis do setor</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">🎯</div>
+      <h3>Product Manager (Daniel)</h3>
+      <p>Define a direção dos produtos, dá a palavra final nas prioridades e revisa se o setor está entregando. Cuida da relação com a liderança (Tiago e Gabriel) e fecha os contratos com influencers.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🔬</div>
+      <h3>Analista de Produto</h3>
+      <p>Executa a operação dos três produtos no dia a dia: ouve os clientes, pesquisa o mercado, testa as entregas e mantém a Biancode andando. É um papel multitarefa, com autonomia crescente. <a href="#" onclick="showPage('analista');return false">Ver perfil completo</a>.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">💻</div>
+      <h3>Biancode (parceiro)</h3>
+      <p>Implementa as demandas. Wolney organiza as sprints; Lincoln e Iago desenvolvem. Recebe as demandas pelo Notion e conversa com o setor pelo Slack.</p>
+    </div>
+  </div>
+
+  <h2>Quem responde por cada coisa</h2>
+  <p>Cada tarefa tem um único responsável. Responsável é quem garante que aquilo acontece, mesmo quando pede ajuda a outras pessoas.</p>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Frente</th><th>O que inclui</th><th>Responsável</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Voz do cliente</strong></td><td>Pesquisa de NPS, satisfação com cada ferramenta e levantamento dos pedidos mais frequentes</td><td>Analista</td></tr>
+        <tr><td><strong>Mercado e concorrência</strong></td><td>Acompanhar o que os concorrentes lançam e fazem, e trazer ideias novas, inclusive as fora da caixa</td><td>Analista</td></tr>
+        <tr><td><strong>Ponte com a Biancode</strong></td><td>Levar as dores e ideias de melhoria, responder rápido às dúvidas dos devs e conferir os prazos combinados</td><td>Analista</td></tr>
+        <tr><td><strong>Apoio às equipes da TB</strong></td><td>Responder às solicitações do suporte e dar assistência às equipes comercial e de marketing da TB no que for pedido</td><td>Analista</td></tr>
+        <tr><td><strong>Testes das entregas</strong></td><td>Testar cada função implementada, aprovar ou devolver, e sugerir ajustes</td><td>Analista</td></tr>
+        <tr><td><strong>Influencers</strong></td><td>Encontrar influencers para parcerias e acompanhar as entregas combinadas</td><td>Analista</td></tr>
+        <tr><td><strong>Ideias de conteúdo</strong></td><td>Sugerir conteúdos para o Instagram com base nas novidades e nas dores dos clientes</td><td>Analista</td></tr>
+        <tr><td><strong>Prioridades e direção</strong></td><td>Palavra final sobre o que entra no backlog e em que ordem, e o rumo de cada produto</td><td>Daniel</td></tr>
+        <tr><td><strong>Contratos com influencers</strong></td><td>Negociar e fechar as parcerias que o Analista encontrou</td><td>Daniel</td></tr>
+        <tr><td><strong>Revisão do setor</strong></td><td>Conferir se o trabalho está rodando certo e se os números estão evoluindo</td><td>Daniel</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Autonomia para decidir</h2>
+  <p>O Analista tem autonomia para decidir. O que muda com o tempo é quanto acompanhamento o Daniel faz.</p>
+  <div class="phase-grid">
+    <div class="phase-card week1">
+      <div class="phase-label">Fase 1</div>
+      <h3>Decide com acompanhamento</h3>
+      <p>No início, o Analista toma as decisões do dia a dia e o Daniel acompanha de perto, corrigindo o rumo quando precisar.</p>
+      <ul>
+        <li>Decide e mostra ao Daniel o que decidiu</li>
+        <li>O Daniel comenta e ajusta</li>
+        <li>Cada ajuste vira aprendizado e, quando fizer sentido, regra no playbook</li>
+      </ul>
+    </div>
+    <div class="phase-card week3">
+      <div class="phase-label">Fase 2</div>
+      <h3>Decide sozinho e comunica</h3>
+      <p>Quando o Daniel liberar, o Analista passa a decidir sem acompanhamento prévio, mas sempre avisando o que foi decidido.</p>
+      <ul>
+        <li>Decide e executa</li>
+        <li>Comunica a decisão ao Daniel</li>
+        <li>O Daniel revisa nos pontos de revisão abaixo</li>
+      </ul>
+    </div>
+  </div>
+  <div class="info-box success">
+    <strong>Pedir ajuda é sempre permitido.</strong> Em qualquer fase, se surgir uma dúvida, peça feedback ou ajuda ao Daniel. Ter autonomia não significa decidir no escuro.
+  </div>
+
+  <h2>Pontos de revisão do Daniel</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">1</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Antes de a demanda ir para a Biancode</div>
+        <div class="timeline-desc">Toda demanda fica registrada no Notion antes de ser enviada, e o Daniel pode revisar qualquer uma, a qualquer momento. Por isso a demanda precisa estar completa e clara desde o início.</div>
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-line"></div>
+      <div class="timeline-dot">2</div>
+      <div class="timeline-content">
+        <div class="timeline-title">Reunião semanal com números</div>
+        <div class="timeline-desc">Uma vez por semana, o Analista apresenta os números do setor e o andamento das frentes. É aqui que o Daniel confere se tudo está rodando certo. Os indicadores estão em <a href="#" onclick="showPage('kpis');return false">KPIs</a>.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>A meta</h2>
+  <div class="section-card">
+    <p>Fazer das ferramentas Flow as número 1 do mercado. Cada frente acima existe para isso: ouvir o cliente, conhecer bem a concorrência e entregar rápido e com qualidade.</p>
+  </div>
+</section>
+
 <!-- ===================== PAGE: OVERVIEW ===================== -->
-<section class="page active" id="page-overview">
+<section class="page" id="page-overview">
   <div class="page-header">
     <div class="page-eyebrow">Plataforma</div>
     <h1>Flow Tools</h1>
@@ -1455,7 +1685,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
         <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <div class="accordion-body">
-        <p><strong>O que faz:</strong> Conduz entrevistas, pesquisas de satisfação e formulários com usuários reais dos produtos Flow para entender suas necessidades, frustrações e desejos. Sintetiza os insights para o backlog.</p>
+        <p><strong>O que faz:</strong> Conduz a pesquisa de NPS, pesquisas de satisfação com cada ferramenta, entrevistas e formulários com usuários reais dos produtos Flow para entender suas necessidades, frustrações e desejos. Levanta os pedidos mais frequentes e sintetiza os insights para o backlog.</p>
         <p><strong>Por que importa:</strong> Nenhuma decisão de produto deveria ser feita sem ouvir quem usa. A pesquisa com usuários é o antídoto para construir funcionalidades que ninguém quer.</p>
         <p><strong>Entrega esperada:</strong> Pelo menos 1 rodada de pesquisa por produto por trimestre. Síntese documentada no Notion com citações diretas e principais insights priorizados.</p>
       </div>
@@ -1473,13 +1703,35 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
     <div class="accordion-item">
       <button class="accordion-header" onclick="toggleAccordion(this)">
-        🤝 Acompanhamento de Influencers
+        🤝 Influencers e Conteúdo
         <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <div class="accordion-body">
-        <p><strong>O que faz:</strong> Mantém contato ativo com os influencers parceiros para garantir que as postagens e materiais combinados estão sendo entregues. Coleta métricas das publicações e reporta ao PM.</p>
+        <p><strong>O que faz:</strong> Busca influencers com perfil para parcerias com as ferramentas e leva as indicações ao PM, que fecha os contratos. Depois, mantém contato ativo com os parceiros para garantir que as postagens e materiais combinados estão sendo entregues, coleta métricas das publicações e reporta ao PM. Também sugere ideias de conteúdo para o Instagram com base nas novidades e nas dores dos clientes.</p>
         <p><strong>Por que importa:</strong> Parcerias com influencers têm prazo e compromissos. Sem acompanhamento, entregas atrasam ou não acontecem. A relação precisa ser mantida ativa para render frutos no longo prazo.</p>
         <p><strong>Entrega esperada:</strong> Planilha de acompanhamento de influencers atualizada semanalmente. Notificação proativa ao PM de qualquer atraso ou problema.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🔗 Ponte com a Biancode
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Leva para a Biancode as dores dos clientes e as ideias de melhoria para as ferramentas, responde rápido às dúvidas e solicitações dos devs e confere se os prazos combinados estão sendo cumpridos.</p>
+        <p><strong>Por que importa:</strong> Uma dúvida sem resposta trava a sprint inteira. Quanto mais rápido a Biancode tem o que precisa, mais rápido a melhoria chega ao cliente.</p>
+        <p><strong>Entrega esperada:</strong> Dúvidas da Biancode respondidas no mesmo dia. Prazos acompanhados, com aviso ao PM assim que algum estiver em risco.</p>
+      </div>
+    </div>
+    <div class="accordion-item">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        🤲 Apoio às Equipes da TB
+        <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="accordion-body">
+        <p><strong>O que faz:</strong> Responde às solicitações do time de suporte sobre as ferramentas e dá assistência às equipes comercial e de marketing da TB no que for pedido: explicar uma funcionalidade, levantar uma informação, revisar um material.</p>
+        <p><strong>Por que importa:</strong> O suporte, o comercial e o marketing falam com o cliente todos os dias. Se eles têm resposta rápida do setor de produto, o cliente também tem.</p>
+        <p><strong>Entrega esperada:</strong> Solicitações do suporte, do comercial e do marketing respondidas no mesmo dia.</p>
       </div>
     </div>
     <div class="accordion-item">
@@ -1546,7 +1798,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 
   <h2>O que Não É Esse Cargo</h2>
   <div class="info-box warning">
-    <strong>Para ficar claro:</strong> O Analista de Produto não é designer, não é desenvolvedor, não é gestor de redes sociais e não é suporte ao cliente. É um papel de produto com foco em qualidade, pesquisa e acompanhamento de processos. Quem entra nessa posição deve ter clareza sobre isso.
+    <strong>Para ficar claro:</strong> O Analista de Produto não é designer, não é desenvolvedor, não é gestor de redes sociais e não atende o cliente diretamente no suporte (apoia o time de suporte quando ele precisa). É um papel de produto com foco em qualidade, pesquisa e acompanhamento de processos. Quem entra nessa posição deve ter clareza sobre isso.
   </div>
 
   <h2>Primeiros 90 Dias (expectativa)</h2>
@@ -1934,136 +2186,159 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-fluxo">
   <div class="page-header">
     <div class="page-eyebrow" style="color:var(--accent3)">Processos</div>
-    <h1>Fluxo Real de Demandas</h1>
-    <p class="page-desc">Do surgimento de uma ideia até a entrega ao usuário: como uma demanda percorre todo o setor de produto.</p>
+    <h1>Fluxo de Demandas</h1>
+    <p class="page-desc">O processo central do setor: do momento em que surge uma dor até a melhoria chegar ao cliente. Todos seguem este fluxo, sem atalhos.</p>
   </div>
 
-  <div class="info-box">
-    <strong>Este é o fluxo real</strong> que acontece hoje na operação. Entender cada etapa e saber onde você está em cada demanda é fundamental para trabalhar no setor de produto.
+  <div class="info-box warning">
+    <strong>Regra de ouro: toda demanda passa pelo Notion.</strong> Nada vai direto para a Biancode sem estar registrado. A única exceção é um bug urgente, que pode ser avisado na hora pelo Slack, mas precisa ser registrado no Notion no mesmo dia. Ideia que fica só no Slack ou na conversa se perde.
   </div>
 
-  <h2>Visão Geral do Fluxo</h2>
-  <div class="flow-wrap" style="flex-direction:column;align-items:flex-start">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <div class="flow-box accent">Origem da ideia</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box">Notion (backlog)</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box orange">Priorização PM</div>
-    </div>
-    <div style="margin-left:48px;color:var(--fg3);font-size:1.2rem">↓</div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <div class="flow-box blue">Sprint Biancode</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box">Desenvolvimento</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box accent">QA (Analista)</div>
-    </div>
-    <div style="margin-left:48px;color:var(--fg3);font-size:1.2rem">↓</div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <div class="flow-box green">Deploy em produção</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box orange">Validação pós-deploy</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box">Slack Mktg</div>
-      <span class="flow-arrow">→</span>
-      <div class="flow-box green">Usuários</div>
-    </div>
+  <h2>Visão geral</h2>
+  <div class="flow-wrap">
+    <div class="flow-box">Dor ou solicitação</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box accent">Notion</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Fundamentar</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Priorizar</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box blue">Biancode</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Teste em homologação</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box accent">Autorização do deploy</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box green">Produção</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box orange">Marketing avisado</div>
   </div>
 
-  <h2>Etapas em Detalhe</h2>
+  <h2>Etapas</h2>
   <div class="timeline">
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">1</div>
       <div class="timeline-content">
-        <div class="timeline-title">Origem da Ideia</div>
-        <div class="timeline-desc">A demanda pode surgir de: feedback de usuário, pesquisa de mercado, análise de concorrência, pedido da liderança ou observação interna. Toda ideia, independente de quem trouxe, precisa ser documentada. Ideia não documentada não existe.</div>
+        <div class="timeline-title">Capturar <span class="badge badge-gray">Quem ouviu</span></div>
+        <div class="timeline-desc">A demanda nasce de uma dor ou de uma solicitação. Pode chegar de forma direta (um cliente, o suporte, o comercial ou a liderança pede) ou indireta (um comentário, uma resposta de NPS, algo que a concorrência lançou). Quem ouviu registra no Notion no mesmo dia, mesmo que ainda esteja incompleta.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">2</div>
       <div class="timeline-content">
-        <div class="timeline-title">Criação no Notion</div>
-        <div class="timeline-desc">O PM (ou o Analista de Produto) cria a demanda no backlog do Notion com todas as informações necessárias: tipo, produto, prioridade, contexto e critérios de aceite. Demandas vagas travam o desenvolvimento.</div>
+        <div class="timeline-title">Fundamentar <span class="badge badge-purple">Analista</span></div>
+        <div class="timeline-desc">Preencha a ficha da demanda (abaixo). Toda demanda precisa de um fundamento: por que queremos isso, qual dor resolve e o quanto é importante. Demanda sem fundamento não é priorizada.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">3</div>
       <div class="timeline-content">
-        <div class="timeline-title">Priorização pelo PM</div>
-        <div class="timeline-desc">O PM decide a prioridade relativa da demanda em relação ao que já está no backlog. Bugs P0/P1 entram na sprint imediatamente. Features e melhorias são priorizadas por impacto x esforço e entram no próximo sprint disponível.</div>
+        <div class="timeline-title">Priorizar <span class="badge badge-blue">Daniel decide</span></div>
+        <div class="timeline-desc">Bugs são tratados como prioridade. Funcionalidades novas também entram como prioridade de implementação. O que entra em cada sprint é definido pelas horas disponíveis da Biancode. O Analista sugere a ordem; o Daniel dá a palavra final.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">4</div>
       <div class="timeline-content">
-        <div class="timeline-title">Repasse para a Biancode</div>
-        <div class="timeline-desc">O PM passa a demanda para o Wolney (sprint manager da Biancode) com link da demanda do Notion e contexto adicional se necessário. O Wolney organiza na sprint com Lincoln e Iago e confirma prazo estimado.</div>
+        <div class="timeline-title">Enviar para a Biancode <span class="badge badge-purple">Analista</span></div>
+        <div class="timeline-desc">Envie ao Wolney o link da demanda no Notion e peça a estimativa de prazo. Antes do envio, o Daniel pode revisar qualquer demanda, por isso ela precisa estar completa.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">5</div>
       <div class="timeline-content">
-        <div class="timeline-title">Desenvolvimento (Biancode)</div>
-        <div class="timeline-desc">Lincoln e Iago implementam a demanda. Durante o desenvolvimento, podem surgir dúvidas técnicas que precisam de esclarecimento do PM. O canal <code>#flow-dev</code> no Slack é usado para isso. Dúvidas respondidas com agilidade evitam atrasos.</div>
+        <div class="timeline-title">Acompanhar o desenvolvimento <span class="badge badge-purple">Analista</span></div>
+        <div class="timeline-desc">Responda às dúvidas dos devs no mesmo dia e confira se o prazo combinado está sendo cumprido. Se um prazo estiver em risco, avise o Daniel na hora.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">6</div>
       <div class="timeline-content">
-        <div class="timeline-title">QA pelo Analista de Produto</div>
-        <div class="timeline-desc">Quando a Biancode conclui e disponibiliza em ambiente de teste, o Analista de Produto executa o QA completo conforme o checklist. Testa os critérios de aceite, busca comportamentos inesperados e regressões em fluxos existentes. Resultado: aprovado (segue para deploy) ou reprovado (volta para a Biancode com lista de ajustes documentada).</div>
+        <div class="timeline-title">Testar em homologação <span class="badge badge-purple">Analista</span></div>
+        <div class="timeline-desc">Quando a Biancode disponibiliza a entrega em homologação, teste seguindo o <a href="#" onclick="showPage('qa');return false">QA Checklist</a>. O resultado é um de dois: aprovado, ou devolvido para a Biancode com a lista do que precisa ser ajustado.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">7</div>
       <div class="timeline-content">
-        <div class="timeline-title">Deploy em Produção</div>
-        <div class="timeline-desc">Após QA aprovado, a Biancode realiza o deploy em produção. O PM é notificado quando o deploy é realizado. Para releases maiores, o horário de deploy é planejado para minimizar impacto (evitar horários de pico de uso).</div>
+        <div class="timeline-title">Autorizar o deploy <span class="badge badge-blue">Daniel</span></div>
+        <div class="timeline-desc">Com o teste aprovado, o Daniel autoriza e a Biancode sobe para produção. A Biancode não faz deploy sem essa autorização.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">8</div>
       <div class="timeline-content">
-        <div class="timeline-title">Validação Pós-Deploy</div>
-        <div class="timeline-desc">O Analista de Produto faz smoke test em produção logo após o deploy para confirmar que tudo foi ao ar corretamente. Primeiras horas são monitoradas. Se aparecer problema, bug P0 é aberto imediatamente.</div>
+        <div class="timeline-title">Conferir em produção e avisar o marketing <span class="badge badge-blue">Daniel</span></div>
+        <div class="timeline-desc">Confira se a entrega funciona em produção e avise o marketing no Slack: qual produto, o que mudou e o que o cliente vai ver de diferente.</div>
       </div>
     </div>
     <div class="timeline-item">
       <div class="timeline-line"></div>
       <div class="timeline-dot">9</div>
       <div class="timeline-content">
-        <div class="timeline-title">Comunicação ao Time de Marketing</div>
-        <div class="timeline-desc">O PM notifica o canal de marketing no Slack com o que foi atualizado: produto, o que mudou, o que o usuário vai ver diferente. O marketing usa essa informação para criar a comunicação externa (e-mail, push, redes sociais).</div>
-      </div>
-    </div>
-    <div class="timeline-item">
-      <div class="timeline-dot">10</div>
-      <div class="timeline-content">
-        <div class="timeline-title">Demanda Fechada</div>
-        <div class="timeline-desc">Após validação em produção e comunicação ao marketing, a demanda é fechada no Notion como "Concluído" com data de conclusão. Aprendizados relevantes são documentados para referência futura.</div>
+        <div class="timeline-title">Fechar no Notion <span class="badge badge-purple">Analista</span></div>
+        <div class="timeline-desc">Mude a demanda para "Concluída" com a data de entrega. Se algo deu errado no caminho, anote o que aprendemos.</div>
       </div>
     </div>
   </div>
 
-  <h2>Aprovações e Responsabilidades</h2>
+  <h2>Ficha da demanda</h2>
+  <p>Toda demanda precisa responder a estas perguntas antes de ser priorizada. Se alguma ficou sem resposta, a demanda ainda não está pronta.</p>
+  <ul class="checklist">
+    <li><span class="check-icon done">✓</span><strong>O que é:</strong> produto (FlowSpy, FlowTracking ou FlowPages) e tipo (bug, melhoria ou nova funcionalidade).</li>
+    <li><span class="check-icon done">✓</span><strong>Qual dor resolve:</strong> o problema do cliente, em uma ou duas frases.</li>
+    <li><span class="check-icon done">✓</span><strong>Por que queremos:</strong> o fundamento. De onde veio (cliente, NPS, suporte, concorrência, ideia interna) e a evidência (print, vídeo no Loom, quantos pediram).</li>
+    <li><span class="check-icon done">✓</span><strong>Quanto é importante:</strong> alta, média ou baixa, com uma frase explicando o motivo.</li>
+    <li><span class="check-icon done">✓</span><strong>Como saber que ficou pronto:</strong> o que precisa funcionar para o teste em homologação ser aprovado.</li>
+  </ul>
+
+  <h2>Status no Notion</h2>
+  <p>Cada etapa do fluxo corresponde a um status no quadro de demandas. Assim qualquer pessoa sabe em que ponto cada demanda está.</p>
   <div class="table-wrap">
     <table class="styled-table">
-      <thead><tr><th>Tipo de Demanda</th><th>Quem aprova</th><th>Observação</th></tr></thead>
+      <thead><tr><th>Status</th><th>Significa</th><th>Quem move</th></tr></thead>
       <tbody>
-        <tr><td>Bug P0/P1</td><td>PM (Daniel)</td><td>Ação imediata, sem burocracia</td></tr>
-        <tr><td>Bug P2/P3</td><td>PM (Daniel)</td><td>Entra no próximo sprint</td></tr>
-        <tr><td>Melhoria e features pequenas</td><td>PM (Daniel)</td><td>Sob responsabilidade do PM</td></tr>
-        <tr><td>Features grandes ou estratégicas</td><td>Liderança (Tiago/Gabriel)</td><td>Objetivo crescente: passar mais para a liderança</td></tr>
-        <tr><td>Mudança de roadmap significativa</td><td>Liderança (Tiago/Gabriel)</td><td>Sempre requer alinhamento</td></tr>
+        <tr><td><strong>Caixa de entrada</strong></td><td>Registrada, ainda sem a ficha completa</td><td>Quem ouviu</td></tr>
+        <tr><td><strong>Fundamentada</strong></td><td>Ficha completa, esperando priorização</td><td>Analista</td></tr>
+        <tr><td><strong>Priorizada</strong></td><td>Aprovada pelo Daniel, esperando horas da Biancode</td><td>Daniel</td></tr>
+        <tr><td><strong>Na Biancode</strong></td><td>Enviada, em desenvolvimento</td><td>Analista</td></tr>
+        <tr><td><strong>Em homologação</strong></td><td>Pronta para teste</td><td>Analista</td></tr>
+        <tr><td><strong>Aprovada</strong></td><td>Teste aprovado, esperando autorização do deploy</td><td>Analista</td></tr>
+        <tr><td><strong>Concluída</strong></td><td>Em produção, conferida e marketing avisado</td><td>Analista</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Hoje e para onde vamos</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Etapa</th><th>Hoje</th><th>Meta</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Registro</strong></td><td>Parte das demandas vai direto para a Biancode</td><td>Tudo passa pelo Notion</td></tr>
+        <tr><td><strong>Teste em homologação</strong></td><td>O Daniel testa, quando a agenda permite</td><td>O Analista testa e aprova, com o checklist</td></tr>
+        <tr><td><strong>Autorização do deploy</strong></td><td>Daniel</td><td>Daniel</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Quem aprova</h2>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Tipo de demanda</th><th>Quem aprova</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td>Bugs</td><td>PM (Daniel)</td><td>Prioridade. Bug urgente tem ação imediata</td></tr>
+        <tr><td>Melhorias e funcionalidades pequenas</td><td>PM (Daniel)</td><td>Entram conforme as horas da Biancode</td></tr>
+        <tr><td>Funcionalidades grandes ou estratégicas</td><td>Liderança (Tiago e Gabriel)</td><td>Objetivo: passar cada vez mais pela liderança</td></tr>
+        <tr><td>Mudança significativa de roadmap</td><td>Liderança (Tiago e Gabriel)</td><td>Sempre exige alinhamento</td></tr>
       </tbody>
     </table>
   </div>
@@ -2915,8 +3190,8 @@ function showPage(id) {
     target.classList.add('active');
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  document.querySelectorAll('.sidebar-link').forEach(a => {
-    a.classList.toggle('active', a.getAttribute('data-page') === id);
+  document.querySelectorAll('.nav-item').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick') === "showPage('" + id + "')");
   });
   // close sidebar on mobile
   if (window.innerWidth < 768) {
@@ -3000,11 +3275,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // load from hash or default
   const hash = location.hash.replace('#', '');
-  const validPages = ['overview','flowspy','flowtracking','flowpages','team','demands',
+  const validPages = ['comece','organizacao','overview','flowspy','flowtracking','flowpages','team','demands',
     'cultura','setor','analista','ferramentas','bugs','improvements','features','fluxo',
     'standards','slas','routines','kpis','qa','governance','backlog','roadmap',
     'onboarding','glossario'];
-  showPage(validPages.includes(hash) ? hash : 'overview');
+  showPage(validPages.includes(hash) ? hash : 'comece');
 });
 </script>
 </body>
