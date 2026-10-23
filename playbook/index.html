@@ -203,14 +203,34 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
   border-color:color-mix(in srgb,var(--spy) 30%,transparent);color:var(--spy)}
 
 /* === STAT CARDS === */
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:20px 0}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}
 .stat-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;box-shadow:var(--shadow);
 }
 .stat-card .stat-val{
-  font-family:'Fraunces',serif;font-size:2.2rem;font-weight:600;
-  line-height:1;margin-bottom:6px;
+  font-family:'Fraunces',serif;font-size:clamp(1.5rem,1.9vw,2.2rem);font-weight:600;
+  line-height:1.1;margin-bottom:6px;overflow-wrap:break-word;
+}
+.stat-card[onclick]{cursor:pointer}
+
+/* === HOVER: cards respond to the pointer === */
+.stat-card,.section-card,.product-card,.rule-card,.kpi-card,.sla-card,.team-card,
+.demand-card,.phase-card,.milestone-card,.pillar-card,.flow-box{
+  transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease;
+}
+@media(hover:hover){
+  .stat-card:hover,.rule-card:hover,.kpi-card:hover,.sla-card:hover,.team-card:hover,
+  .demand-card:hover,.phase-card:hover,.milestone-card:hover,.pillar-card:hover{
+    transform:translateY(-3px);
+    box-shadow:var(--shadow-lg),0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);
+  }
+  .section-card:hover{box-shadow:var(--shadow-lg),0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .flow-box:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+}
+@media(prefers-reduced-motion:reduce){
+  .stat-card,.section-card,.product-card,.rule-card,.kpi-card,.sla-card,.team-card,
+  .demand-card,.phase-card,.milestone-card,.pillar-card,.flow-box{transition:none;transform:none!important}
 }
 .stat-card .stat-label{font-size:.8rem;color:var(--fg3);text-transform:uppercase;
   letter-spacing:.06em;font-family:'DM Mono',monospace}
@@ -224,7 +244,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .section-card h3{margin-top:0}
 
 /* === PRODUCT CARDS === */
-.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:20px 0}
 .product-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:24px;box-shadow:var(--shadow);cursor:pointer;
@@ -354,7 +374,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .timeline-desc{font-size:.875rem;color:var(--fg2)}
 
 /* === RULE CARDS === */
-.rule-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin:16px 0}
+.rule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:16px 0}
 .rule-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;box-shadow:var(--shadow);
@@ -364,7 +384,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .rule-card p{font-size:.85rem;color:var(--fg2);margin:0}
 
 /* === KPI CARDS === */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 0}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
 .kpi-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;box-shadow:var(--shadow);
@@ -378,7 +398,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .kpi-card .kpi-desc{font-size:.82rem;color:var(--fg2);margin-top:6px}
 
 /* === SLA CARDS === */
-.sla-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:16px 0}
+.sla-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:16px 0}
 .sla-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;border-top:3px solid;box-shadow:var(--shadow);
@@ -396,7 +416,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .sla-card .sla-desc{font-size:.83rem;color:var(--fg2);margin-top:8px}
 
 /* === TEAM CARDS === */
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:16px 0}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
 .team-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px;text-align:center;box-shadow:var(--shadow);
@@ -427,7 +447,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .demand-card p{font-size:.83rem;color:var(--fg2);margin:0}
 
 /* === PHASE CARDS (Onboarding) === */
-.phase-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:16px 0}
+.phase-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:16px 0}
 .phase-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:22px;box-shadow:var(--shadow);border-top:3px solid;
@@ -451,7 +471,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 }
 
 /* === MILESTONE CARDS (30/60/90) === */
-.milestone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin:20px 0}
+.milestone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:20px 0}
 .milestone-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:22px;box-shadow:var(--shadow);
@@ -475,7 +495,7 @@ code{font-family:'DM Mono',monospace;font-size:.82em;
 .milestone-list li::before{content:'✓';color:var(--accent2);font-size:.75rem;flex-shrink:0;margin-top:2px}
 
 /* === CULTURA PILLAR CARDS === */
-.pillar-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin:20px 0}
+.pillar-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:20px 0}
 .pillar-card{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:22px;box-shadow:var(--shadow);
@@ -579,13 +599,13 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
         <span class="nav-dot"></span>Visão Geral
       </button>
       <button class="nav-item" onclick="showPage('flowspy')">
-        <span class="nav-dot spy"></span>FlowSpy
+        <span class="nav-dot spy"></span>Flow Spy
       </button>
       <button class="nav-item" onclick="showPage('flowtracking')">
-        <span class="nav-dot track"></span>FlowTracking
+        <span class="nav-dot track"></span>Flow Tracking
       </button>
       <button class="nav-item" onclick="showPage('flowpages')">
-        <span class="nav-dot pages"></span>FlowPages
+        <span class="nav-dot pages"></span>Flow Pages
       </button>
       <button class="nav-item" onclick="showPage('team')">
         <span class="nav-dot"></span>Time
@@ -912,22 +932,22 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
   </div>
 
   <div class="stat-grid">
-    <div class="stat-card">
-      <div class="stat-val" style="color:var(--spy)">FlowSpy</div>
+    <div class="stat-card" onclick="showPage('flowspy')">
+      <div class="stat-val" style="color:var(--spy)">Flow Spy</div>
       <div class="stat-label">Monitoramento</div>
       <div class="stat-sub">Análise de concorrentes e mercado</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-val" style="color:var(--track)">FlowTracking</div>
+    <div class="stat-card" onclick="showPage('flowtracking')">
+      <div class="stat-val" style="color:var(--track)">Flow Tracking</div>
       <div class="stat-label">Rastreamento</div>
       <div class="stat-sub">Tracking de afiliados e campanhas</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-val" style="color:var(--pages)">FlowPages</div>
+    <div class="stat-card" onclick="showPage('flowpages')">
+      <div class="stat-val" style="color:var(--pages)">Flow Pages</div>
       <div class="stat-label">Páginas</div>
       <div class="stat-sub">Criação de páginas de afiliados</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" onclick="showPage('team')">
       <div class="stat-val">Biancode</div>
       <div class="stat-label">Parceiro Dev</div>
       <div class="stat-sub">PO + time de desenvolvimento</div>
@@ -938,17 +958,17 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
   <div class="product-grid">
     <div class="product-card spy" onclick="showPage('flowspy')">
       <div class="product-icon">🔍</div>
-      <h3 style="color:var(--spy)">FlowSpy</h3>
+      <h3 style="color:var(--spy)">Flow Spy</h3>
       <p>Ferramenta de monitoramento de concorrentes e espionagem de estratégias de marketing digital. Permite que afiliados e produtores vejam o que está funcionando no mercado.</p>
     </div>
     <div class="product-card track" onclick="showPage('flowtracking')">
       <div class="product-icon">📊</div>
-      <h3 style="color:var(--track)">FlowTracking</h3>
+      <h3 style="color:var(--track)">Flow Tracking</h3>
       <p>Plataforma de rastreamento de campanhas de afiliados. Monitora cliques, conversões e ROI de links e campanhas de divulgação em tempo real.</p>
     </div>
     <div class="product-card pages" onclick="showPage('flowpages')">
       <div class="product-icon">📄</div>
-      <h3 style="color:var(--pages)">FlowPages</h3>
+      <h3 style="color:var(--pages)">Flow Pages</h3>
       <p>Criador de páginas otimizadas para afiliados. Permite criar landing pages, páginas de review e de comparação de produtos sem código.</p>
     </div>
   </div>
@@ -997,7 +1017,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-flowspy">
   <div class="page-header">
     <div class="page-eyebrow" style="color:var(--spy)">Produto</div>
-    <h1 style="color:var(--spy)">FlowSpy</h1>
+    <h1 style="color:var(--spy)">Flow Spy</h1>
     <p class="page-desc">Ferramenta de inteligência competitiva para o mercado de afiliados e marketing digital.</p>
     <div class="page-meta">
       <span class="chip purple">Monitoramento</span>
@@ -1005,9 +1025,9 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
   </div>
 
-  <h2>O que é o FlowSpy</h2>
+  <h2>O que é o Flow Spy</h2>
   <div class="section-card">
-    <p>O FlowSpy é uma plataforma de espionagem de estratégias de marketing digital. Permite que afiliados e produtores monitorem criativos, landing pages, anúncios e estratégias dos concorrentes no mercado de infoprodutos e afiliação.</p>
+    <p>O Flow Spy é uma plataforma de espionagem de estratégias de marketing digital. Permite que afiliados e produtores monitorem criativos, landing pages, anúncios e estratégias dos concorrentes no mercado de infoprodutos e afiliação.</p>
     <p>O produto se posiciona como ferramenta essencial para quem quer copiar o que está funcionando antes de investir em tráfego pago, reduzindo risco e acelerando resultados.</p>
   </div>
 
@@ -1093,7 +1113,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-flowtracking">
   <div class="page-header">
     <div class="page-eyebrow" style="color:var(--track)">Produto</div>
-    <h1 style="color:var(--track)">FlowTracking</h1>
+    <h1 style="color:var(--track)">Flow Tracking</h1>
     <p class="page-desc">Plataforma de rastreamento de campanhas e links para afiliados e gestores de tráfego.</p>
     <div class="page-meta">
       <span class="chip blue">Rastreamento</span>
@@ -1101,9 +1121,9 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
   </div>
 
-  <h2>O que é o FlowTracking</h2>
+  <h2>O que é o Flow Tracking</h2>
   <div class="section-card">
-    <p>O FlowTracking é uma plataforma de rastreamento de links e campanhas de afiliados. Permite monitorar em tempo real o desempenho de cada link, fonte de tráfego, criativo e campanha, centralizando dados que normalmente ficam dispersos entre diferentes plataformas de anúncio.</p>
+    <p>O Flow Tracking é uma plataforma de rastreamento de links e campanhas de afiliados. Permite monitorar em tempo real o desempenho de cada link, fonte de tráfego, criativo e campanha, centralizando dados que normalmente ficam dispersos entre diferentes plataformas de anúncio.</p>
     <p>O produto resolve o principal problema dos afiliados: saber exatamente de onde vêm suas vendas e qual criativo, público ou fonte gera o melhor ROI.</p>
   </div>
 
@@ -1176,7 +1196,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-flowpages">
   <div class="page-header">
     <div class="page-eyebrow" style="color:var(--pages)">Produto</div>
-    <h1 style="color:var(--pages)">FlowPages</h1>
+    <h1 style="color:var(--pages)">Flow Pages</h1>
     <p class="page-desc">Criador de páginas otimizadas para afiliados, sem necessidade de código ou design.</p>
     <div class="page-meta">
       <span class="chip green">Páginas</span>
@@ -1184,10 +1204,10 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
   </div>
 
-  <h2>O que é o FlowPages</h2>
+  <h2>O que é o Flow Pages</h2>
   <div class="section-card">
-    <p>O FlowPages é um construtor de páginas focado no mercado de afiliados. Permite criar landing pages de review, páginas de comparação de produtos, páginas de captura e páginas de redirecionamento sem precisar saber programar ou contratar um designer.</p>
-    <p>O diferencial do FlowPages é o foco no fluxo de conversão do afiliado: templates testados, integração com plataformas de pagamento e velocidade de carregamento otimizada para tráfego pago.</p>
+    <p>O Flow Pages é um construtor de páginas focado no mercado de afiliados. Permite criar landing pages de review, páginas de comparação de produtos, páginas de captura e páginas de redirecionamento sem precisar saber programar ou contratar um designer.</p>
+    <p>O diferencial do Flow Pages é o foco no fluxo de conversão do afiliado: templates testados, integração com plataformas de pagamento e velocidade de carregamento otimizada para tráfego pago.</p>
   </div>
 
   <h2>Funcionalidades Core</h2>
@@ -1221,11 +1241,11 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
     <div class="accordion-item">
       <button class="accordion-header" onclick="toggleAccordion(this)">
-        🔗 Integração com FlowTracking
+        🔗 Integração com Flow Tracking
         <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <div class="accordion-body">
-        <p>Todas as páginas criadas no FlowPages se conectam automaticamente ao FlowTracking. Cada clique nos CTAs é rastreado, permitindo análise completa do funil do afiliado em um só lugar.</p>
+        <p>Todas as páginas criadas no Flow Pages se conectam automaticamente ao Flow Tracking. Cada clique nos CTAs é rastreado, permitindo análise completa do funil do afiliado em um só lugar.</p>
       </div>
     </div>
   </div>
@@ -1271,9 +1291,9 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
       <h3>Daniel Breda</h3>
       <div class="team-role">Product Manager</div>
       <div class="team-tags">
-        <span class="team-tag">FlowSpy</span>
-        <span class="team-tag">FlowTracking</span>
-        <span class="team-tag">FlowPages</span>
+        <span class="team-tag">Flow Spy</span>
+        <span class="team-tag">Flow Tracking</span>
+        <span class="team-tag">Flow Pages</span>
       </div>
     </div>
   </div>
@@ -1876,7 +1896,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
         <svg class="accordion-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <div class="accordion-body">
-        <p>O workspace do Notion tem uma área por produto (FlowSpy, FlowTracking, FlowPages) e áreas transversais (Pesquisa, Influencers, Processos). Cada produto tem seu backlog de demandas com status, prioridade e notas de contexto.</p>
+        <p>O workspace do Notion tem uma área por produto (Flow Spy, Flow Tracking, Flow Pages) e áreas transversais (Pesquisa, Influencers, Processos). Cada produto tem seu backlog de demandas com status, prioridade e notas de contexto.</p>
       </div>
     </div>
     <div class="accordion-item">
@@ -2342,7 +2362,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
   <h2>Ficha da demanda</h2>
   <p>Toda demanda precisa responder a estas perguntas para ser priorizada. As três últimas são o portão: sem elas, a demanda não entra no desenvolvimento.</p>
   <ul class="checklist">
-    <li><span class="check-icon done">✓</span><strong>O que é:</strong>&nbsp;produto (FlowSpy, FlowTracking ou FlowPages) e tipo (bug, melhoria ou nova funcionalidade).</li>
+    <li><span class="check-icon done">✓</span><strong>O que é:</strong>&nbsp;produto (Flow Spy, Flow Tracking ou Flow Pages) e tipo (bug, melhoria ou nova funcionalidade).</li>
     <li><span class="check-icon done">✓</span><strong>Por que queremos:</strong>&nbsp;de onde veio (cliente, NPS, suporte, concorrência, ideia interna) e a evidência (print, vídeo no Loom, quantos pediram).</li>
     <li><span class="check-icon done">✓</span><strong>Quanto é importante:</strong>&nbsp;alta, média ou baixa, com uma frase explicando o motivo.</li>
     <li><span class="check-icon done">✓</span><strong>Como saber que ficou pronto:</strong>&nbsp;o que precisa funcionar para o teste em homologação ser aprovado.</li>
@@ -2851,7 +2871,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
       <thead><tr><th>Coluna</th><th>O que registrar</th></tr></thead>
       <tbody>
         <tr><td><strong>Título</strong></td><td>Nome claro e objetivo da demanda</td></tr>
-        <tr><td><strong>Produto</strong></td><td>FlowSpy / FlowTracking / FlowPages</td></tr>
+        <tr><td><strong>Produto</strong></td><td>Flow Spy / Flow Tracking / Flow Pages</td></tr>
         <tr><td><strong>Tipo</strong></td><td>Bug / Melhoria / Feature / Débito técnico / Integração</td></tr>
         <tr><td><strong>Prioridade</strong></td><td>Crítica / Alta / Média / Baixa</td></tr>
         <tr><td><strong>Status</strong></td><td>Backlog / Em priorização / Em sprint / Em QA / Concluído</td></tr>
@@ -2944,7 +2964,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
       <ul>
         <li>Leitura completa deste playbook</li>
         <li>Acesso a Notion, Slack, Loom configurados</li>
-        <li>Testar FlowSpy, FlowTracking e FlowPages como usuário</li>
+        <li>Testar Flow Spy, Flow Tracking e Flow Pages como usuário</li>
         <li>1:1 de alinhamento com Daniel</li>
         <li>Assistir gravações Loom de demandas recentes</li>
       </ul>
@@ -3183,7 +3203,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
     <div class="glossary-item">
       <div class="glossary-term">Link de afiliado</div>
-      <div class="glossary-def">URL única que identifica o afiliado em cada venda. O FlowTracking ajuda a rastrear o desempenho desses links.</div>
+      <div class="glossary-def">URL única que identifica o afiliado em cada venda. O Flow Tracking ajuda a rastrear o desempenho desses links.</div>
     </div>
     <div class="glossary-item">
       <div class="glossary-term">Sub-afiliado</div>
@@ -3191,7 +3211,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
     <div class="glossary-item">
       <div class="glossary-term">Funil</div>
-      <div class="glossary-def">Sequência de páginas e comunicações que guiam o visitante até a compra. O FlowPages é usado para criar e gerenciar esses funis.</div>
+      <div class="glossary-def">Sequência de páginas e comunicações que guiam o visitante até a compra. O Flow Pages é usado para criar e gerenciar esses funis.</div>
     </div>
     <div class="glossary-item">
       <div class="glossary-term">Copy</div>
@@ -3211,7 +3231,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     </div>
     <div class="glossary-item">
       <div class="glossary-term">Pixel</div>
-      <div class="glossary-def">Código de rastreamento instalado em páginas para medir conversões e criar audiências para anúncios. Gerenciado pelo FlowSpy.</div>
+      <div class="glossary-def">Código de rastreamento instalado em páginas para medir conversões e criar audiências para anúncios. Gerenciado pelo Flow Spy.</div>
     </div>
   </div>
 </section>
