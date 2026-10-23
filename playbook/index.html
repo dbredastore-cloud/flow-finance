@@ -676,7 +676,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
     <div class="nav-group">
       <div class="nav-group-label">Estratégia</div>
       <button class="nav-item" onclick="showPage('backlog')">
-        <span class="nav-dot"></span>Backlog
+        <span class="nav-dot"></span>Backlog e ICE
       </button>
       <button class="nav-item" onclick="showPage('roadmap')">
         <span class="nav-dot"></span>Roadmap
@@ -2314,7 +2314,7 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
       <div class="timeline-dot">4</div>
       <div class="timeline-content">
         <div class="timeline-title">Priorizar e passar pelo portão <span class="badge badge-blue">Daniel + PO da Biancode</span> <span class="badge badge-gray">Semana 2</span></div>
-        <div class="timeline-desc">Sessão de 1 hora para ranquear as ideias por impacto, confiança e facilidade (ICE). Só segue o que responder às três perguntas do portão. Bugs entram nas horas de saúde técnica; urgências, na reserva.</div>
+        <div class="timeline-desc">Sessão de 1 hora para ranquear as ideias por impacto, confiança e facilidade (<a href="#" onclick="showPage('backlog');return false">ICE</a>). Só segue o que responder às três perguntas do portão. Bugs entram nas horas de saúde técnica; urgências, na reserva.</div>
       </div>
     </div>
     <div class="timeline-item">
@@ -2354,21 +2354,36 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
       <div class="timeline-dot">9</div>
       <div class="timeline-content">
         <div class="timeline-title">Revisão mensal <span class="badge badge-blue">Daniel + PO da Biancode</span> <span class="badge badge-gray">Fim do mês</span></div>
-        <div class="timeline-desc">Em 30 minutos: o que foi entregue, o que os números mostraram e o que entra no próximo ciclo. Depois, o Analista fecha as demandas entregues no Notion.</div>
+        <div class="timeline-desc">Em 30 minutos: o que foi entregue, se a métrica se moveu e o que entra no próximo ciclo. O <a href="#" onclick="showPage('roadmap');return false">Agora · Próximo · Depois</a> é atualizado, e as ideias que ficaram de fora recebem nova nota ICE. Depois, o Analista fecha as demandas entregues no Notion.</div>
       </div>
     </div>
+  </div>
+
+  <h2>Onde a IA ajuda no ciclo</h2>
+  <p>A IA faz os rascunhos e o trabalho operacional. As decisões ficam com o Daniel e o PO da Biancode.</p>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Momento</th><th>O que a IA prepara</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Antes do kickoff</strong></td><td>Rascunho do roadmap de resultados, esboço da árvore de oportunidades e sugestões de métricas</td></tr>
+        <tr><td><strong>Semana 1 · Descoberta</strong></td><td>Roteiro das entrevistas, resumo das conversas e agrupamento dos pedidos de clientes e do suporte</td></tr>
+        <tr><td><strong>Semana 2 · Priorização</strong></td><td>Notas ICE pré-preenchidas, com justificativa, para ajustar na sessão</td></tr>
+        <tr><td><strong>Semanas 3 e 4 · Desenvolvimento</strong></td><td>Histórias com critérios de aceite e cenários de teste, incluindo casos de erro</td></tr>
+        <tr><td><strong>Fim do mês · Revisão</strong></td><td>Resumo das decisões, responsáveis e próximos passos, e as notas de versão</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <h2>Ficha da demanda</h2>
   <p>Toda demanda precisa responder a estas perguntas para ser priorizada. As três últimas são o portão: sem elas, a demanda não entra no desenvolvimento.</p>
   <ul class="checklist">
-    <li><span class="check-icon done">✓</span><strong>O que é:</strong>&nbsp;produto (Flow Spy, Flow Tracking ou Flow Pages) e tipo (bug, melhoria ou nova funcionalidade).</li>
-    <li><span class="check-icon done">✓</span><strong>Por que queremos:</strong>&nbsp;de onde veio (cliente, NPS, suporte, concorrência, ideia interna) e a evidência (print, vídeo no Loom, quantos pediram).</li>
-    <li><span class="check-icon done">✓</span><strong>Quanto é importante:</strong>&nbsp;alta, média ou baixa, com uma frase explicando o motivo.</li>
-    <li><span class="check-icon done">✓</span><strong>Como saber que ficou pronto:</strong>&nbsp;o que precisa funcionar para o teste em homologação ser aprovado.</li>
-    <li><span class="check-icon done">✓</span><strong>Qual problema resolve, e para qual usuário.</strong></li>
-    <li><span class="check-icon done">✓</span><strong>Qual resultado do roadmap move.</strong></li>
-    <li><span class="check-icon done">✓</span><strong>Como medir se funcionou.</strong></li>
+    <li><span class="check-icon done">✓</span><span><strong>O que é:</strong> produto (Flow Spy, Flow Tracking ou Flow Pages) e tipo (bug, melhoria ou nova funcionalidade).</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Por que queremos:</strong> de onde veio (cliente, NPS, suporte, concorrência, ideia interna) e a evidência (print, vídeo no Loom, quantos pediram).</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Quanto é importante:</strong> alta, média ou baixa, com uma frase explicando o motivo.</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Como saber que ficou pronto:</strong> o que precisa funcionar para o teste em homologação ser aprovado.</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Qual problema resolve, e para qual usuário.</strong></span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Qual resultado do roadmap move.</strong></span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Como medir se funcionou.</strong></span></li>
   </ul>
 
   <h2>Status no Notion</h2>
@@ -2833,52 +2848,101 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-backlog">
   <div class="page-header">
     <div class="page-eyebrow">Estratégia</div>
-    <h1>Gestão de Backlog</h1>
-    <p class="page-desc">Como o backlog dos produtos Flow é organizado, priorizado e mantido saudável.</p>
+    <h1>Backlog e Priorização ICE</h1>
+    <p class="page-desc">Como o backlog dos produtos Flow é organizado e como decidimos, todo mês, o que entra no desenvolvimento.</p>
   </div>
 
-  <h2>Princípios do Backlog</h2>
-  <div class="info-box">
-    <strong>Backlog saudável</strong> não é backlog enorme. É um backlog priorizado, com demandas bem descritas, onde os itens do topo estão prontos para entrar em sprint a qualquer momento.
-  </div>
-
+  <h2>Princípios do backlog</h2>
   <div class="rule-grid">
     <div class="rule-card">
-      <div class="rule-icon">🎯</div>
-      <h3>Sempre priorizado</h3>
-      <p>O topo do backlog contém o que tem mais impacto agora. A prioridade é revisada quinzenalmente ou quando algo muda no negócio.</p>
-    </div>
-    <div class="rule-card">
-      <div class="rule-icon">📝</div>
-      <h3>Bem especificado</h3>
-      <p>Demanda no topo do backlog está pronta para sprint: tem contexto, critérios de aceite e informação suficiente para o dev implementar sem precisar perguntar o óbvio.</p>
-    </div>
-    <div class="rule-card">
-      <div class="rule-icon">🧹</div>
-      <h3>Limpo regularmente</h3>
-      <p>Demandas que não fazem mais sentido são arquivadas. Backlog com 200 itens sem prioridade é um ruído, não um ativo.</p>
+      <div class="rule-icon">🌳</div>
+      <h3>Ligado ao roadmap</h3>
+      <p>Toda solução no backlog pertence a um galho da <a href="#" onclick="showPage('roadmap');return false">árvore de oportunidades</a>: resolve um problema real e move um resultado.</p>
     </div>
     <div class="rule-card">
       <div class="rule-icon">🔍</div>
       <h3>Baseado em evidência</h3>
-      <p>Cada item tem contexto de por que está no backlog. "Alguém pediu" não é contexto suficiente. Quantas pessoas? Qual o impacto se não fizermos?</p>
+      <p>"Alguém pediu" não basta. Quantas pessoas pediram? Qual o impacto se não fizermos?</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📝</div>
+      <h3>Bem especificado</h3>
+      <p>O que está no topo tem a ficha completa e critério de aceite, para o time desenvolver sem precisar perguntar o óbvio.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🧹</div>
+      <h3>Limpo todo mês</h3>
+      <p>Na revisão mensal, o que não faz mais sentido é arquivado. Backlog enorme sem prioridade é ruído.</p>
     </div>
   </div>
 
-  <h2>Estrutura do Backlog no Notion</h2>
+  <h2>A nota ICE</h2>
+  <p>Na sessão de priorização (semana 2 do ciclo), cada solução candidata recebe uma nota de 1 a 10 em três fatores. As três notas são multiplicadas, e o total vai de 1 a 1000.</p>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val">I</div>
+      <div class="stat-label">Impacto</div>
+      <div class="stat-sub">Quanto isso ajuda a mover o resultado?</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">C</div>
+      <div class="stat-label">Confiança</div>
+      <div class="stat-sub">Quão seguros estamos de que vai funcionar? Quanto mais evidência da descoberta, maior.</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">E</div>
+      <div class="stat-label">Facilidade</div>
+      <div class="stat-sub">Quão fácil é de construir?</div>
+    </div>
+  </div>
+  <div class="info-box">
+    <strong>Exemplo:</strong> impacto 8 × confiança 8 × facilidade 7 = <strong>448</strong>. Quanto maior o total, mais cedo vale a pena fazer. A IA pode pré-preencher as notas com justificativa, mas elas são ajustadas e decididas na sessão.
+  </div>
+
+  <h2>O que a nota decide</h2>
+  <div class="sla-grid">
+    <div class="sla-card low">
+      <div class="sla-time">300 a 1000</div>
+      <div class="sla-type">Candidata ao sprint</div>
+      <div class="sla-desc">Entra em ordem decrescente de nota até acabarem as vagas do ciclo. O que sobrar vai para o próximo ciclo.</div>
+    </div>
+    <div class="sla-card normal">
+      <div class="sla-time">100 a 299</div>
+      <div class="sla-type">Próximo ciclo</div>
+      <div class="sla-desc">Recebe nova nota na revisão do fim do mês.</div>
+    </div>
+    <div class="sla-card critical">
+      <div class="sla-time">0 a 99</div>
+      <div class="sla-type">Agora não</div>
+      <div class="sla-desc">Para subir, precisa de mais evidência na descoberta ou de um jeito mais simples de entregar.</div>
+    </div>
+  </div>
+  <p>Os cortes de 100 e 300 são um ponto de partida e podem ser ajustados com o time. O número de vagas de cada ciclo depende das horas de roadmap disponíveis na Biancode.</p>
+
+  <h2>Regras do ciclo</h2>
+  <ul class="checklist">
+    <li><span class="check-icon done">✓</span><span><strong>Semana 1:</strong> ideias novas entram e juntam evidência na descoberta.</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Semana 2, dia do corte:</strong> a sessão de priorização dá as notas, e os cortes decidem onde cada ideia fica.</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Semanas 3 e 4, sprint congelado:</strong> ideia nova espera o próximo ciclo. Só urgência real entra, usando a reserva de horas.</span></li>
+    <li><span class="check-icon done">✓</span><span><strong>Fim do mês:</strong> na revisão, as ideias que ficaram de fora recebem nova nota. Nenhuma ideia herda vaga do ciclo anterior.</span></li>
+  </ul>
+
+  <h2>Estrutura do backlog no Notion</h2>
   <div class="table-wrap">
     <table class="styled-table">
-      <thead><tr><th>Coluna</th><th>O que registrar</th></tr></thead>
+      <thead><tr><th>Campo</th><th>O que registrar</th></tr></thead>
       <tbody>
         <tr><td><strong>Título</strong></td><td>Nome claro e objetivo da demanda</td></tr>
         <tr><td><strong>Produto</strong></td><td>Flow Spy / Flow Tracking / Flow Pages</td></tr>
-        <tr><td><strong>Tipo</strong></td><td>Bug / Melhoria / Feature / Débito técnico / Integração</td></tr>
-        <tr><td><strong>Prioridade</strong></td><td>Crítica / Alta / Média / Baixa</td></tr>
-        <tr><td><strong>Status</strong></td><td>Backlog / Em priorização / Em sprint / Em QA / Concluído</td></tr>
-        <tr><td><strong>Contexto</strong></td><td>Por que isso é importante? Qual problema resolve?</td></tr>
-        <tr><td><strong>Critérios de aceite</strong></td><td>Como saberemos que foi entregue corretamente?</td></tr>
-        <tr><td><strong>Esforço estimado</strong></td><td>Pequeno / Médio / Grande (validado com Biancode)</td></tr>
-        <tr><td><strong>Data de conclusão</strong></td><td>Preenchida quando concluído</td></tr>
+        <tr><td><strong>Tipo</strong></td><td>Bug / Melhoria / Nova funcionalidade / Débito técnico / Integração</td></tr>
+        <tr><td><strong>Status</strong></td><td>Os status do <a href="#" onclick="showPage('fluxo');return false">Fluxo de Demandas</a>: Caixa de entrada → Fundamentada → Priorizada → Em desenvolvimento → Em homologação → Aprovada → Concluída</td></tr>
+        <tr><td><strong>Oportunidade</strong></td><td>Qual problema do usuário isso resolve</td></tr>
+        <tr><td><strong>Resultado</strong></td><td>Qual resultado do roadmap isso move</td></tr>
+        <tr><td><strong>Como medir</strong></td><td>Qual número vai mostrar se funcionou</td></tr>
+        <tr><td><strong>Impacto · Confiança · Facilidade</strong></td><td>Notas de 1 a 10 dadas na sessão de priorização</td></tr>
+        <tr><td><strong>Nota ICE</strong></td><td>Impacto × Confiança × Facilidade (fórmula no Notion)</td></tr>
+        <tr><td><strong>Critério de aceite</strong></td><td>Como saberemos que foi entregue corretamente</td></tr>
+        <tr><td><strong>Data de conclusão</strong></td><td>Preenchida quando concluída</td></tr>
       </tbody>
     </table>
   </div>
@@ -2888,57 +2952,112 @@ mark{background:color-mix(in srgb,var(--accent3) 30%,transparent);
 <section class="page" id="page-roadmap">
   <div class="page-header">
     <div class="page-eyebrow">Estratégia</div>
-    <h1>Roadmap</h1>
-    <p class="page-desc">Visão de médio prazo do que cada produto Flow está planejando entregar.</p>
+    <h1>Roadmap de Resultados</h1>
+    <p class="page-desc">Como decidimos para onde cada produto Flow vai. O roadmap é feito de resultados, números que queremos mudar, e não de uma lista de funções.</p>
   </div>
 
-  <div class="info-box warning">
-    <strong>Importante:</strong> O roadmap é uma intenção, não um contrato. Prioridades mudam. O que está no roadmap reflete o melhor julgamento hoje, mas pode ser ajustado conforme aprendemos mais com usuários e mercado.
+  <h2>As 4 regras</h2>
+  <div class="rule-grid">
+    <div class="rule-card">
+      <div class="rule-icon">📈</div>
+      <h3>Resultado é número que muda</h3>
+      <p>Entregar uma função não prova impacto. O que conta é o número do negócio que se moveu depois que ela foi ao ar.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">📅</div>
+      <h3>Roadmap não promete data de função</h3>
+      <p>O roadmap diz qual resultado estamos atacando agora, a seguir e depois. Ele não é um calendário de lançamentos.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🌳</div>
+      <h3>Sem problema e sem resultado, não entra</h3>
+      <p>Uma função que não resolve um problema real ligado a um resultado não entra na priorização, por melhor que pareça.</p>
+    </div>
+    <div class="rule-card">
+      <div class="rule-icon">🤖</div>
+      <h3>A IA prepara, a gente decide</h3>
+      <p>A IA faz rascunhos, resumos e classificações. As decisões ficam com o Daniel e o PO da Biancode.</p>
+    </div>
   </div>
 
-  <h2>Princípios do Roadmap Flow</h2>
+  <h2>Resultado com métrica</h2>
   <div class="section-card">
-    <p>Um bom roadmap conta uma história: o produto está indo de A para B, e cada item no caminho faz sentido dentro dessa narrativa. Roadmap que é apenas uma lista de features não tem estratégia.</p>
-    <ul class="checklist" style="margin-top:12px">
-      <li><span class="check-icon done">✓</span>Cada feature no roadmap tem uma razão clara de existir</li>
-      <li><span class="check-icon done">✓</span>O roadmap é construído de trás para frente: qual é o objetivo do produto nos próximos 6 meses?</li>
-      <li><span class="check-icon done">✓</span>Existe equilíbrio entre features novas, melhorias e débito técnico</li>
-      <li><span class="check-icon done">✓</span>O roadmap é revisado mensalmente com dados reais de uso e feedback</li>
-      <li><span class="check-icon done">✓</span>A liderança está alinhada com a direção estratégica</li>
-    </ul>
+    <p>Todo resultado segue o formato: <strong>verbo + o que muda + de [X] para [Y]</strong>. É uma versão simplificada de OKR.</p>
+    <div class="table-wrap">
+      <table class="styled-table">
+        <thead><tr><th>❌ Isso é entrega</th><th>✅ Isso é resultado</th></tr></thead>
+        <tbody>
+          <tr><td>Lançar um app mobile</td><td>Aumentar as contas ativas por semana de [X] para [Y]</td></tr>
+          <tr><td>Melhorar o onboarding</td><td>Elevar a conclusão do primeiro cadastro de [X]% para [Y]%</td></tr>
+          <tr><td>Refazer a tela de cadastro</td><td>Reduzir os pedidos de suporte sobre cadastro de [X] para [Y] por mês</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <h2>Horizontes do Roadmap</h2>
+  <h2>A árvore de oportunidades</h2>
+  <p>Cada produto tem uma árvore que desce em quatro níveis. Começamos pelo problema do usuário, nunca pela função.</p>
+  <div class="flow-wrap">
+    <div class="flow-box accent">Visão</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box">Resultado</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box orange">Oportunidade</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box green">Solução</div>
+  </div>
   <div class="table-wrap">
     <table class="styled-table">
-      <thead><tr><th>Horizonte</th><th>Prazo</th><th>Nível de certeza</th><th>Detalhamento</th></tr></thead>
+      <thead><tr><th>Nível</th><th>O que é</th><th>Exemplo (Flow Tracking)</th></tr></thead>
       <tbody>
-        <tr>
-          <td><strong>Now (Agora)</strong></td>
-          <td>0-4 semanas</td>
-          <td><span class="badge badge-green">Alto</span></td>
-          <td>Em sprint ou prestes a entrar. Especificação completa.</td>
-        </tr>
-        <tr>
-          <td><strong>Next (Próximo)</strong></td>
-          <td>1-3 meses</td>
-          <td><span class="badge badge-orange">Médio</span></td>
-          <td>Priorizado e validado. Pode mudar de ordem.</td>
-        </tr>
-        <tr>
-          <td><strong>Later (Depois)</strong></td>
-          <td>3-6 meses</td>
-          <td><span class="badge badge-blue">Baixo</span></td>
-          <td>Ideia estratégica. Pode mudar completamente.</td>
-        </tr>
+        <tr><td><strong>Visão</strong></td><td>Aonde o produto quer chegar em um ano</td><td>Ser a ferramenta que o gestor abre todo dia</td></tr>
+        <tr><td><strong>Resultado</strong></td><td>O número que mostra que estamos chegando lá</td><td>Aumentar as contas ativas por semana de [X] para [Y]</td></tr>
+        <tr><td><strong>Oportunidade</strong></td><td>Um problema real, contado do ponto de vista do usuário</td><td>"Só descubro que algo atrasou quando o cliente reclama"</td></tr>
+        <tr><td><strong>Solução</strong></td><td>Uma ideia que resolve aquela oportunidade</td><td>Painel de entregas atrasadas, ou alertas pelo WhatsApp</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="info-box">
+    <strong>Função sem galho na árvore não tem problema nem resultado ligados a ela, e por isso não entra no <a href="#" onclick="showPage('backlog');return false">ranking ICE</a>.</strong> A árvore define quais soluções podem disputar uma vaga; o ICE escolhe entre elas.
+  </div>
+
+  <h2>Agora · Próximo · Depois</h2>
+  <p>O roadmap tem três colunas de resultados, sem datas de entrega. Ele é revisado na revisão mensal de cada ciclo.</p>
+  <div class="phase-grid">
+    <div class="phase-card week3">
+      <div class="phase-label">Agora · este mês</div>
+      <h3>Em execução</h3>
+      <p>Resultado detalhado, com as soluções sendo desenvolvidas.</p>
+    </div>
+    <div class="phase-card week2">
+      <div class="phase-label">Próximo · mês 2</div>
+      <h3>Em descoberta</h3>
+      <p>Resultado escolhido, com as oportunidades sendo mapeadas em conversas com usuários.</p>
+    </div>
+    <div class="phase-card week1">
+      <div class="phase-label">Depois · mês 3 em diante</div>
+      <h3>Intenção</h3>
+      <p>Só a direção. Ainda sem soluções definidas.</p>
+    </div>
+  </div>
+
+  <h2>Kickoff de produto</h2>
+  <p>Cada período de roadmap começa com um kickoff de 1h30. A Biancode prepara um rascunho antes, o Daniel revisa e decide na reunião.</p>
+  <div class="table-wrap">
+    <table class="styled-table">
+      <thead><tr><th>Tempo</th><th>Tema</th><th>Pergunta</th><th>Sai daqui</th></tr></thead>
+      <tbody>
+        <tr><td>15 min</td><td><strong>Visão</strong></td><td>Aonde queremos chegar em um ano?</td><td>Uma frase de visão</td></tr>
+        <tr><td>30 min</td><td><strong>Resultados</strong></td><td>Quais números queremos mudar?</td><td>3 resultados, cada um com métrica</td></tr>
+        <tr><td>30 min</td><td><strong>Oportunidades</strong></td><td>Quais problemas travam cada número? (com base nos pedidos e reclamações que já temos)</td><td>Os galhos da árvore</td></tr>
+        <tr><td>15 min</td><td><strong>Agora · Próximo · Depois</strong></td><td>Qual resultado atacamos primeiro?</td><td>Roadmap de 3 meses</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h2>O Roadmap Atual</h2>
+  <h2>Onde fica o roadmap atual</h2>
   <div class="section-card">
-    <p>O roadmap detalhado e atualizado de cada produto está no Notion, na área de cada ferramenta. Este playbook não replica o roadmap porque ele muda com frequência. Acesse o Notion para a versão mais recente.</p>
-    <p>O que está aqui são os princípios de como o roadmap é construído e gerenciado, não o conteúdo em si.</p>
+    <p>O roadmap de cada produto fica no Notion, na área de cada ferramenta, e é atualizado na revisão mensal. Este playbook não copia o roadmap porque ele muda todo mês: aqui está só o método.</p>
   </div>
 </section>
 
