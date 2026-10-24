@@ -17,8 +17,8 @@ window.FlowAccess = (function () {
       ["fin.clients", "Saúde dos clientes"],
       ["fin.hours", "Horas de dev."],
       ["fin.trello", "Cards Trello"],
-      ["fin.instagram", "Instagram"],
-      ["fin.ideias", "Ideias Usuários"]
+      ["fin.instagram", "Instagram (@useaflow, pautas e radar)"],
+      ["fin.ideias", "Ideias dos usuários (aba do @useaflow)"]
     ] },
     { page: "afiliados", label: "Afiliados", href: "../afiliados/", menus: [
       ["af.overview", "Visão geral"],
@@ -76,6 +76,8 @@ window.FlowAccess = (function () {
   function apply(root) {
     root = root || document;
     root.querySelectorAll("[data-menu]").forEach(function (el) { el.hidden = !can(el.getAttribute("data-menu")); });
+    // data-menu-any="a,b": aparece para quem tem qualquer um dos menus.
+    root.querySelectorAll("[data-menu-any]").forEach(function (el) { el.hidden = !el.getAttribute("data-menu-any").split(",").some(can); });
     root.querySelectorAll("[data-page]").forEach(function (el) { el.hidden = !canPage(el.getAttribute("data-page")); });
     root.querySelectorAll("[data-admin-only]").forEach(function (el) { el.hidden = !isAdmin(); });
     // Título de grupo do menu sem nenhum item visível some junto.

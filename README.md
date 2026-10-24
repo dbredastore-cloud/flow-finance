@@ -118,7 +118,7 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - No painel, os itens do menu têm `data-menu`, os links entre painéis `data-page` e o link da Equipe `data-admin-only`; quem não tem nenhum menu de um painel é levado ao primeiro que pode ver.
 - Gerenciar: tela Equipe → **Editar acesso** (ou o seletor ao adicionar pessoa). Precisa sobrar sempre pelo menos um Admin.
 
-## Instagram (menu do /financeiro/)
+## Pautas Instagram (menu do /financeiro/)
 
 - Painel de pautas a partir das entregas do Trello, só com o que **não é bug** (coluna gerada `trello_cards.is_bug`: etiqueta "Bug", tipo "Correção de bug" ou nome começando com "[Bug]").
 - Para cada card: o que foi feito, ângulo, formato ideal, ganchos, roteiro de Reels cena a cena (tempo, imagem, fala, texto na tela), carrossel slide a slide, sequência de stories, legenda, hashtags e dica de gravação (coluna `ig`), além dos textos Para mim e Slack dos Cards Trello. Tudo com botão Copiar.
@@ -126,11 +126,12 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
 - Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
 
-## Desempenho do @useaflow (menu Instagram do /financeiro/)
+## @useaflow (menu do /financeiro/)
 
-- O menu Instagram tem quatro abas: **Pautas** (as pautas dos Cards Trello, `assets/instagram-hub.js`) e **Desempenho**, **Stories** e **Comentários** (`assets/instagram-perf.js`).
+- Tudo da conta da Flow num menu só (`assets/useaflow.js`), em abas: **Desempenho**, **Stories**, **Comentários** e **Direct** (`assets/instagram-perf.js`, menu `fin.instagram`) e **Ideias dos usuários** (`assets/user-ideas.js`, menu `fin.ideias`). O item aparece para quem tem qualquer um dos dois menus (`data-menu-any` em `assets/flow-access.js`), e cada aba só para quem tem o menu dela. A antiga tela "Ideias Usuários" abre direto na aba Ideias.
 - **Desempenho:** seguidores, alcance, visualizações, interações e respostas a stories dos últimos 7 dias (com a variação sobre os 7 anteriores), alcance por dia em 30 dias e todos os posts e reels com alcance, views, curtidas, comentários, compartilhamentos, salvos, engajamento, seguidores ganhos, visitas ao perfil, tempo médio assistido e pulos nos 3 primeiros segundos (ordenável).
 - **Stories:** o histórico de `ig_stories` (ver abaixo). **Comentários:** todos os comentários e respostas, com busca. Sem a permissão `instagram_manage_comments` no token, a Meta não manda o @ de quem comentou.
+- **Direct:** conversas e mensagens (`ig_conversations`, `ig_messages`), com filtros Sem resposta, Respostas a stories e Menções em stories (quando outra conta marca o @useaflow num story, a menção chega como mensagem). `supabase/functions/instagram-dm/` lê de hora em hora (cron `instagram-dm`, minuto 47) pela Página ligada ao Instagram; precisa do token com `instagram_manage_messages` e `pages_manage_metadata`, da Página atribuída ao usuário do sistema e ligada ao @useaflow, e de "Permitir acesso a mensagens" ligado no app do Instagram. A Meta só entrega as mensagens mais recentes de cada conversa; o painel guarda o que já leu. Mensagens não vão para o cache da aba. Migration `20261024_ig_direct.sql`; última rodada em `sync_state.instagram_dm_last_run`.
 - `supabase/functions/instagram-own/` lê pela Graph API, a cada 6 h (cron `instagram-own`, minuto 27), os posts e reels com as métricas (`ig_media`), os comentários (`ig_comments`) e o resumo diário da conta (`ig_account_daily`: 30 dias na primeira vez, depois os últimos 3). O botão **Atualizar agora** de cada aba chama a função na hora. Última rodada em `sync_state.instagram_own_last_run`. Migration `20261024_ig_own.sql`; leitura pelo menu `fin.instagram`.
 
 ## Radar Instagram (menu do /financeiro/)
@@ -146,12 +147,12 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Story com menos de 5 contas não tem métricas na Meta (fica a nota em `insights_note`). Votos de enquete, perguntas da caixinha e texto das respostas não saem por API.
 - Mesmos secrets do `instagram-sync` (`IG_ACCESS_TOKEN`, `IG_BUSINESS_ID`); passo a passo em `docs/instagram-meta.md`. Última rodada em `sync_state.instagram_stories_last_run`. Leitura: menu `fin.instagram`. Migration `20261024_ig_stories.sql`.
 
-## Ideias Usuários (menu do /financeiro/)
+## Ideias dos usuários (aba do menu @useaflow)
 
 - O que o público pede, sugere ou pergunta sobre FlowSpy, FlowPages e FlowTracking, para decidir o que entra nas ferramentas. Tabela `user_ideas` (migration `20261024_user_ideas.sql`), tela `assets/user-ideas.js`.
 - Cada pedido tem origem (comentário, caixinha, Direct, enquete, outro), ferramenta, tipo (ideia, dúvida, compra, problema), status (Novo → Em análise → No roadmap → Entregue, ou Descartado) e observação da equipe. O status muda direto no card; quem registrou e quem alterou por último é gravado pelo banco (`created_by` / `updated_by`, e-mail do login).
-- **Comentários do Instagram** (@useaflow) entram com `ig_comment_id` único, então a importação pode rodar de novo sem duplicar. Hoje são importados pelo Claude pelo conector do Windsor.ai, como os textos dos Cards Trello; quando os secrets `IG_ACCESS_TOKEN` / `IG_BUSINESS_ID` estiverem configurados, dá para ler direto da API da Meta.
-- **Caixinha, Direct e enquetes** não saem pela API do Instagram: a equipe registra pelo botão **+ Registrar pedido**.
+- **Comentários e Direct** do @useaflow entram sozinhos: a tarefa agendada do app Claude "Ideias dos usuários: comentários e Direct do @useaflow" (todo dia, 9h, com o app aberto) lê `ig_comments` e `ig_messages` no Supabase, classifica (ideia, dúvida, compra, problema; elogios ficam de fora) e grava com `ig_comment_id` / `ig_message_id` únicos, então pode rodar de novo sem duplicar.
+- **Caixinha de perguntas e enquetes** não saem pela API do Instagram: a equipe registra pelo botão **+ Registrar pedido**.
 - Acesso: menu `fin.ideias` na tela Equipe (leitura e escrita pelo mesmo menu).
 
 ## Velocidade

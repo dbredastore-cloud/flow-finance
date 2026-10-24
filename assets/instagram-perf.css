@@ -58,6 +58,28 @@
 .ip-c-post { font-size: 11.5px; color: var(--text-muted); }
 .ip-c-post a { color: var(--accent-3); }
 
+/* Direct */
+.ip-setup h4 { margin: 0 0 6px; font-size: 14px; color: var(--warning); }
+.ip-setup p { margin: 0 0 8px; font-size: 12.5px; color: var(--text-dim); }
+.ip-setup ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; }
+.ip-dfilters { margin: 0; }
+.ip-dfilters .btn { width: auto; }
+.ip-row #ip-dq { flex: 1 1 220px; max-width: 360px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; }
+.ip-convs { display: grid; gap: 8px; }
+.ip-conv { border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+.ip-conv.open { border-color: var(--accent); }
+.ip-conv-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; width: 100%; padding: 10px 14px; text-align: left; font: inherit; color: var(--text); background: transparent; border: 0; cursor: pointer; }
+.ip-conv-h b { font-size: 13.5px; }
+.ip-conv-last { flex: 1 1 260px; min-width: 0; font-size: 12.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ip-conv-d { font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); }
+.ip-pill.wait { color: var(--warning); border-color: var(--warning); }
+.ip-thread { display: flex; flex-direction: column; gap: 6px; padding: 4px 14px 14px; border-top: 1px solid var(--border); max-height: 420px; overflow-y: auto; }
+.ip-msg { align-self: flex-start; max-width: 78%; padding: 8px 12px; border-radius: 12px 12px 12px 4px; background: var(--surface-2); border: 1px solid var(--border); }
+.ip-msg.me { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 35%, transparent); }
+.ip-msg p { margin: 0; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ip-msg a { display: inline-block; margin-top: 4px; font-size: 11.5px; color: var(--accent-3); }
+.ip-msg small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text-muted); }
+
 @media (max-width: 768px) {
   .ip-bars { gap: 2px; height: 120px; }
   .ip-bar span { display: none; }

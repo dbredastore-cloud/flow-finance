@@ -1,14 +1,15 @@
-/* Instagram — desempenho do @useaflow (abas Desempenho, Stories e Comentários do menu Instagram do Financeiro).
+/* @useaflow — abas Desempenho, Stories, Comentários e Direct do menu @useaflow do Financeiro (assets/useaflow.js).
    Dados lidos pela API da Meta e gravados no Supabase:
    - ig_account_daily, ig_media, ig_comments: Edge Function instagram-own (a cada 6 h);
-   - ig_stories: Edge Function instagram-stories (de hora em hora; a Meta só entrega um story nas 24 h em que está no ar).
+   - ig_stories: Edge Function instagram-stories (de hora em hora; a Meta só entrega um story nas 24 h em que está no ar);
+   - ig_conversations, ig_messages: Edge Function instagram-dm (de hora em hora; respostas e menções em stories incluídas).
    O botão "Atualizar agora" chama a função na hora (só quem está em app_admins).
-   Uso: InstagramPerf.init({ root, sb, toast, url }); InstagramPerf.show("desempenho" | "stories" | "comentarios"); */
+   Uso: InstagramPerf.init({ root, sb, toast, url }); InstagramPerf.show("desempenho" | "stories" | "comentarios" | "direct"); */
 (function () {
   "use strict";
 
   var A = null;
-  var S = { ready: false, tab: "desempenho", days: [], media: [], stories: [], comments: [], runs: {}, sort: "recentes", q: "", busy: false };
+  var S = { ready: false, tab: "desempenho", days: [], media: [], stories: [], comments: [], convs: [], msgs: [], runs: {}, sort: "recentes", q: "", dq: "", dfilter: "", openConv: null, busy: false };
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -30,6 +31,7 @@
   /* ---------------- dados ---------------- */
   function cacheKey() { return "flow_igperf_cache_v1:" + ((window.FlowAccess && window.FlowAccess.email()) || ""); }
   function cacheRead() { try { return JSON.parse(sessionStorage.getItem(cacheKey()) || "null"); } catch (e) { return null; } }
+  // O Direct não vai para o cache da aba (mensagens pessoais ficam só na memória da página).
   function cacheWrite() { try { sessionStorage.setItem(cacheKey(), JSON.stringify({ days: S.days, media: S.media, stories: S.stories, comments: S.comments, runs: S.runs })); } catch (e) {} }
 
   async function load() {
@@ -38,12 +40,15 @@
       A.sb.from("ig_media").select("id, media_type, media_product_type, caption, permalink, posted_at, like_count, comments_count, reach, views, saved, shares, total_interactions, follows, profile_visits, avg_watch_ms, skip_rate, insights_note").order("posted_at", { ascending: false }).limit(1000),
       A.sb.from("ig_stories").select("*").order("posted_at", { ascending: false }).limit(1000),
       A.sb.from("ig_comments").select("id, media_id, parent_id, username, text, like_count, posted_at").order("posted_at", { ascending: false }).limit(2000),
-      A.sb.from("sync_state").select("key, value").in("key", ["instagram_own_last_run", "instagram_stories_last_run"])
+      A.sb.from("sync_state").select("key, value").in("key", ["instagram_own_last_run", "instagram_stories_last_run", "instagram_dm_last_run"]),
+      A.sb.from("ig_conversations").select("id, username, updated_at").order("updated_at", { ascending: false }).limit(2000),
+      A.sb.from("ig_messages").select("id, conversation_id, from_username, from_business, text, story_url, attachment, created_at").order("created_at", { ascending: false }).limit(10000)
     ]);
     r.forEach(function (x) { if (x.error) throw x.error; });
     S.days = r[0].data || []; S.media = r[1].data || []; S.stories = r[2].data || []; S.comments = r[3].data || [];
     S.runs = {};
     (r[4].data || []).forEach(function (x) { S.runs[x.key] = x.value; });
+    S.convs = r[5].data || []; S.msgs = r[6].data || [];
   }
 
   async function refresh(fn) {
@@ -56,7 +61,9 @@
       var js = await res.json().catch(function () { return {}; });
       if (!res.ok || js.ok === false) throw new Error(js.error || ("HTTP " + res.status));
       await load(); cacheWrite();
-      A.toast(fn === "instagram-stories" ? "Stories atualizados: " + (js.live || 0) + " no ar." : "Instagram atualizado: " + (js.media || 0) + " posts e reels.");
+      A.toast(fn === "instagram-stories" ? "Stories atualizados: " + (js.live || 0) + " no ar."
+        : fn === "instagram-dm" ? "Direct atualizado: " + (js.conversations || 0) + " conversas."
+        : "Instagram atualizado: " + (js.media || 0) + " posts e reels.");
     } catch (e) {
       A.toast("Não foi possível atualizar: " + (e.message || e), true);
     }
@@ -66,7 +73,7 @@
   /* ---------------- desenho ---------------- */
   function render() {
     var root = A.root;
-    var body = S.tab === "stories" ? viewStories() : S.tab === "comentarios" ? viewComments() : viewPerf();
+    var body = S.tab === "stories" ? viewStories() : S.tab === "comentarios" ? viewComments() : S.tab === "direct" ? viewDirect() : viewPerf();
     root.innerHTML = body;
   }
 
@@ -177,6 +184,65 @@
       '<div class="ip-comments">' + (items || '<div class="panel ig-empty">Nenhum comentário lido ainda.</div>') + "</div>";
   }
 
+  function viewDirect() {
+    var run = S.runs.instagram_dm_last_run;
+    var head = '<div class="ip-head"><div><div class="ch-kicker">Direct</div><h3 class="ch-title">Conversas do @useaflow</h3>' +
+      '<p class="ch-sub">Mensagens, respostas aos stories e menções ao @useaflow em stories de outras contas (é assim que aparece quando um influencer marca a Flow). A Meta só entrega as mensagens mais recentes de cada conversa; o painel guarda tudo o que já leu. Pedidos e ideias daqui também vão para a aba Ideias dos usuários.</p></div>' +
+      runLine("instagram_dm_last_run", "instagram-dm", "Atualizar Direct") + "</div>";
+    if (run && run.ok === false && run.code === "permission" && !S.convs.length) {
+      return head + '<div class="panel ip-card ip-setup"><h4>Falta liberar a leitura do Direct</h4><p>' + esc(run.error) + "</p>" +
+        "<ol><li>No app do Instagram do @useaflow: Configurações → Mensagens e respostas a stories → Ferramentas conectadas → ligue <b>Permitir acesso a mensagens</b>.</li>" +
+        "<li>Ligue o Instagram à Página <b>Flow Tools</b> (Página no Facebook → Configurações → Contas vinculadas → Instagram).</li>" +
+        "<li>Gere o token do usuário do sistema de novo incluindo <b>instagram_manage_messages</b> e <b>pages_manage_metadata</b>, e troque o secret IG_ACCESS_TOKEN no Supabase.</li></ol></div>";
+    }
+    var byConv = {};
+    S.msgs.forEach(function (m) { (byConv[m.conversation_id] = byConv[m.conversation_id] || []).push(m); });
+    var rows = S.convs.map(function (c) {
+      var ms = (byConv[c.id] || []).slice().sort(function (a, b) { return Date.parse(b.created_at) - Date.parse(a.created_at); });
+      var last = ms[0];
+      return { c: c, ms: ms, last: last,
+        replies: ms.filter(function (m) { return m.attachment === "story_reply"; }).length,
+        mentions: ms.filter(function (m) { return m.attachment === "story_mention"; }).length,
+        waiting: last && !last.from_business };
+    });
+    var received = S.msgs.filter(function (m) { return !m.from_business; }).length;
+    var tiles = '<div class="ig-tiles">' +
+      tile("Conversas", n(S.convs.length), "com mensagens lidas") +
+      tile("Mensagens recebidas", n(received), "de " + n(S.msgs.length) + " no total") +
+      tile("Respostas a stories", n(sum(rows, "replies")), "mensagens que responderam um story") +
+      tile("Menções em stories", n(sum(rows, "mentions")), "outras contas marcando o @useaflow") +
+      tile("Sem resposta", n(rows.filter(function (r) { return r.waiting; }).length), "a última mensagem é de quem escreveu", "") + "</div>";
+    var q = S.dq.trim().toLowerCase();
+    var list = rows.filter(function (r) {
+      if (S.dfilter === "replies" && !r.replies) return false;
+      if (S.dfilter === "mentions" && !r.mentions) return false;
+      if (S.dfilter === "waiting" && !r.waiting) return false;
+      if (q && ((r.c.username || "") + " " + r.ms.map(function (m) { return m.text || ""; }).join(" ")).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    var filters = [["", "Todas"], ["waiting", "Sem resposta"], ["replies", "Respostas a stories"], ["mentions", "Menções em stories"]];
+    var bar = '<div class="ip-row"><div class="ch-tabs ip-dfilters">' + filters.map(function (f) {
+      return '<button type="button" class="btn' + (S.dfilter === f[0] ? " btn-primary" : "") + '" data-perf="dfilter" data-v="' + f[0] + '">' + esc(f[1]) + "</button>";
+    }).join("") + '</div><input type="search" id="ip-dq" placeholder="Buscar @ ou mensagem…" aria-label="Buscar no Direct" value="' + esc(S.dq) + '"><span>' + n(list.length) + " conversas</span></div>";
+    var items = list.map(function (r) {
+      var open = S.openConv === r.c.id;
+      var badge = (r.mentions ? '<span class="ip-pill live">menção em story</span>' : "") + (r.replies ? '<span class="ip-pill">resposta a story</span>' : "") + (r.waiting ? '<span class="ip-pill wait">sem resposta</span>' : "");
+      var lastTxt = r.last ? (r.last.from_business ? "Você: " : "") + (r.last.text || label(r.last.attachment)) : "";
+      return '<article class="ip-conv' + (open ? " open" : "") + '"><button type="button" class="ip-conv-h" data-perf="conv" data-id="' + esc(r.c.id) + '" aria-expanded="' + open + '">' +
+        '<b>' + esc(r.c.username ? "@" + r.c.username : "Conta sem @") + "</b>" + badge + '<span class="ip-conv-last">' + esc(String(lastTxt).slice(0, 120)) + "</span>" +
+        '<span class="ip-conv-d">' + esc(dt(r.c.updated_at || (r.last && r.last.created_at), true)) + "</span></button>" +
+        (open ? '<div class="ip-thread">' + r.ms.slice().reverse().map(function (m) {
+          return '<div class="ip-msg' + (m.from_business ? " me" : "") + '"><p>' + esc(m.text || label(m.attachment)) + "</p>" +
+            (m.story_url ? '<a href="' + esc(m.story_url) + '" target="_blank" rel="noopener noreferrer">' + (m.attachment === "story_mention" ? "ver o story que marcou a Flow" : "ver o story respondido") + " ↗</a>" : "") +
+            "<small>" + esc(dt(m.created_at, true)) + "</small></div>";
+        }).join("") + "</div>" : "") + "</article>";
+    }).join("");
+    return head + tiles + bar + '<div class="ip-convs">' + (items || '<div class="panel ig-empty">' + (S.convs.length ? "Nada com esses filtros." : "Nenhuma conversa lida ainda.") + "</div>") + "</div>";
+  }
+  function label(att) {
+    return { story_mention: "(marcou o @useaflow num story)", story_reply: "(respondeu um story)", image: "(imagem)", video: "(vídeo)", audio: "(áudio)", file: "(arquivo)", share: "(compartilhou uma publicação)", unsupported: "(mensagem que a API não mostra)" }[att] || "(sem texto)";
+  }
+
   /* ---------------- eventos ---------------- */
   function onClick(e) {
     var el = e.target.closest("[data-perf]");
@@ -184,13 +250,16 @@
     var act = el.getAttribute("data-perf");
     if (act === "refresh") refresh(el.getAttribute("data-fn"));
     else if (act === "sort") { S.sort = el.getAttribute("data-v"); render(); }
+    else if (act === "dfilter") { S.dfilter = el.getAttribute("data-v"); render(); }
+    else if (act === "conv") { var id = el.getAttribute("data-id"); S.openConv = S.openConv === id ? null : id; render(); }
   }
   function onInput(e) {
-    if (e.target.id !== "ip-q") return;
-    S.q = e.target.value;
+    var id = e.target.id;
+    if (id !== "ip-q" && id !== "ip-dq") return;
+    if (id === "ip-q") S.q = e.target.value; else S.dq = e.target.value;
     var pos = e.target.selectionStart;
     render();
-    var q = $("ip-q"); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
+    var q = $(id); if (q) { q.focus(); q.setSelectionRange(pos, pos); }
   }
 
   /* ---------------- API pública ---------------- */
