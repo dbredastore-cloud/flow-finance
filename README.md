@@ -126,6 +126,12 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
 - Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
 
+## Stories do @useaflow
+
+- A Meta só entrega um story (e as métricas) nas 24 h em que ele está no ar. `supabase/functions/instagram-stories/` roda de hora em hora (cron `instagram-stories`, minuto 17), lê os stories no ar pela Graph API e grava cada um em `ig_stories` com alcance, visualizações, respostas, compartilhamentos, interações, seguidores ganhos, visitas e atividade no perfil e a navegação (avançou, voltou, saiu, pulou para a próxima conta). Cada leitura também vai para `ig_story_snapshots`; quando o story sai do ar, a última leitura fica como final (`final = true`).
+- Story com menos de 5 contas não tem métricas na Meta (fica a nota em `insights_note`). Votos de enquete, perguntas da caixinha e texto das respostas não saem por API.
+- Mesmos secrets do `instagram-sync` (`IG_ACCESS_TOKEN`, `IG_BUSINESS_ID`); passo a passo em `docs/instagram-meta.md`. Última rodada em `sync_state.instagram_stories_last_run`. Leitura: menu `fin.instagram`. Migration `20261024_ig_stories.sql`.
+
 ## Ideias Usuários (menu do /financeiro/)
 
 - O que o público pede, sugere ou pergunta sobre FlowSpy, FlowPages e FlowTracking, para decidir o que entra nas ferramentas. Tabela `user_ideas` (migration `20261024_user_ideas.sql`), tela `assets/user-ideas.js`.

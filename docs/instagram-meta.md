@@ -1,6 +1,10 @@
 # Instagram: como conectar a conta da Flow à API da Meta
 
-O painel já tem a leitura do Instagram pronta (Edge Function `instagram-sync`, a cada 6 h). Falta só a Meta liberar o acesso.
+O painel já tem a leitura do Instagram pronta. Falta só a Meta liberar o acesso. Um único token serve para as duas funções:
+- `instagram-sync` (a cada 6 h): dados públicos dos perfis dos influencers;
+- `instagram-stories` (de hora em hora): os stories do **@useaflow**, com alcance, visualizações, respostas,
+  compartilhamentos, seguidores ganhos, visitas ao perfil e navegação (avançou, voltou, saiu, pulou). A Meta só entrega
+  um story nas 24 h em que ele está no ar, então o histórico começa no dia em que o token for cadastrado.
 Este guia é da **fase 1** (dados públicos dos perfis profissionais dos influencers). A fase 2 (o influencer conecta o
 próprio Instagram no Portal do Afiliado) está no final.
 
@@ -37,14 +41,16 @@ Em **business.facebook.com**, confira se a Página e a conta do Instagram estão
 ## 6. Descobrir o ID da conta do Instagram (IG_BUSINESS_ID)
 No **Explorador da API do Graph** (developers.facebook.com/tools/explorer), com o token do passo 5, rode:
 `me/accounts?fields=name,instagram_business_account`
-O número em `instagram_business_account.id` (começa com 1784…) é o `IG_BUSINESS_ID`.
+O número em `instagram_business_account.id` (começa com 1784…) é o `IG_BUSINESS_ID`. Para o @useaflow deve
+ser `17841441194954388` (o mesmo id que o Windsor.ai mostra); confira se bate.
 
 ## 7. Cadastrar no Supabase
 **Supabase → Edge Functions → Secrets → Add new secret**:
 - `IG_ACCESS_TOKEN` = token do passo 5
 - `IG_BUSINESS_ID` = ID do passo 6
 
-Depois é só avisar: a primeira leitura roda na hora e os perfis aparecem no dashboard de cada influencer
+Depois é só avisar: a primeira leitura roda na hora. Os stories do @useaflow passam a ser guardados em
+`ig_stories` (uma leitura por hora em `ig_story_snapshots`) e os perfis aparecem no dashboard de cada influencer
 (Influencers Flow / YouTube → Abrir dados) e no Portal do Afiliado.
 
 ## O que é lido (fase 1)
