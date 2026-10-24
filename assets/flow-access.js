@@ -17,7 +17,8 @@ window.FlowAccess = (function () {
       ["fin.clients", "Saúde dos clientes"],
       ["fin.hours", "Horas de dev."],
       ["fin.trello", "Cards Trello"],
-      ["fin.instagram", "Instagram"]
+      ["fin.instagram", "Instagram"],
+      ["fin.ideias", "Ideias Usuários"]
     ] },
     { page: "afiliados", label: "Afiliados", href: "../afiliados/", menus: [
       ["af.overview", "Visão geral"],

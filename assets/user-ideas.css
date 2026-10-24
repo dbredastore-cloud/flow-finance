@@ -1,0 +1,59 @@
+/* Ideias Usuários — usa os tokens de flow-theme.css, as classes .ch-* de customer-health.css (cabeçalho, abas)
+   e as .ig-* de instagram-hub.css (números, etiquetas, gaveta). */
+
+#ideas-view .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ui-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+
+/* ---------- Filtros ---------- */
+.ui-filters { display: grid; gap: 10px; margin-bottom: 16px; }
+.ui-filters .ch-tabs { margin: 0; }
+.ui-filters .btn { width: auto; }
+.ui-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ui-row select, .ui-row input[type="search"] { padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; }
+.ui-row input[type="search"] { flex: 1 1 200px; min-width: 0; max-width: 340px; margin-left: auto; }
+
+/* ---------- Lista ---------- */
+.ui-list { display: grid; gap: 10px; }
+.ui-card { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--warning); }
+.ui-card.st-analise { border-left-color: var(--accent-3); }
+.ui-card.st-roadmap { border-left-color: var(--accent); }
+.ui-card.st-entregue { border-left-color: var(--good); }
+.ui-card.st-descartado { border-left-color: var(--border-strong); opacity: .7; }
+.ui-card-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.ui-text { margin: 0; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ui-note { margin: 0; padding: 6px 10px; font-size: 12.5px; color: var(--text-dim); background: var(--surface-2); border-radius: 6px; }
+.ui-meta { font-size: 11.5px; color: var(--text-muted); }
+.ui-meta a { color: var(--accent-3); }
+.ig-card-top .ui-src { border-style: dashed; }
+.ig-card-top .k-compra { background: color-mix(in oklab, var(--warning) 18%, transparent); }
+.ig-card-top .k-problema { background: color-mix(in oklab, var(--critical) 16%, transparent); }
+.ig-card-top .k-duvida { background: color-mix(in oklab, var(--accent-3) 16%, transparent); }
+.ui-card-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex: 0 0 150px; }
+.ui-status-sel { padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 600; }
+.ui-status-sel.s-novo { color: var(--warning); }
+.ui-status-sel.s-analise { color: var(--accent-3); }
+.ui-status-sel.s-roadmap { color: var(--accent); }
+.ui-status-sel.s-entregue { color: var(--good); }
+.ui-edit { width: auto; padding: 5px 10px; font-size: 12.5px; }
+
+/* ---------- Formulário (gaveta) ---------- */
+.ui-drawer { width: min(620px, 100%); }
+.ui-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; margin-top: 16px; }
+.ui-form label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.ui-form .ui-full { grid-column: 1 / -1; }
+.ui-form input, .ui-form select, .ui-form textarea { padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 14px; font-weight: 400; }
+.ui-form textarea { resize: vertical; line-height: 1.5; }
+.ui-form-acts { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.ui-form-acts .btn { width: auto; }
+.ui-del { color: var(--critical); }
+
+@media (max-width: 1100px) { .ui-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 768px) {
+  .ui-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-tiles > :first-child { grid-column: 1 / -1; }
+  .ui-card { flex-direction: column; }
+  .ui-card-side { flex: none; width: 100%; flex-direction: row; }
+  .ui-card-side select { flex: 1; }
+  .ui-row input[type="search"] { max-width: none; margin-left: 0; }
+  .ui-form { grid-template-columns: 1fr; }
+}

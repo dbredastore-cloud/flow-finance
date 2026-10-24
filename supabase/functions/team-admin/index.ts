@@ -30,7 +30,7 @@ class Fail extends Error {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // Mesmas chaves da migration 20261015_menu_access.sql e de assets/flow-access.js.
 const MENUS = new Set([
-  "fin.financeiro", "fin.health", "fin.clients", "fin.hours", "fin.trello", "fin.instagram",
+  "fin.financeiro", "fin.health", "fin.clients", "fin.hours", "fin.trello", "fin.instagram", "fin.ideias",
   "af.overview", "af.base", "af.flowinf", "af.products", "af.youtube", "af.mercado", "af.favoritos",
 ]);
 

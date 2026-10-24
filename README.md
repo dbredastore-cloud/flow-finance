@@ -113,7 +113,7 @@ Supabase → Project Settings → Edge Functions → Secrets:
 ## Acesso por menu (tela Equipe)
 
 - Cada pessoa em `app_admins` tem um perfil: **Admin** (`role = 'admin'`, vê todos os menus e gerencia a Equipe) ou **Acesso personalizado** (`role = 'custom'`, vê só os menus em `menus`). Quem já tinha acesso antes desta mudança ficou como Admin.
-- Menus: Financeiro → `fin.financeiro` (Home e ferramentas), `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`; Afiliados → `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`. A lista fica em `assets/flow-access.js`, na Edge Function `team-admin` e na migration `20261015_menu_access.sql`; menu novo precisa entrar nos três.
+- Menus: Financeiro → `fin.financeiro` (Home e ferramentas), `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`, `fin.instagram`, `fin.ideias`; Afiliados → `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`. A lista fica em `assets/flow-access.js`, na Edge Function `team-admin` e na migration `20261015_menu_access.sql`; menu novo precisa entrar nos três.
 - Proteção nos dados, não só na tela: as policies de cada tabela usam `public.can(array[...menus])`, então quem só tem Cards Trello não lê despesas nem pela API. `is_owner()` = perfil admin (tentativas de login, tela Equipe); `my_access()` devolve o perfil de quem está logado.
 - No painel, os itens do menu têm `data-menu`, os links entre painéis `data-page` e o link da Equipe `data-admin-only`; quem não tem nenhum menu de um painel é levado ao primeiro que pode ver.
 - Gerenciar: tela Equipe → **Editar acesso** (ou o seletor ao adicionar pessoa). Precisa sobrar sempre pelo menos um Admin.
@@ -125,6 +125,14 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Marcações compartilhadas pela equipe, que ligam e desligam: **Lido**, **Interessante** e **Conteúdo feito** (marcar Conteúdo feito também marca Lido). Gravadas pela função `trello_ig_flag`, com quem marcou e quando. Filtros por situação, ferramenta, tipo e formato ideal.
 - O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
 - Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
+
+## Ideias Usuários (menu do /financeiro/)
+
+- O que o público pede, sugere ou pergunta sobre FlowSpy, FlowPages e FlowTracking, para decidir o que entra nas ferramentas. Tabela `user_ideas` (migration `20261024_user_ideas.sql`), tela `assets/user-ideas.js`.
+- Cada pedido tem origem (comentário, caixinha, Direct, enquete, outro), ferramenta, tipo (ideia, dúvida, compra, problema), status (Novo → Em análise → No roadmap → Entregue, ou Descartado) e observação da equipe. O status muda direto no card; quem registrou e quem alterou por último é gravado pelo banco (`created_by` / `updated_by`, e-mail do login).
+- **Comentários do Instagram** (@useaflow) entram com `ig_comment_id` único, então a importação pode rodar de novo sem duplicar. Hoje são importados pelo Claude pelo conector do Windsor.ai, como os textos dos Cards Trello; quando os secrets `IG_ACCESS_TOKEN` / `IG_BUSINESS_ID` estiverem configurados, dá para ler direto da API da Meta.
+- **Caixinha, Direct e enquetes** não saem pela API do Instagram: a equipe registra pelo botão **+ Registrar pedido**.
+- Acesso: menu `fin.ideias` na tela Equipe (leitura e escrita pelo mesmo menu).
 
 ## Velocidade
 
