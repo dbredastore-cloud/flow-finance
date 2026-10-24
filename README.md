@@ -126,6 +126,13 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - O conteúdo é escrito pelo Claude (sem API paga): a tarefa agendada "Textos dos Cards Trello" escreve `ai` e depois `ig` dos cards novos. Enquanto `ig` não existe, o painel mostra as ideias básicas de `ai.instagram`.
 - Acesso: menu `fin.instagram` na tela Equipe. Migration `20261015_trello_instagram.sql`.
 
+## Desempenho do @useaflow (menu Instagram do /financeiro/)
+
+- O menu Instagram tem quatro abas: **Pautas** (as pautas dos Cards Trello, `assets/instagram-hub.js`) e **Desempenho**, **Stories** e **Comentários** (`assets/instagram-perf.js`).
+- **Desempenho:** seguidores, alcance, visualizações, interações e respostas a stories dos últimos 7 dias (com a variação sobre os 7 anteriores), alcance por dia em 30 dias e todos os posts e reels com alcance, views, curtidas, comentários, compartilhamentos, salvos, engajamento, seguidores ganhos, visitas ao perfil, tempo médio assistido e pulos nos 3 primeiros segundos (ordenável).
+- **Stories:** o histórico de `ig_stories` (ver abaixo). **Comentários:** todos os comentários e respostas, com busca. Sem a permissão `instagram_manage_comments` no token, a Meta não manda o @ de quem comentou.
+- `supabase/functions/instagram-own/` lê pela Graph API, a cada 6 h (cron `instagram-own`, minuto 27), os posts e reels com as métricas (`ig_media`), os comentários (`ig_comments`) e o resumo diário da conta (`ig_account_daily`: 30 dias na primeira vez, depois os últimos 3). O botão **Atualizar agora** de cada aba chama a função na hora. Última rodada em `sync_state.instagram_own_last_run`. Migration `20261024_ig_own.sql`; leitura pelo menu `fin.instagram`.
+
 ## Stories do @useaflow
 
 - A Meta só entrega um story (e as métricas) nas 24 h em que ele está no ar. `supabase/functions/instagram-stories/` roda de hora em hora (cron `instagram-stories`, minuto 17), lê os stories no ar pela Graph API e grava cada um em `ig_stories` com alcance, visualizações, respostas, compartilhamentos, interações, seguidores ganhos, visitas e atividade no perfil e a navegação (avançou, voltou, saiu, pulou para a próxima conta). Cada leitura também vai para `ig_story_snapshots`; quando o story sai do ar, a última leitura fica como final (`final = true`).

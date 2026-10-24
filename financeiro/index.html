@@ -573,6 +573,7 @@
 <link rel="stylesheet" href="../assets/dev-hours.css">
 <link rel="stylesheet" href="../assets/trello-cards.css">
 <link rel="stylesheet" href="../assets/instagram-hub.css">
+<link rel="stylesheet" href="../assets/instagram-perf.css">
 <link rel="stylesheet" href="../assets/user-ideas.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
@@ -581,6 +582,7 @@
 <script src="../assets/customer-health.js"></script>
 <script src="../assets/dev-hours.js"></script>
 <script src="../assets/trello-cards.js"></script>
+<script src="../assets/instagram-perf.js"></script>
 <script src="../assets/instagram-hub.js"></script>
 <script src="../assets/user-ideas.js"></script>
 <link rel="prefetch" href="../afiliados/">
@@ -2948,8 +2950,8 @@
     setView("trello");
     await TrelloCards.show();
   }
-  // Instagram: pautas e roteiros das atualizações (sem bugs), com marcações da equipe.
-  InstagramHub.init({ root: document.getElementById("ig-view"), sb: sb, toast: toast });
+  // Instagram: pautas e roteiros das atualizações (sem bugs), com marcações da equipe, e o desempenho do @useaflow.
+  InstagramHub.init({ root: document.getElementById("ig-view"), sb: sb, toast: toast, url: SUPABASE_URL });
   document.getElementById("ig-btn").addEventListener("click", function () { openInstagram(); });
   async function openInstagram() {
     setView("instagram");

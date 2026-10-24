@@ -4,7 +4,8 @@
    (ganchos, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags).
    Marcações compartilhadas pela equipe — Lido, Interessante e Conteúdo feito — ligam e desligam pela função
    trello_ig_flag. Dados: tabela trello_cards (coluna ig, escrita pelo Claude como os demais textos).
-   Uso: InstagramHub.init({ root, sb, toast }); InstagramHub.show(); */
+   As abas Desempenho, Stories e Comentários (métricas do @useaflow) ficam em assets/instagram-perf.js.
+   Uso: InstagramHub.init({ root, sb, toast, url }); InstagramHub.show(); */
 (function () {
   "use strict";
 
@@ -22,7 +23,7 @@
     "ig_read_at, ig_read_by, ig_fav_at, ig_fav_by, ig_used_at, ig_used_by";
 
   var A = null;
-  var S = { ready: false, cards: [], status: "", tool: "", tipo: "", fmt: "", q: "", openId: null, tab: "geral", busy: {} };
+  var S = { section: null, ready: false, cards: [],status: "", tool: "", tipo: "", fmt: "", q: "", openId: null, tab: "geral", busy: {} };
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -79,8 +80,32 @@
   }
 
   /* ---------------- esqueleto ---------------- */
+  // Abas do menu: Pautas (este módulo) e Desempenho, Stories e Comentários (assets/instagram-perf.js).
+  var SECTIONS = [["pautas", "Pautas"], ["desempenho", "Desempenho"], ["stories", "Stories"], ["comentarios", "Comentários"]];
+  function sectionKey() { return "flow_ig_section_v1"; }
+  function savedSection() { try { var v = sessionStorage.getItem(sectionKey()); return SECTIONS.some(function (s) { return s[0] === v; }) ? v : "pautas"; } catch (e) { return "pautas"; } }
+  function setSection(v) {
+    S.section = v;
+    try { sessionStorage.setItem(sectionKey(), v); } catch (e) {}
+    $("ig-sections").innerHTML = SECTIONS.map(function (s) {
+      return '<button type="button" role="tab" aria-selected="' + (s[0] === v) + '" class="btn' + (s[0] === v ? " btn-primary" : "") + '" data-act="section" data-v="' + s[0] + '">' + esc(s[1]) + "</button>";
+    }).join("");
+    $("ig-pane-pautas").hidden = v !== "pautas";
+    $("ig-pane-perf").hidden = v === "pautas";
+    if (v !== "pautas") { closeDrawer(); if (window.InstagramPerf) window.InstagramPerf.show(v); }
+  }
+
   function build(root) {
     root.innerHTML =
+      '<div class="ch-tabs ig-sections" id="ig-sections" role="tablist" aria-label="Instagram"></div>' +
+      '<div id="ig-pane-perf" hidden></div>' +
+      '<div id="ig-pane-pautas">' + buildPautas() + "</div>";
+    if (window.InstagramPerf) window.InstagramPerf.init({ root: $("ig-pane-perf"), sb: A.sb, toast: A.toast, url: A.url });
+    wire(root);
+  }
+
+  function buildPautas() {
+    return (
       '<section class="ch-hero ig-hero">' +
         '<div class="ch-hero-main"><div class="ch-kicker">Instagram</div><h3 class="ch-title">Conteúdo das atualizações Flow</h3>' +
           '<p class="ch-sub">Cada melhoria e funcionalidade nova das ferramentas vira pauta: o que foi feito, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags. Correções de bug ficam de fora. Marque o que já leu, o que achou interessante e o que já virou conteúdo; a equipe toda vê as marcações.</p></div>' +
@@ -95,8 +120,10 @@
       "</div>" +
       '<div class="ig-grid" id="ig-grid"></div>' +
       '<div class="ig-drawer-back" id="ig-back" hidden></div>' +
-      '<aside class="ig-drawer" id="ig-drawer" hidden aria-label="Conteúdo da atualização"></aside>';
+      '<aside class="ig-drawer" id="ig-drawer" hidden aria-label="Conteúdo da atualização"></aside>');
+  }
 
+  function wire(root) {
     $("ig-q").addEventListener("input", function (e) { S.q = e.target.value; renderGrid(); });
     $("ig-tipo").addEventListener("change", function (e) { S.tipo = e.target.value; render(); });
     $("ig-fmt").addEventListener("change", function (e) { S.fmt = e.target.value; render(); });
@@ -113,7 +140,8 @@
     var el = e.target.closest("[data-act]");
     if (!el) return;
     var act = el.getAttribute("data-act"), id = el.getAttribute("data-id"), v = el.getAttribute("data-v");
-    if (act === "status") { S.status = v; render(); }
+    if (act === "section") setSection(v);
+    else if (act === "status") { S.status = v; render(); }
     else if (act === "tool") { S.tool = v; render(); }
     else if (act === "open") openDrawer(id);
     else if (act === "close") closeDrawer();
@@ -332,6 +360,8 @@
   /* ---------------- API pública ---------------- */
   async function show() {
     if (!A) return;
+    if (!S.section) setSection(savedSection());
+    else if (S.section !== "pautas" && window.InstagramPerf) window.InstagramPerf.show(S.section);
     try {
       if (!S.ready) {
         S.ready = true;

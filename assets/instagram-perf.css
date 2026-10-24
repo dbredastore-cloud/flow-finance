@@ -1,0 +1,66 @@
+/* Instagram — abas Desempenho, Stories e Comentários. Usa os tokens de flow-theme.css, as classes .ch-* de
+   customer-health.css e .ig-tiles / .ig-tile de instagram-hub.css. */
+
+.ig-sections { margin: 0 0 16px; }
+.ig-sections .btn { width: auto; }
+
+#ig-pane-perf .num, .ip-table td.n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ip-head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+.ip-head > div:first-child { flex: 1 1 420px; min-width: 0; }
+.ip-head .ch-sub { margin-bottom: 0; }
+.ip-run { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+.ip-run .btn { width: auto; }
+.ip-err { color: var(--critical); }
+
+.ip-tile { cursor: default; }
+.ip-tile:hover { border-color: var(--border) !important; }
+.ip-tile em { font-style: normal; font-weight: 600; }
+.ip-tile em.up { color: var(--good); }
+.ip-tile em.down { color: var(--critical); }
+
+.ip-card { padding: 14px 16px; margin-bottom: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.ip-card-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
+.ip-card-h h4 { margin: 0; font-size: 14px; }
+.ip-card-h span { font-size: 12px; color: var(--text-muted); max-width: 900px; }
+
+/* Alcance por dia */
+.ip-bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-top: 6px; }
+.ip-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.ip-bar i { display: block; width: 100%; max-width: 26px; border-radius: 4px 4px 1px 1px; background: var(--accent); opacity: .85; }
+.ip-bar:hover i { opacity: 1; box-shadow: var(--glow); }
+.ip-bar span { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Tabelas */
+.ip-sorts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ip-sorts .btn { width: auto; padding: 6px 12px; font-size: 12.5px; }
+.ip-scroll { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+.ip-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ip-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-solid); text-align: left; font-weight: 600; color: var(--text-muted); padding: 8px 10px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.ip-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; text-align: left; color: var(--text); }
+.ip-cap { display: block; max-width: 260px; margin-top: 2px; font-size: 11.5px; color: var(--text-dim); white-space: normal; }
+.ip-table .n { text-align: right; }
+.ip-table td.ip-txt { white-space: normal; min-width: 240px; max-width: 380px; }
+.ip-table a { color: var(--accent-3); text-decoration: none; }
+.ip-table a:hover { text-decoration: underline; }
+.ip-pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid var(--border-strong); color: var(--text-dim); }
+.ip-pill.live { color: var(--accent); border-color: var(--accent); }
+.ip-note { margin-top: 4px; font-size: 11px; color: var(--warning); white-space: normal; }
+
+/* Comentários */
+.ip-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--text-muted); }
+.ip-row input[type="search"] { flex: 1 1 260px; max-width: 420px; padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; }
+.ip-comments { display: grid; gap: 8px; }
+.ip-comment { padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); }
+.ip-comment.reply { margin-left: 28px; border-left: 3px solid var(--accent-3); }
+.ip-c-top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12px; color: var(--text-muted); }
+.ip-c-top b { color: var(--text); font-size: 13px; }
+.ip-comment p { margin: 4px 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ip-c-post { font-size: 11.5px; color: var(--text-muted); }
+.ip-c-post a { color: var(--accent-3); }
+
+@media (max-width: 768px) {
+  .ip-bars { gap: 2px; height: 120px; }
+  .ip-bar span { display: none; }
+  #ig-pane-perf .ig-tiles > :first-child { grid-column: 1 / -1; }
+  .ip-comment.reply { margin-left: 12px; }
+}
