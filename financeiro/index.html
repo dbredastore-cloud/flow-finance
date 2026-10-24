@@ -574,6 +574,7 @@
 <link rel="stylesheet" href="../assets/trello-cards.css">
 <link rel="stylesheet" href="../assets/instagram-hub.css">
 <link rel="stylesheet" href="../assets/instagram-perf.css">
+<link rel="stylesheet" href="../assets/ig-radar.css">
 <link rel="stylesheet" href="../assets/user-ideas.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
@@ -584,6 +585,7 @@
 <script src="../assets/trello-cards.js"></script>
 <script src="../assets/instagram-perf.js"></script>
 <script src="../assets/instagram-hub.js"></script>
+<script src="../assets/ig-radar.js"></script>
 <script src="../assets/user-ideas.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -662,6 +664,7 @@
       <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
       <button class="fnav-item" id="trello-btn" type="button" data-menu="fin.trello"><i data-ic="grid"></i><span>Cards Trello</span></button>
       <button class="fnav-item" id="ig-btn" type="button" data-menu="fin.instagram"><i data-ic="camera"></i><span>Instagram</span></button>
+      <button class="fnav-item" id="radar-btn" type="button" data-menu="fin.instagram"><i data-ic="radar"></i><span>Radar Instagram</span></button>
       <button class="fnav-item" id="ideas-btn" type="button" data-menu="fin.ideias"><i data-ic="bulb"></i><span>Ideias Usuários</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
@@ -719,6 +722,8 @@
     <div id="trello-view" hidden></div>
 
     <div id="ig-view" hidden></div>
+
+    <div id="radar-view" hidden></div>
 
     <div id="ideas-view" hidden></div>
 
@@ -1624,6 +1629,7 @@
     document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
     document.getElementById("trello-btn").classList.toggle("active", state.view === "trello");
     document.getElementById("ig-btn").classList.toggle("active", state.view === "instagram");
+    document.getElementById("radar-btn").classList.toggle("active", state.view === "radar");
     document.getElementById("ideas-btn").classList.toggle("active", state.view === "ideas");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
@@ -2914,9 +2920,11 @@
     document.getElementById("trello-view").hidden = v !== "trello";
     document.getElementById("ig-view").hidden = v !== "instagram";
     document.getElementById("ideas-view").hidden = v !== "ideas";
+    document.getElementById("radar-view").hidden = v !== "radar";
     if (v !== "instagram") InstagramHub.hide();
     if (v !== "ideas") UserIdeas.hide();
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours" || v === "trello" || v === "instagram" || v === "ideas";
+    if (v !== "radar") IgRadar.hide();
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "hours" || v === "trello" || v === "instagram" || v === "ideas" || v === "radar";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
@@ -2926,6 +2934,7 @@
     else if (v === "trello") document.getElementById("tool-title").textContent = "Cards Trello";
     else if (v === "instagram") document.getElementById("tool-title").textContent = "Instagram";
     else if (v === "ideas") document.getElementById("tool-title").textContent = "Ideias Usuários";
+    else if (v === "radar") document.getElementById("tool-title").textContent = "Radar Instagram";
     renderSidebar();
   }
   CustomerHealth.init({
@@ -2956,6 +2965,13 @@
   async function openInstagram() {
     setView("instagram");
     await InstagramHub.show();
+  }
+  // Radar Instagram: concorrentes, influencers e qualquer @ do mercado (mesmo acesso do menu Instagram).
+  IgRadar.init({ root: document.getElementById("radar-view"), sb: sb, toast: toast, url: SUPABASE_URL });
+  document.getElementById("radar-btn").addEventListener("click", function () { openRadar(); });
+  async function openRadar() {
+    setView("radar");
+    await IgRadar.show();
   }
   // Ideias Usuários: pedidos e sugestões do público para as ferramentas, com status da equipe.
   UserIdeas.init({ root: document.getElementById("ideas-view"), sb: sb, toast: toast });
@@ -3573,10 +3589,10 @@
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
     if (canFin) alertsReady.then(function () { renderAlerts(); renderTable(); });
     // Tela inicial: a última aberta, se a pessoa ainda pode ver; senão a primeira liberada.
-    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello", instagram: "fin.instagram", ideas: "fin.ideias" };
+    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello", instagram: "fin.instagram", radar: "fin.instagram", ideas: "fin.ideias" };
     var view = safeGet("flow_fin_view");
     if (view !== null && !(VIEW_MENU[view] && FlowAccess.can(VIEW_MENU[view]))) view = null;
-    if (view === null && !canFin) view = ["health", "clients", "hours", "trello", "instagram", "ideas"].filter(function (v) { return FlowAccess.can(VIEW_MENU[v]); })[0];
+    if (view === null && !canFin) view = ["health", "clients", "hours", "trello", "instagram", "radar", "ideas"].filter(function (v) { return FlowAccess.can(VIEW_MENU[v]); })[0];
     renderPeriodBar();
     if (!canFin) {
       if (view === "health") openHealth();
@@ -3584,6 +3600,7 @@
       else if (view === "hours") openHours();
       else if (view === "trello") openTrello();
       else if (view === "instagram") openInstagram();
+      else if (view === "radar") openRadar();
       else if (view === "ideas") openIdeas();
       return;
     }
@@ -3601,6 +3618,7 @@
     else if (view === "hours") openHours();
     else if (view === "trello") openTrello();
     else if (view === "instagram") openInstagram();
+    else if (view === "radar") openRadar();
     else if (view === "ideas") openIdeas();
     prefetchOtherTools();
   }

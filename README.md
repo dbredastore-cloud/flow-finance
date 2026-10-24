@@ -133,6 +133,13 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - **Stories:** o histórico de `ig_stories` (ver abaixo). **Comentários:** todos os comentários e respostas, com busca. Sem a permissão `instagram_manage_comments` no token, a Meta não manda o @ de quem comentou.
 - `supabase/functions/instagram-own/` lê pela Graph API, a cada 6 h (cron `instagram-own`, minuto 27), os posts e reels com as métricas (`ig_media`), os comentários (`ig_comments`) e o resumo diário da conta (`ig_account_daily`: 30 dias na primeira vez, depois os últimos 3). O botão **Atualizar agora** de cada aba chama a função na hora. Última rodada em `sync_state.instagram_own_last_run`. Migration `20261024_ig_own.sql`; leitura pelo menu `fin.instagram`.
 
+## Radar Instagram (menu do /financeiro/)
+
+- Acompanha perfis de concorrentes, influencers e qualquer @ do mercado. Cole o @ ou o link; o perfil entra com uma categoria (Concorrente, Influencer, Mercado) e uma observação opcional, e é lido na hora (até 200 posts). Depois, todos são relidos a cada 6 h (cron `ig-radar`, minuto 37; 50 posts por perfil).
+- Cada card mostra seguidores e crescimento em 7 dias, posts por semana (últimos 30 dias), engajamento ((curtidas + comentários) ÷ seguidores, últimos 12 posts), média de views, formato mais usado e o último post. Ao abrir: bio, site, gráfico de seguidores por dia, todos os posts e busca na legenda (para achar menções a ferramentas). Ordena por seguidores, crescimento, engajamento, views ou frequência.
+- A Meta (Business Discovery) só mostra contas profissionais (Empresa ou Criador): conta pessoal ou @ errado fica com o aviso e a mensagem da Meta. Alcance, stories e público de outros perfis não saem por API. O crescimento conta a partir do dia em que o perfil entrou no radar.
+- `supabase/functions/ig-radar/`, tabelas `ig_radar_profiles`, `ig_radar_media`, `ig_radar_snapshots` (migration `20261024_ig_radar.sql`), tela `assets/ig-radar.js`. Acesso pelo mesmo menu do Instagram (`fin.instagram`): quem vê pode adicionar, editar e tirar perfis. Última rodada em `sync_state.ig_radar_last_run`.
+
 ## Stories do @useaflow
 
 - A Meta só entrega um story (e as métricas) nas 24 h em que ele está no ar. `supabase/functions/instagram-stories/` roda de hora em hora (cron `instagram-stories`, minuto 17), lê os stories no ar pela Graph API e grava cada um em `ig_stories` com alcance, visualizações, respostas, compartilhamentos, interações, seguidores ganhos, visitas e atividade no perfil e a navegação (avançou, voltou, saiu, pulou para a próxima conta). Cada leitura também vai para `ig_story_snapshots`; quando o story sai do ar, a última leitura fica como final (`final = true`).
