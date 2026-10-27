@@ -565,17 +565,80 @@
     var r = await Promise.all([
       me.has_contract ? rpc("portal_contract").catch(function () { return null; }) : Promise.resolve(null),
       me.has_channel ? rpc("portal_youtube").catch(function () { return null; }) : Promise.resolve(null),
-      me.has_instagram ? rpc("portal_instagram").catch(function () { return null; }) : Promise.resolve(null)
+      // Sempre: mesmo sem perfil lido, o painel mostra o botão "Conectar Instagram".
+      rpc("portal_instagram").catch(function () { return null; })
     ]);
     S.contract = r[0]; S.yt = r[1]; S.ig = r[2]; S.extrasLoaded = true;
     renderContract(); renderChannel(); renderInstagram();
   }
 
-  /* ---------------- Instagram (dados públicos; fase 2: conectar a conta) ---------------- */
+  /* ---------------- Instagram ----------------
+     Sem conexão: dados públicos do perfil (lidos com a conta da Flow) e o botão "Conectar Instagram".
+     Conectado (login oficial do Instagram, Edge Function ig-connect): stories, alcance, salvamentos, compartilhamentos e
+     público, lidos pela ig-partners com a autorização do próprio afiliado. */
   function igKind(p) { return p.media_product_type === "REELS" ? "reels" : p.media_product_type === "STORY" ? "story" : p.media_type === "CAROUSEL_ALBUM" ? "carousel" : "feed"; }
+  async function igCall(action) {
+    var s = await sb.auth.getSession(), token = s.data && s.data.session && s.data.session.access_token;
+    var r = await fetch(SUPABASE_URL + "/functions/v1/ig-connect", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ action: action }) });
+    var js = await r.json().catch(function () { return {}; });
+    if (!r.ok || js.ok === false) throw new Error(js.error || ("HTTP " + r.status));
+    return js;
+  }
+  async function igConnect(btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "Abrindo o Instagram…"; }
+    try { var js = await igCall("start"); location.href = js.url; }
+    catch (e) { toast(e.message || String(e), true); if (btn) { btn.disabled = false; btn.textContent = "Conectar Instagram"; } }
+  }
+  async function igDisconnect(btn) {
+    if (!window.confirm("Desconectar o seu Instagram? A Flow para de ler stories, alcance e público. O que já foi lido continua aqui.")) return;
+    btn.disabled = true;
+    try { await igCall("disconnect"); toast("Instagram desconectado."); S.ig = await rpc("portal_instagram").catch(function () { return null; }); renderInstagram(); }
+    catch (e) { toast(e.message || String(e), true); btn.disabled = false; }
+  }
+  // Volta do login do Instagram (?ig=conectado | cancelado | erro&motivo=…).
+  (function igReturn() {
+    var v = qs.get("ig");
+    if (!v) return;
+    var motivo = qs.get("motivo");
+    qs.delete("ig"); qs.delete("motivo");
+    history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs : ""));
+    setTimeout(function () {
+      if (v === "conectado") toast("Instagram conectado! Os primeiros números aparecem em alguns minutos.");
+      else if (v === "cancelado") toast("Conexão cancelada. Você pode conectar quando quiser.");
+      else toast("Não foi possível conectar o Instagram" + (motivo ? ": " + motivo : "."), true);
+    }, 600);
+  })();
+  function igConnectCard(a) {
+    var c = S.ig && S.ig.connection;
+    if (VER) {
+      return '<p class="muted pp-hint">' + (c ? "Instagram conectado pelo afiliado em " + dtt(c.connected_at) + "." : "O afiliado ainda não conectou o Instagram; aparecem só os dados públicos.") + "</p>";
+    }
+    if (c && c.status === "expired") {
+      return '<div class="pp-igc warn"><div><b>A autorização do seu Instagram venceu</b><span>Conecte de novo para a Flow voltar a ler seus stories e métricas.</span></div>' +
+        '<button type="button" class="btn btn-primary" data-ig="connect">Conectar de novo</button></div>';
+    }
+    if (c) return "";
+    return '<div class="pp-igc"><div><b>' + (a ? "Veja também stories, alcance e público" : "Conecte o seu Instagram") + "</b>" +
+      "<span>Conectando pelo login oficial do Instagram, você vê aqui o alcance de cada story, salvamentos, compartilhamentos e quem é o seu público. A Flow só lê os números; nunca publica nada e nunca vê a sua senha.</span></div>" +
+      '<button type="button" class="btn btn-primary" data-ig="connect">Conectar Instagram</button></div>';
+  }
   function renderInstagram() {
     var el = $("instagram-panel");
-    if (!S.ig || !S.ig.account) { el.hidden = true; return; }
+    if (!S.ig) { el.hidden = true; return; }
+    if (!el._igWired) {
+      el._igWired = true;
+      el.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-ig]");
+        if (!b) return;
+        if (b.getAttribute("data-ig") === "connect") igConnect(b);
+        else if (b.getAttribute("data-ig") === "disconnect") igDisconnect(b);
+      });
+    }
+    if (!S.ig.account) {
+      el.hidden = false;
+      el.innerHTML = '<div class="pp-head"><h2>Seu Instagram</h2></div>' + igConnectCard(null);
+      return;
+    }
     var a = S.ig.account, media = S.ig.media || [], now = Date.now();
     var posts = media.filter(function (p) { return igKind(p) !== "story"; });
     var last30 = posts.filter(function (p) { return now - Date.parse(p.posted_at) <= 30 * DAY; });
@@ -587,8 +650,11 @@
     var sn = S.ig.snaps || [], first = sn.filter(function (x) { return Date.parse(x.day + "T12:00:00") >= now - 30 * DAY; })[0];
     var growth = first && a.followers_count != null && first.followers_count != null ? a.followers_count - first.followers_count : null;
     var LBL = { reels: "Reels", feed: "Feed", carousel: "Carrossel", story: "Story" };
+    var conn = S.ig.connection, linked = conn && conn.status !== "expired";
     el.hidden = false;
-    el.innerHTML = '<div class="pp-head"><h2>Seu Instagram</h2><span class="muted">@' + esc(a.username) + (a.fetched_at ? " · atualizado em " + dtt(a.fetched_at) : "") + "</span></div>" +
+    el.innerHTML = '<div class="pp-head"><h2>Seu Instagram</h2><span class="muted">@' + esc(a.username) + (a.fetched_at ? " · atualizado em " + dtt(a.fetched_at) : "") + "</span>" +
+        (linked ? '<span class="pp-st ok">conectado</span>' + (VER ? "" : '<button type="button" class="btn btn-ghost" data-ig="disconnect">Desconectar</button>') : "") + "</div>" +
+      igConnectCard(a) + (linked ? igPrivate() : "") +
       '<div class="pp-kpis pp-kpis-sm">' +
         '<div class="pp-kpi static"><small>Seguidores</small><b class="num">' + short(a.followers_count) + "</b><span>" + (growth != null ? (growth >= 0 ? "+" : "") + int(growth) + " nos últimos 30 dias" : "&nbsp;") + "</span></div>" +
         '<div class="pp-kpi static"><small>Posts em 30 dias</small><b class="num">' + int(last30.length) + "</b><span>" + int(last30.filter(function (p) { return igKind(p) === "reels"; }).length) + " reels · " + int(last30.filter(function (p) { return igKind(p) !== "reels"; }).length) + " no feed</span></div>" +
@@ -603,7 +669,48 @@
           '<span class="fd-ig-kind ' + k + '">' + LBL[k] + "</span>" + (flowRe.test(p.caption || "") ? '<span class="fd-ig-flow">Flow</span>' : "") + "</span>" +
           '<span class="fd-ig-meta"><b>' + dt(p.posted_at) + "</b><span>♥ " + short(p.like_count) + " · 💬 " + short(p.comments_count) + (p.view_count != null ? " · ▶ " + short(p.view_count) : "") + "</span></span></a>";
       }).join("") + "</div>" +
-      (a.source === "oauth" ? "" : '<p class="muted pp-hint">Dados públicos do seu perfil. Em breve você poderá conectar o seu Instagram aqui para ver também stories, alcance, salvamentos e compartilhamentos.</p>');
+      (linked ? "" : '<p class="muted pp-hint">Acima: dados públicos do seu perfil.</p>');
+  }
+  // Números que só existem com o Instagram conectado: resumo de 7 dias, stories e público.
+  function igPrivate() {
+    var ig = S.ig, now = Date.now(), daily = ig.daily || [], stories = ig.stories || [], aud = ig.audience || [];
+    var last7 = daily.slice(-7), prev7 = daily.slice(-14, -7);
+    var tot = function (list, k) { return sum(list, function (d) { return d[k]; }); };
+    var delta = function (k) { var a = tot(last7, k), b = tot(prev7, k); return b ? (a - b) / b : null; };
+    var dl = function (k) { var d = delta(k); return d == null ? "últimos 7 dias" : (d >= 0 ? "+" : "") + pct(d) + " vs 7 dias antes"; };
+    var st30 = stories.filter(function (s) { return now - Date.parse(s.posted_at) <= 30 * DAY; });
+    var avgReach = st30.length ? sum(st30, function (s) { return s.reach; }) / st30.length : null;
+    var exitRate = sum(st30, function (s) { return s.views; }) ? sum(st30, function (s) { return s.exits; }) / sum(st30, function (s) { return s.views; }) : null;
+    var flowSt = st30.filter(function (s) { return s.mentions_flow; }).length;
+    var html = '<div class="pp-kpis pp-kpis-sm">' +
+      '<div class="pp-kpi static"><small>Alcance · 7 dias</small><b class="num">' + short(tot(last7, "reach")) + "</b><span>" + dl("reach") + "</span></div>" +
+      '<div class="pp-kpi static"><small>Visualizações · 7 dias</small><b class="num">' + short(tot(last7, "views")) + "</b><span>" + dl("views") + "</span></div>" +
+      '<div class="pp-kpi static"><small>Interações · 7 dias</small><b class="num">' + short(tot(last7, "total_interactions")) + "</b><span>" + dl("total_interactions") + "</span></div>" +
+      '<div class="pp-kpi static"><small>Stories em 30 dias</small><b class="num">' + int(st30.length) + "</b><span>alcance médio " + short(avgReach) + "</span></div>" +
+      '<div class="pp-kpi static accent"><small>Stories citando a Flow</small><b class="num">' + int(flowSt) + "</b><span>em 30 dias" + (exitRate != null ? " · saídas " + pct(exitRate) : "") + "</span></div>" +
+      "</div>";
+    var rows = stories.slice(0, 40).map(function (s) {
+      var v = Number(s.views) || 0;
+      return "<tr><td class=\"l\">" + (s.permalink ? '<a href="' + esc(s.permalink) + '" target="_blank" rel="noopener noreferrer">' + dtt(s.posted_at) + "</a>" : dtt(s.posted_at)) +
+        (s.mentions_flow ? ' <span class="pp-st ok mini">Flow</span>' : "") + "</td><td>" + short(s.reach) + "</td><td>" + short(s.views) + "</td><td>" + int(s.replies) + "</td><td>" + int(s.shares) +
+        "</td><td>" + int(s.taps_forward) + "</td><td>" + int(s.exits) + "</td><td>" + (v && s.exits != null ? pct(s.exits / v) : "—") + '</td><td class="l"><span class="pp-st mini' + (s.final ? "" : " ok") + '">' + (s.final ? "final" : "no ar") + "</span></td></tr>";
+    }).join("");
+    html += '<h3 class="pp-h3">Seus stories</h3>' +
+      '<p class="muted pp-hint">Lidos de hora em hora enquanto estão no ar (o Instagram só mostra um story por 24 horas). Quando o story sai do ar, fica a última leitura.</p>' +
+      '<div class="table-scroll"><table class="pp-table"><thead><tr><th class="l">Publicado</th><th>Alcance</th><th>Views</th><th>Respostas</th><th>Compart.</th><th>Avançou</th><th>Saiu</th><th>Saídas</th><th class="l">Situação</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="9" class="empty">Nenhum story lido ainda. Os próximos que você postar aparecem aqui.</td></tr>') + "</tbody></table></div>";
+    var byB = {};
+    aud.forEach(function (x) { (byB[x.breakdown] = byB[x.breakdown] || []).push(x); });
+    var LB = { city: "Cidades", age: "Idade", gender: "Gênero", country: "Países" }, GEN = { M: "Homens", F: "Mulheres", U: "Não informado" };
+    var blocks = ["city", "age", "gender", "country"].filter(function (b) { return byB[b]; }).map(function (b) {
+      var list = byB[b].slice(0, b === "city" || b === "country" ? 6 : 8), total = sum(byB[b], function (x) { return x.value; }) || 1;
+      return '<div class="pp-aud"><h4>' + LB[b] + "</h4>" + list.map(function (x) {
+        var share = (Number(x.value) || 0) / total;
+        return '<div class="pp-aud-row"><span>' + esc(b === "gender" ? (GEN[x.key] || x.key) : x.key) + '</span><i style="width:' + Math.max(2, Math.round(share * 100)) + '%"></i><b>' + pct(share) + "</b></div>";
+      }).join("") + "</div>";
+    }).join("");
+    if (blocks) html += '<h3 class="pp-h3">Seu público</h3><div class="pp-aud-grid">' + blocks + "</div>";
+    return html;
   }
   function isShort(v) { return v.is_short != null ? v.is_short : (v.duration_s != null && v.duration_s <= 180); }
 

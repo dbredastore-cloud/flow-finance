@@ -49,7 +49,7 @@ Supabase → Project Settings → Edge Functions → Secrets:
 
 ## Instagram dos influencers
 
-- `supabase/functions/instagram-sync/` lê o Instagram dos afiliados com o perfil na ficha (`affiliates.instagram`) a cada 6 h (cron `instagram-sync`) ou pelo botão **↻ Instagram** no dashboard do influencer. Fase 1: Business Discovery (dados públicos de contas profissionais: seguidores, posts, reels, curtidas, comentários, visualizações, legendas). Fase 2 (planejada): o influencer conecta o próprio Instagram pelo Portal do Afiliado (stories, alcance, salvamentos); as colunas já existem.
+- `supabase/functions/instagram-sync/` lê o Instagram dos afiliados com o perfil na ficha (`affiliates.instagram`) a cada 6 h (cron `instagram-sync`) ou pelo botão **↻ Instagram** no dashboard do influencer. Fase 1: Business Discovery (dados públicos de contas profissionais: seguidores, posts, reels, curtidas, comentários, visualizações, legendas). Fase 2: o influencer conecta o próprio Instagram no Portal do Afiliado (botão **Conectar Instagram**, Edge Function `ig-connect`) e a `ig-partners` lê de hora em hora stories, alcance, salvamentos e público (cron `ig-partners`, migration `20261027_ig_partner_connect.sql`); configuração e testadores em `docs/instagram-meta.md`.
 - Tabelas `instagram_accounts`, `instagram_media`, `instagram_snapshots` e a função `portal_instagram` (migration `20261017_instagram.sql`). Aparece no dashboard do influencer (seção Instagram, com a contagem de reels/feed por mês ao lado das entregas do contrato) e no Portal do Afiliado (Seu Instagram).
 - Configuração da Meta (secrets `IG_ACCESS_TOKEN` e `IG_BUSINESS_ID`): passo a passo em `docs/instagram-meta.md`.
 

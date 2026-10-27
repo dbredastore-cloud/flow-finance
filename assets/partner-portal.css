@@ -202,3 +202,20 @@ span.pp-fu { cursor: default; display: inline-block; }
   .pp-main > .pp-products-panel { grid-column: 2; }
 }
 @media (min-width: 2200px) { .pp-main { max-width: 2400px; } }
+
+/* Instagram conectado (fase 2) */
+.pp-igc { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 16px; margin: 4px 0 12px; border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent); border-radius: 12px; background: color-mix(in oklab, var(--accent) 8%, transparent); }
+.pp-igc > div { flex: 1 1 280px; display: flex; flex-direction: column; gap: 4px; }
+.pp-igc b { font-size: 14px; }
+.pp-igc span { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+.pp-igc .btn { width: auto; }
+.pp-igc.warn { border-color: color-mix(in oklab, var(--warn, #e0a030) 55%, transparent); background: color-mix(in oklab, var(--warn, #e0a030) 9%, transparent); }
+.pp-h3 { margin: 18px 0 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
+.pp-st.mini { padding: 0 6px; font-size: 10.5px; }
+.pp-aud-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pp-aud { border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; }
+.pp-aud h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.pp-aud-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 42px; align-items: center; gap: 8px; font-size: 12.5px; margin: 4px 0; }
+.pp-aud-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-aud-row i { display: block; height: 6px; border-radius: 3px; background: var(--accent); opacity: .75; }
+.pp-aud-row b { text-align: right; font-weight: 600; }

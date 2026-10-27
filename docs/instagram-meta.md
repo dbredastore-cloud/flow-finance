@@ -60,9 +60,37 @@ Só de contas **profissionais** (Comercial ou Criador de conteúdo). Conta pesso
 - Posts, reels e carrosséis: data, tipo, legenda, link, curtidas, comentários e visualizações.
 - Contagem de reels e posts por mês (aparece ao lado das entregas do contrato) e menções à Flow nas legendas.
 
-## Fase 2 — o influencer conecta o próprio Instagram (stories, alcance, salvamentos)
-Para isso a Meta precisa aprovar o app (**Análise do app**) com as permissões do login do Instagram
-(`instagram_business_basic`, `instagram_business_manage_insights`) e a **verificação da empresa**. Vai precisar de
-uma página de política de privacidade no site e de um vídeo curto mostrando o uso — o painel prepara isso quando
-chegarmos lá. Aí entra o botão **Conectar Instagram** no Portal do Afiliado: o influencer entra na página oficial do
-Instagram e autoriza; **a senha dele nunca passa pelo nosso sistema**.
+## Fase 2 — o influencer conecta o próprio Instagram (stories, alcance, salvamentos, público)
+No Portal do Afiliado (Seu Instagram) há o botão **Conectar Instagram**: o influencer entra na página oficial do
+Instagram e autoriza; **a senha dele nunca passa pelo nosso sistema**. A conta dele precisa ser profissional
+(Empresa ou Criador de conteúdo).
+
+- `supabase/functions/ig-connect/` faz o login (API do Instagram com Login do Instagram, permissões
+  `instagram_business_basic` e `instagram_business_manage_insights`), guarda o token de 60 dias em
+  `instagram_connections` (nenhum login lê essa tabela) e devolve o influencer para `/parceiro/?ig=conectado`.
+- `supabase/functions/ig-partners/` roda de hora em hora (cron `ig-partners`, minuto 7): renova o token quando faltam
+  menos de 15 dias, lê os stories no ar (`instagram_stories`) e, a cada 6 h, as métricas privadas dos posts e reels
+  (`instagram_media`), o resumo diário da conta (`instagram_account_daily`) e o público por cidade, país, idade e
+  gênero (`instagram_audience`). Última rodada em `sync_state.ig_partners_last_run`. Migration
+  `20261027_ig_partner_connect.sql`.
+
+### Configuração no app da Meta (Flow Painel)
+1. Painel do app → **Casos de uso** → **Adicionar caso de uso** → *Gerenciar mensagens e conteúdo no Instagram*
+   (API do Instagram) → em **API configuration with Instagram login**, adicionar as permissões
+   `instagram_business_basic` e `instagram_business_manage_insights`.
+2. Na mesma tela, **Configurar login comercial do Instagram** → *URIs de redirecionamento OAuth*:
+   `https://jagmnogcpxeujtsrrotd.supabase.co/functions/v1/ig-connect`.
+3. Copiar o **ID do app do Instagram** e a **Chave secreta do app do Instagram** (são diferentes do ID do app da Meta)
+   e cadastrar no Supabase → Edge Functions → Secrets como `IG_APP_ID` e `IG_APP_SECRET`.
+
+### Testadores (antes da aprovação da Meta)
+Enquanto o app não passa pela Análise do app, só contas adicionadas como testadoras conseguem conectar:
+1. App → **Funções do app** → **Funções** → **Adicionar pessoas** → **Testador do Instagram** → @ do influencer.
+2. O influencer aceita em instagram.com → Configurações → **Apps e sites** → **Convites de testador**
+   (no app do celular nem sempre aparece; pelo navegador funciona).
+3. Ele entra no Portal do Afiliado e clica em **Conectar Instagram**.
+
+### Para liberar para todos
+**Verificação da empresa** (Configurações do portfólio → Central de segurança) e **Análise do app** pedindo acesso
+avançado às duas permissões, com página de política de privacidade, instruções de exclusão de dados e um vídeo curto
+mostrando o fluxo (Portal → Conectar Instagram → números aparecendo).
