@@ -26,11 +26,16 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-class Fail extends Error { code: string; constructor(code: string, m: string) { super(m); this.code = code; } }
+class Fail extends Error { code: string; extra?: Record<string, unknown>; constructor(code: string, m: string, extra?: Record<string, unknown>) { super(m); this.code = code; this.extra = extra; } }
 const env = (k: string) => (Deno.env.get(k) ?? "").trim();
 function config() {
   const appId = env("IG_APP_ID"), secret = env("IG_APP_SECRET");
-  if (!appId || !secret) throw new Fail("no_config", "A conexão com o Instagram ainda está sendo liberada pela Flow. Tente de novo em breve.");
+  if (!appId || !secret) {
+    // Para a equipe achar o problema: quais faltam e quais nomes IG_* existem (só os nomes, nunca os valores).
+    const missing = [!appId && "IG_APP_ID", !secret && "IG_APP_SECRET"].filter(Boolean);
+    const seen = Object.keys(Deno.env.toObject()).filter((k) => /^\s*IG_/i.test(k)).sort();
+    throw new Fail("no_config", "A conexão com o Instagram ainda está sendo liberada pela Flow. Tente de novo em breve.", { missing, seen });
+  }
   return { appId, secret, ver: env("IG_GRAPH_VERSION") || "v25.0" };
 }
 
@@ -158,6 +163,6 @@ Deno.serve(async (req) => {
     return json({ ok: false, code: "input", error: "Ação desconhecida." }, 400);
   } catch (e) {
     const code = e instanceof Fail ? e.code : "internal";
-    return json({ ok: false, code, error: String((e as Error)?.message ?? e).slice(0, 300) }, code === "auth" ? 401 : code === "no_config" ? 200 : 500);
+    return json({ ok: false, code, error: String((e as Error)?.message ?? e).slice(0, 300), ...(e instanceof Fail ? e.extra : {}) }, code === "auth" ? 401 : code === "no_config" ? 200 : 500);
   }
 });
