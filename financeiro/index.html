@@ -578,6 +578,7 @@
 <link rel="stylesheet" href="../assets/user-ideas.css">
 <link rel="stylesheet" href="../assets/alerts.css">
 <link rel="stylesheet" href="../assets/fin-analysis.css">
+<link rel="stylesheet" href="../assets/ai-insights.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -593,6 +594,7 @@
 <script src="../assets/alert-refunds.js"></script>
 <script src="../assets/alerts.js"></script>
 <script src="../assets/fin-analysis.js"></script>
+<script src="../assets/ai-insights.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -700,6 +702,8 @@
         <span class="period-nav"><button type="button" class="period-step" id="period-prev" aria-label="Período anterior">‹</button><span class="period-label" id="period-label"></span><button type="button" class="period-step" id="period-next" aria-label="Próximo período">›</button></span>
       </div>
     </div>
+
+    <div id="ai-insights" class="aii" hidden aria-label="Insights da IA"></div>
 
     <section class="alerts sec-alerts" id="sec-alerts" hidden>
       <div class="alerts-head">
@@ -1631,7 +1635,14 @@
   }
 
   /* ---------------- Rendering ---------------- */
+  // Insights da IA da tela aberta (menu_insights). Home e Avisos já têm a própria análise.
+  var INSIGHT_KEY = { health: "fin.health", clients: "fin.clients", hours: "fin.hours", trello: "fin.trello", instagram: "fin.instagram", radar: "fin.radar", useaflow: "fin.useaflow" };
+  function insightKey() {
+    if (state.view === "tool") { var t = state.tools.find(function (x) { return x.id === state.activeToolId; }); return t ? "tool:" + t.slug : null; }
+    return INSIGHT_KEY[state.view] || null;
+  }
   function renderSidebar() {
+    AiInsights.show(insightKey());
     var list = document.getElementById("tool-list");
     list.innerHTML = "";
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
@@ -2732,6 +2743,7 @@
     renderHome();
   }
 
+  AiInsights.init({ root: document.getElementById("ai-insights"), sb: sb });
   // Análise da IA no topo da Home: comparativos do mês, do mesmo mês do ano passado e do ano (fin_analyses).
   FinAnalysis.init({ root: document.getElementById("home-ai"), sb: sb, toast: toast });
   async function openHome() {

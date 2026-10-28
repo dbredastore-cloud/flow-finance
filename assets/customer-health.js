@@ -56,9 +56,10 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await A.sb.rpc("health_summary", critParams());
-    if (r.error) throw r.error;
-    S.sum = r.data;
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix")]);
+    if (r[0].error) throw r[0].error;
+    S.sum = r[0].data;
+    S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -247,8 +248,32 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + usoSec + venc;
+    el.innerHTML = assSec + mixSec() + usoSec + venc;
     drawExpiry(s.vencimentos || {});
+  }
+
+  // Quantos softwares cada cliente usa: 1, 2 ou 3 (clientes únicos, por e-mail), no histórico ou com assinatura em dia agora.
+  function mixSec() {
+    var m = S.mix;
+    if (!m) return "";
+    var act = (S.mixMode || "ativos") === "ativos", d = (act ? m.ativos : m.historico) || {}, total = act ? m.clientes_ativos : m.clientes;
+    var combos = (act ? m.combos_ativos : m.combos) || [];
+    var n = function (k) { return Number(d[k]) || 0; };
+    var card = function (k, label, sub) {
+      var v = n(k), w = total ? v / total * 100 : 0;
+      return '<div class="ch-mix-c"><small>' + label + '</small><b class="num">' + fmtInt(v) + '</b><span>' + pct(v, total) + " " + sub + '</span><div class="ch-mix-bar"><i style="width:' + w.toFixed(1) + '%"></i></div></div>';
+    };
+    var maxC = Math.max.apply(null, combos.map(function (c) { return c.n; }).concat([1]));
+    return '<section class="panel ch-sec ch-mix"><div class="panel-head"><h3>Quantos softwares cada cliente usa</h3>' +
+      '<div class="ch-mix-tg" role="group" aria-label="Base">' +
+        '<button type="button" class="pay-chip' + (act ? " on" : "") + '" data-mix="ativos">Assinatura em dia agora</button>' +
+        '<button type="button" class="pay-chip' + (!act ? " on" : "") + '" data-mix="historico">Já compraram (histórico)</button></div></div>' +
+      '<p class="ch-mix-sub">' + fmtInt(total) + (act ? " clientes com pelo menos uma assinatura em dia, contados uma vez cada (por e-mail), pelo número de softwares ativos ao mesmo tempo." : " clientes que já pagaram por algum software, contados uma vez cada (por e-mail), pelo número de softwares que já compraram.") + "</p>" +
+      '<div class="ch-mix-cards">' + card("1", "1 software", "dos clientes") + card("2", "2 softwares", "dos clientes") + card("3", "3 softwares", "dos clientes") + "</div>" +
+      (combos.length ? '<div class="ch-mix-combos"><h4>Combinações</h4>' + combos.map(function (c) {
+        return '<div class="ch-mix-row"><span>' + esc(c.combo.replace(/Flow(Pages|Tracking|Spy)/g, "Flow $1")) + '</span><span class="ch-mix-t"><i style="width:' + (c.n / maxC * 100).toFixed(1) + '%"></i></span><b class="num">' + fmtInt(c.n) + "</b></div>";
+      }).join("") + "</div>" : "") +
+      '<button type="button" class="btn ch-mix-go" data-flt="ass:multi">Ver na lista quem usa 2 ou mais</button></section>';
   }
 
   function drawExpiry(venc) {
@@ -583,6 +608,8 @@
       if (card) { S.sw = card.dataset.sw === S.sw ? "all" : card.dataset.sw; S.f.plano = ""; S.page = 0; renderCards(); renderTabs(); renderDetail(); renderFilters(); loadList(); return; }
       var tab = e.target.closest("[data-tab]");
       if (tab) { S.sw = tab.dataset.tab; S.f.plano = ""; S.page = 0; renderCards(); renderTabs(); renderDetail(); renderFilters(); loadList(); return; }
+      var mix = e.target.closest("[data-mix]");
+      if (mix) { S.mixMode = mix.dataset.mix; renderDetail(); return; }
       var flt = e.target.closest("[data-flt]");
       if (flt && !flt.disabled) return applyTile(flt.dataset.flt);
       var act = e.target.closest("[data-act]");

@@ -1,0 +1,27 @@
+/* Insights da IA no topo de cada menu (assets/ai-insights.js). */
+
+.aii { position: relative; margin: 0 0 16px; border-radius: var(--radius); border: 1px solid var(--border-strong);
+  background: linear-gradient(120deg, rgba(var(--accent-rgb), .11), rgba(var(--accent-rgb), .03) 55%, transparent), var(--card-bg, var(--surface)); overflow: hidden; }
+.aii[hidden] { display: none; }
+.aii::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: linear-gradient(var(--accent), var(--accent-3)); }
+.aii-top { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 16px 11px 18px; background: transparent; border: 0; font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.aii-spark { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 8px; font-size: 13px; color: var(--accent-ink); background: linear-gradient(135deg, var(--accent), var(--accent-3)); }
+.aii-t { font-family: var(--font-display); font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.aii-when { font-size: 11.5px; color: var(--text-muted); }
+.aii-chev { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+.aii-top:hover .aii-chev { color: var(--accent); }
+.aii-body { padding: 0 18px 14px 54px; }
+.aii-head { margin: 0 0 8px; font-size: 15px; line-height: 1.5; font-weight: 600; color: var(--text); }
+.aii-body ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.aii-body li { position: relative; padding-left: 16px; font-size: 13.5px; line-height: 1.55; color: var(--text-dim); }
+.aii-body li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+.aii-body li.act { color: var(--text); }
+.aii-body li.act::before { content: "✓"; color: var(--warning); }
+.aii-money { font-weight: 700; color: var(--text); white-space: nowrap; }
+.aii-num { font-weight: 700; white-space: nowrap; }
+.aii-num.up { color: var(--good, var(--accent)); }
+.aii-num.down { color: var(--critical); }
+@media (max-width: 560px) {
+  .aii-when { display: none; }
+  .aii-body { padding: 0 14px 12px 18px; }
+}

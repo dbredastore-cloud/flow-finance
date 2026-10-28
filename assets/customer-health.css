@@ -152,3 +152,24 @@ body.ch-noscroll { overflow: hidden; }
 .ch-newkey-form input { flex: 1; min-width: 200px; }
 
 @media (max-width: 700px) { .ch-hero { padding: 16px; } .ch-card { padding: 12px; } }
+
+/* ---------- Quantos softwares cada cliente usa (health_mix) ---------- */
+.ch-mix .panel-head { flex-wrap: wrap; gap: 10px; }
+.ch-mix-tg { display: flex; gap: 6px; flex-wrap: wrap; }
+.ch-mix-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--text-muted); }
+.ch-mix-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .ch-mix-cards { grid-template-columns: 1fr; } }
+.ch-mix-c { padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); display: grid; gap: 3px; }
+.ch-mix-c small { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim); }
+.ch-mix-c b { font-family: var(--font-display); font-size: 28px; font-weight: 800; color: var(--text); }
+.ch-mix-c span { font-size: 12.5px; color: var(--text-muted); }
+.ch-mix-bar { height: 6px; margin-top: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.ch-mix-bar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.ch-mix-combos { margin-top: 16px; }
+.ch-mix-combos h4 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text); }
+.ch-mix-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 60px; align-items: center; gap: 10px; font-size: 13px; margin: 6px 0; }
+.ch-mix-row span:first-child { color: var(--text-dim); }
+.ch-mix-t { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.ch-mix-t i { display: block; height: 100%; border-radius: 999px; background: var(--accent-3); }
+.ch-mix-row b { text-align: right; color: var(--text); }
+.ch-mix-go { width: auto; margin-top: 12px; padding: 7px 14px; }

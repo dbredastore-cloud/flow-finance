@@ -308,6 +308,7 @@
 <link rel="stylesheet" href="../assets/market-radar.css">
 <link rel="stylesheet" href="../assets/influencer-dash.css">
 <link rel="stylesheet" href="../assets/yt-favorites.css">
+<link rel="stylesheet" href="../assets/ai-insights.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -318,6 +319,7 @@
 <script src="../assets/market-radar.js"></script>
 <script src="../assets/influencer-dash.js"></script>
 <script src="../assets/yt-favorites.js"></script>
+<script src="../assets/ai-insights.js"></script>
 </head>
 <body>
 
@@ -408,6 +410,8 @@
         <option value="all">Todos os status</option>
       </select>
     </div>
+
+    <div id="ai-insights" class="aii" hidden aria-label="Insights da IA"></div>
 
     <!-- Visão geral -->
     <section id="view-overview">
@@ -1973,11 +1977,13 @@
     window.MarketRadar.hide();
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
+    AiInsights.show("af." + v); // Insights da IA da tela (menu_insights)
     if (state.filtered) renderView(v);
   }
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
     b.addEventListener("click", function () { setView(b.dataset.view); });
   });
+  AiInsights.init({ root: $("ai-insights"), sb: sb });
   window.MarketRadar.init({
     root: $("view-mercado"),
     sb: sb,

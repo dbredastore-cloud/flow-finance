@@ -185,6 +185,16 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Leitura em camadas na Home: manchete "Em 10 segundos" (seção RESUMO), 4 cartões de comparação (líquido em destaque, variação, vendas, ticket, reembolso em p.p. e resultado com despesas), barra de projeção do mês com as marcas do mês anterior e do mesmo mês do ano passado, gráfico dos últimos meses (líquido × despesas, mês atual projetado), barras por ferramenta e "O que fazer agora" em cartões numerados. As demais seções abrem em **Ler análise detalhada**, com valores e percentuais destacados. Cartões e gráficos usam só os números (`facts`) e aparecem mesmo sem texto. **Sem API paga:** o texto é escrito pela mesma tarefa agendada do Claude (**"Análise e Avisos FlowFinance"**, 7h40), que grava em `fin_analyses` com `source = 'claude'`; a Home mostra esse texto por 36 h, mesmo depois de **Atualizar números**. Sem texto recente, aparece só a tabela de comparativos com as variações.
 - Acesso: menu `fin.financeiro` (`fin_analyses` só abre para esse menu).
 
+## Insights da IA em cada menu (Financeiro e Afiliados)
+
+- Bloco **Insights da IA** entre o título e a tela de cada menu (`assets/ai-insights.js` e `.css`): uma manchete, 2 a 4 pontos com números e comparações e uma **AÇÃO** sugerida. Troca de conteúdo junto com o menu, some quando não há texto, e "Recolher/Abrir" fica guardado no navegador.
+- Textos em `menu_insights` (migration `20261028_menu_insights.sql`): `key` = tela (`tool:<slug>` para a página de cada ferramenta, `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`, `fin.instagram`, `fin.radar`, `fin.useaflow`, `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`, `af.favoritos`) e `access` = menu que precisa ter para ler (RLS por `public.can`). A Home e os Avisos não usam o bloco porque já têm a própria análise.
+- Escritos todo dia pela tarefa agendada do Claude **"Análise e Avisos FlowFinance"** (parte D), sem API paga: para cada tela ela consulta os dados com SQL, compara com o período equivalente e grava o texto.
+
+## Quantos softwares cada cliente usa (Saúde dos clientes)
+
+- Painel **Quantos softwares cada cliente usa** na Saúde dos clientes: clientes únicos (por e-mail) com 1, 2 ou 3 softwares, com a opção **Assinatura em dia agora** (softwares ativos ao mesmo tempo) ou **Já compraram (histórico)**, e as combinações (ex.: Flow Pages + Flow Tracking). O botão leva à lista de quem usa 2 ou mais. Função `health_mix()` (migration `20261028_health_mix.sql`), sobre a view `customer_software`.
+
 ## Velocidade
 
 - **Policies (RLS)**: sempre `using ((select public.can(array[...])))`, com o `select` em volta. Sem ele o Postgres chama a função para cada linha (afiliados levava 0,6 s a 4 s; com ele, 14 ms). Migration `20261015_rls_initplan.sql`.
