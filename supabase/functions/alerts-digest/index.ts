@@ -6,7 +6,9 @@
 // "Gerar resumo agora" da tela Avisos (JWT de quem tem o menu fin.avisos; body {"telegram": false|true}).
 //
 // A IA só escreve sobre números já calculados pelas regras do banco; ela não faz contas nem lê vendas.
-// Secrets: ANTHROPIC_API_KEY (sem ela, o resumo sai montado pelas próprias regras, sem IA),
+// Sem API paga: a tarefa agendada "Análise e Avisos FlowFinance" do Claude escreve o resumo antes das 8h (source 'claude')
+// e o envio das 8h manda esse texto no Telegram.
+// Secrets: ANTHROPIC_API_KEY (opcional; sem ela e sem o texto do Claude, o resumo sai montado pelas próprias regras),
 //          TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID (opcionais, os mesmos do aviso de login).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -122,6 +124,18 @@ Deno.serve(async (req) => {
 
     const sendTg = body?.telegram === true;
     const header = `Avisos FlowFinance · ${today}\n\n`;
+
+    // Sem API paga: a tarefa agendada do Claude (app do Claude no computador, ~7h40) grava o resumo com source 'claude'.
+    // Se ele foi escrito nas últimas 6 h, é esse que vai para o Telegram, no lugar do montado pelas regras.
+    if (source !== "ai" && sendTg) {
+      const { data: cl } = await sb.from("alert_digests").select("id, text, created_at").eq("source", "claude")
+        .gte("created_at", new Date(Date.now() - 6 * 3600e3).toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (cl?.text) {
+        const ok = await telegram(header + cl.text + "\n\nPainel: https://gestorflowtools.shop/financeiro/");
+        await sb.from("alert_digests").update({ telegram: ok, note: ok ? null : "Telegram não enviado (confira TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID)." }).eq("id", cl.id);
+        return json({ ok: true, by: who, source: "claude", alerts: alerts.length, telegram: ok, digest: { id: cl.id, created_at: cl.created_at } });
+      }
+    }
     const sent = sendTg ? await telegram(header + text + "\n\nPainel: https://gestorflowtools.shop/financeiro/") : false;
     if (sendTg && !sent) note = [note, "Telegram não enviado (confira TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID)."].filter(Boolean).join(" ");
 

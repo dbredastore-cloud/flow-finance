@@ -23,9 +23,9 @@ window.FlowAlerts = (function () {
     var unseen = open.filter(function (a) { return !a.seen_at; }).length;
 
     var head = '<div class="av-head"><div><div class="av-sub">Regras recalculadas a cada 30 minutos com os dados da Kiwify, dos contratos e do Instagram. ' +
-      'O resumo da IA sai todo dia às 8h e vai também para o Telegram.</div></div>' +
+      'O resumo escrito pelo Claude sai todo dia antes das 8h e vai também para o Telegram.</div></div>' +
       '<div class="av-acts"><button class="btn" type="button" data-av="refresh">↻ Recalcular agora</button>' +
-      '<button class="btn btn-primary" type="button" data-av="digest">Gerar resumo da IA</button></div></div>';
+      '<button class="btn btn-primary" type="button" data-av="digest">Atualizar resumo</button></div></div>';
 
     var kpis = '<div class="av-kpis">' +
       kpi("Críticos", count("critical"), "critical") + kpi("Atenção", count("warning"), "warning") +
@@ -33,10 +33,10 @@ window.FlowAlerts = (function () {
 
     var dg = S.digest;
     var digest = '<section class="panel av-digest"><header class="av-ph"><div><h3>Resumo da IA</h3><p>' +
-      (dg ? (dg.source === "ai" ? "Escrito por " + esc(dg.model || "IA") : "Montado pelas regras (sem IA)") + " em " + esc(when(dg.created_at)) +
+      (dg ? byWho(dg) + " em " + esc(when(dg.created_at)) +
         (dg.telegram ? " · enviado no Telegram" : "") : "Ainda não há resumo.") + "</p></div></header>" +
       (dg ? '<div class="av-digest-t">' + esc(dg.text) + "</div>" + (dg.note ? '<div class="av-note">' + esc(dg.note) + "</div>" : "") :
-        '<div class="av-note">Clique em <b>Gerar resumo da IA</b> para criar o primeiro.</div>') + "</section>";
+        '<div class="av-note">Clique em <b>Atualizar resumo</b> para criar o primeiro.</div>') + "</section>";
 
     var chips = '<div class="av-filters">' + chip("all", "Todos", open.length) +
       CATS.map(function (c) { var n = open.filter(function (a) { return a.category === c[0]; }).length; return n ? chip(c[0], c[1], n) : ""; }).join("") +
@@ -67,14 +67,21 @@ window.FlowAlerts = (function () {
   }
 
   /* ---------------- dados ---------------- */
+  // O texto escrito por IA (API ou tarefa agendada do Claude) das últimas 30 h vale mais que um resumo das regras mais novo.
+  function pickDigest(rows) {
+    var limit = Date.now() - 30 * 3600e3;
+    return rows.filter(function (d) { return d.source !== "regras" && Date.parse(d.created_at) > limit; })[0] || rows[0] || null;
+  }
+  function byWho(d) { return d.source === "claude" ? "Escrito pelo Claude (tarefa agendada)" : d.source === "ai" ? "Escrito por " + esc(d.model || "IA") : "Montado pelas regras (sem IA)"; }
+
   async function load() {
     var r = await Promise.all([
       A.sb.from("alerts").select("id, category, severity, title, body, data, sort, first_seen_at, updated_at, seen_at").is("resolved_at", null),
-      A.sb.from("alert_digests").select("created_at, text, source, model, telegram, note, alerts_count").order("created_at", { ascending: false }).limit(1).maybeSingle()
+      A.sb.from("alert_digests").select("created_at, text, source, model, telegram, note, alerts_count").order("created_at", { ascending: false }).limit(10)
     ]);
     if (r[0].error) { A.toast("Erro ao ler os avisos: " + r[0].error.message, true); return; }
     S.alerts = (r[0].data || []).sort(function (x, y) { return (SEV[x.severity] || [, 9])[1] - (SEV[y.severity] || [, 9])[1] || x.sort - y.sort; });
-    S.digest = r[1].data || null;
+    S.digest = pickDigest(r[1].data || []);
     S.loaded = true;
     render();
   }

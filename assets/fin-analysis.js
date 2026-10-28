@@ -71,8 +71,8 @@ window.FinAnalysis = (function () {
   function render() {
     var r = S.row, root = A.root;
     var head = '<div class="panel-head fa-head"><div><h3>Análise da IA</h3><p class="fa-sub">' +
-      (r ? (r.source === "ai" ? "Escrita por " + esc(r.model || "IA") : "Só os números (sem IA)") + " em " + esc(when(r.created_at)) + " · atualiza sozinha todo dia às 8h" : "Ainda não há análise.") +
-      '</p></div><button type="button" class="btn" data-fa="run"' + (S.busy ? " disabled" : "") + ">" + (S.busy ? "Analisando…" : "↻ Gerar análise agora") + "</button></div>";
+      (r ? (r.source === "claude" ? "Escrita pelo Claude (tarefa agendada)" : r.source === "ai" ? "Escrita por " + esc(r.model || "IA") : "Só os números (sem IA)") + " em " + esc(when(r.created_at)) + " · o Claude reescreve todo dia antes das 8h" : "Ainda não há análise.") +
+      '</p></div><button type="button" class="btn" data-fa="run"' + (S.busy ? " disabled" : "") + ' title="Recalcula os números agora; o texto é reescrito pela tarefa diária do Claude">' + (S.busy ? "Calculando…" : "↻ Atualizar números") + "</button></div>";
     if (!r) { root.innerHTML = head + '<p class="fa-empty">Clique em <b>Gerar análise agora</b> para a primeira análise.</p>'; return; }
     var body = "";
     if (r.text) {
@@ -81,15 +81,18 @@ window.FinAnalysis = (function () {
         '<button type="button" class="fa-more" data-fa="toggle">' + (S.open ? "Recolher análise" : "Ver análise completa") + "</button>" +
         (S.open ? '<details class="fa-nums"><summary>Números usados pela IA</summary>' + table(r.facts || {}) + "</details>" : "");
     } else {
-      body = (r.note ? '<p class="fa-note">' + esc(r.note) + " Cadastre ANTHROPIC_API_KEY nos secrets do Supabase para receber o texto.</p>" : "") + table(r.facts || {});
+      body = '<p class="fa-note">O texto da análise é escrito todo dia antes das 8h pela tarefa agendada do Claude (precisa do computador ligado com o app do Claude aberto). Enquanto isso, os números:</p>' + table(r.facts || {});
     }
     root.innerHTML = head + body;
   }
 
   async function load() {
-    var r = await A.sb.from("fin_analyses").select("created_at, text, source, model, facts, note").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    var r = await A.sb.from("fin_analyses").select("created_at, text, source, model, facts, note").order("created_at", { ascending: false }).limit(10);
     if (r.error) { A.root.hidden = true; return; }
-    S.row = r.data || null; S.loaded = true;
+    // O texto escrito (pela tarefa agendada do Claude ou pela API) das últimas 36 h vale mais que uma linha mais nova só com números.
+    var rows = r.data || [], limit = Date.now() - 36 * 3600e3;
+    S.row = rows.filter(function (x) { return x.text && Date.parse(x.created_at) > limit; })[0] || rows[0] || null;
+    S.loaded = true;
     render();
   }
   async function run() {
