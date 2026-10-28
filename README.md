@@ -171,6 +171,18 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - Secret `ANTHROPIC_API_KEY` (Supabase → Edge Functions → Secrets, cadastrado direto lá, nunca no chat). Sem ele, o resumo sai montado pelas próprias regras e a tela avisa.
 - Acesso: menu `fin.avisos` na tela Equipe (`alerts` e `alert_digests` só abrem para esse menu; admin vê tudo).
 
+## Análise da IA (topo da Home do /financeiro/)
+
+- Painel **Análise da IA** no topo da Home (`assets/fin-analysis.js`). O banco calcula todos os números em `public.fin_analysis_facts()` (migration `20261028_fin_analysis.sql`) e a IA só interpreta:
+  - mês atual até agora × mês anterior até o mesmo dia × mesmo mês do ano passado até o mesmo dia;
+  - mês anterior fechado × o mesmo mês no ano passado, com despesas e resultado (líquido − despesas);
+  - ano atual até hoje × ano passado até a mesma data, com as despesas dos meses fechados;
+  - por ferramenta e no total: vendas pagas, líquido, ticket médio, vendas de afiliados, reembolsos e chargebacks (pela data em que aconteceram), valor reembolsado e taxa de reembolso; série mês a mês desde o início do ano passado; projeção do mês no ritmo atual.
+- Vendas vêm de `kiwify_sales_snapshot` (status atual: venda reembolsada depois conta como reembolso) e despesas de `monthly_expenses` (só meses fechados).
+- A Edge Function `supabase/functions/fin-analysis/` manda esses números para o Claude Haiku (`claude-haiku-5-5`, esforço médio), que escreve em seções: resumo, mês × mês anterior, mês × ano passado, mês fechado × ano passado, ano × ano, reembolsos e chargebacks, afiliados, projeção e o que fazer agora. Guarda texto e números em `fin_analyses`. Roda todo dia às 8h10 de Brasília (cron `fin-analysis`, 11h10 UTC, com `x-cron-secret`) e pelo botão **Gerar análise agora**. Custo: uma chamada por dia, centavos por mês.
+- A Home mostra o resumo e o botão **Ver análise completa**, com a tabela dos números usados pela IA. Sem `ANTHROPIC_API_KEY`, aparece só a tabela de comparativos com as variações.
+- Acesso: menu `fin.financeiro` (`fin_analyses` só abre para esse menu).
+
 ## Velocidade
 
 - **Policies (RLS)**: sempre `using ((select public.can(array[...])))`, com o `select` em volta. Sem ele o Postgres chama a função para cada linha (afiliados levava 0,6 s a 4 s; com ele, 14 ms). Migration `20261015_rls_initplan.sql`.
