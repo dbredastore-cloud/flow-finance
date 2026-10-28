@@ -160,6 +160,8 @@
     setPeriod(S.period);
     loadExtras();
     loadPautasCount();
+    // Sua análise: texto do Claude (partner_analyses) + números de agora (influencer_analysis_facts), pela portal_analysis.
+    if (window.PartnerAnalysis) window.PartnerAnalysis.show({ root: $("pp-ai"), load: function () { return rpc("portal_analysis"); } });
   }
 
   /* ---------------- menu: Resultados · Pautas Instagram ---------------- */

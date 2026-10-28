@@ -227,3 +227,29 @@ span.pp-fu { cursor: default; display: inline-block; }
 .pp-nav-i:hover { color: var(--text); }
 .pp-nav-i.on { color: var(--text); border-bottom-color: var(--accent); }
 .pp-nav-n { min-width: 20px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11.5px; font-weight: 700; text-align: center; }
+
+/* ---------- Sua análise (assets/partner-analysis.js; classes fa-* de fin-analysis.css) ---------- */
+#pp-ai { padding: 20px 22px 18px; display: grid; gap: 16px; }
+#pp-ai[hidden] { display: none; }
+.pa-of { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+.pa-bar { position: relative; height: 8px; margin: 6px 0 2px; border-radius: 999px; background: var(--surface-2); }
+.pa-bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--warning); }
+.pa-bar.ok > span { background: var(--good, var(--accent)); }
+.pa-bar.big { height: 12px; margin: 8px 0 4px; }
+.pa-bar.big > span { background: linear-gradient(90deg, var(--accent-3), var(--accent)); }
+.pa-exp { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); opacity: .55; }
+.pa-dl { margin-top: 10px; }
+.pa-dl-h { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-muted); }
+.pa-dl-h b { color: var(--text); font-variant-numeric: tabular-nums; }
+.pa-dl-h b.ok { color: var(--good, var(--accent)); }
+.pa-note { margin: 8px 0 0; font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+.pa-ch + .pa-ch { margin-top: 6px; }
+.pa-ch .fa-mini { margin-top: 4px; }
+.pa-ch-n { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.pa-ch-n.yt { color: #ff4e45; }
+.pa-ch-n.ig { color: #d64f9a; }
+.pa-hl { display: grid; gap: 3px; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+.pa-hl:last-of-type { border-bottom: 0; }
+.pa-hl b { font-size: 13.5px; color: var(--text); line-height: 1.45; }
+.pa-hl small { font-size: 12px; color: var(--text-muted); }
+@media (max-width: 560px) { #pp-ai { padding: 16px 14px; } }

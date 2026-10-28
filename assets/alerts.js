@@ -24,7 +24,7 @@ window.FlowAlerts = (function () {
 
     var head = '<div class="av-head"><div><div class="av-sub">Regras recalculadas a cada 30 minutos com os dados da Kiwify, dos contratos e do Instagram. ' +
       'O resumo escrito pelo Claude sai todo dia antes das 8h e vai também para o Telegram.</div></div>' +
-      '<div class="av-acts"><button class="btn" type="button" data-av="refresh">↻ Recalcular agora</button>' +
+      '<div class="av-acts"><button class="btn" type="button" data-av-ref="mes|todos">Reembolsos e chargebacks</button><button class="btn" type="button" data-av="refresh">↻ Recalcular agora</button>' +
       '<button class="btn btn-primary" type="button" data-av="digest">Atualizar resumo</button></div></div>';
 
     var kpis = '<div class="av-kpis">' +
@@ -63,7 +63,13 @@ window.FlowAlerts = (function () {
       '<span class="av-cat">' + esc(catLabel(a.category)) + "</span>" +
       '<span class="av-when">desde ' + esc(when(a.first_seen_at)) + (a.updated_at !== a.first_seen_at ? " · atualizado " + esc(when(a.updated_at)) : "") + "</span>" +
       '<button type="button" class="av-seen" data-av-seen="' + esc(a.id) + '" data-v="' + (a.seen_at ? "0" : "1") + '">' + (a.seen_at ? "Marcar como não visto" : "Marcar como visto") + "</button></div>" +
-      '<h4 class="av-title">' + esc(a.title) + "</h4>" + (a.body ? '<p class="av-body">' + esc(a.body) + link + "</p>" : "") + "</article>";
+      '<h4 class="av-title">' + esc(a.title) + "</h4>" + (a.body ? '<p class="av-body">' + esc(a.body) + link + "</p>" : "") + refundsBtn(a) + "</article>";
+  }
+
+  // Avisos de reembolso, pico de 24 h e chargeback abrem a lista dos casos (assets/alert-refunds.js).
+  function refundsBtn(a) {
+    var k = String(a.key || ""), o = k.indexOf("refspike:") === 0 ? "24h|todos" : k.indexOf("cb:") === 0 ? "mes|chargeback" : k.indexOf("ref:") === 0 ? "mes|reembolso" : null;
+    return o && window.AlertRefunds ? '<button type="button" class="btn av-open" data-av-ref="' + o + '">Ver reembolsos e chargebacks →</button>' : "";
   }
 
   /* ---------------- dados ---------------- */
@@ -76,7 +82,7 @@ window.FlowAlerts = (function () {
 
   async function load() {
     var r = await Promise.all([
-      A.sb.from("alerts").select("id, category, severity, title, body, data, sort, first_seen_at, updated_at, seen_at").is("resolved_at", null),
+      A.sb.from("alerts").select("id, key, category, severity, title, body, data, sort, first_seen_at, updated_at, seen_at").is("resolved_at", null),
       A.sb.from("alert_digests").select("created_at, text, source, model, telegram, note, alerts_count").order("created_at", { ascending: false }).limit(10)
     ]);
     if (r[0].error) { A.toast("Erro ao ler os avisos: " + r[0].error.message, true); return; }
@@ -119,6 +125,11 @@ window.FlowAlerts = (function () {
       if (b && b.dataset.av === "digest") return digest();
       var c = e.target.closest("[data-av-cat]");
       if (c) { S.cat = c.dataset.avCat; render(); return; }
+      var rf = e.target.closest("[data-av-ref]");
+      if (rf) {
+        var o = rf.dataset.avRef.split("|");
+        return window.AlertRefunds.open({ root: A.root, sb: A.sb, toast: A.toast, preset: o[0], tipo: o[1], back: function () { render(); window.scrollTo(0, 0); } });
+      }
       var s = e.target.closest("[data-av-seen]");
       if (s) setSeen(s.dataset.avSeen, s.dataset.v === "1");
     });
