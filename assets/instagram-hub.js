@@ -4,13 +4,16 @@
    (ganchos, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags).
    Marcações compartilhadas pela equipe — Lido, Interessante e Conteúdo feito — ligam e desligam pela função
    trello_ig_flag. Dados: tabela trello_cards (coluna ig, escrita pelo Claude como os demais textos).
-   Uso: InstagramHub.init({ root, sb, toast }); InstagramHub.show(); */
+   A equipe escolhe em cada card "Mostrar aos influencers" (função trello_ig_share); esses cards aparecem no menu Pautas
+   Instagram do Portal do Afiliado, sem o link do Trello e com Lido/Interessante/Conteúdo feito de cada afiliado.
+   Uso: InstagramHub.init({ root, sb, toast }); InstagramHub.show();
+   Portal: InstagramHub.init({ root, sb, toast, partner: { load: fn() → cards, flag: fn(id, flag, on) → marcações, preview } }). */
 (function () {
   "use strict";
 
   var TOOLS = ["FlowPages", "FlowTracking", "FlowSpy"];
   var STATUS = [
-    ["", "Todos"], ["unread", "Não lidos"], ["fav", "Interessantes"], ["todo", "A produzir"], ["used", "Conteúdo feito"]
+    ["", "Todos"], ["unread", "Não lidos"], ["fav", "Interessantes"], ["todo", "A produzir"], ["used", "Conteúdo feito"], ["shared", "Para influencers"]
   ];
   var TABS = [["geral", "Visão geral"], ["reels", "Reels"], ["carrossel", "Carrossel"], ["stories", "Stories"], ["legenda", "Legenda e hashtags"], ["textos", "Para mim e Slack"]];
   var FLAGS = {
@@ -19,7 +22,7 @@
     used: { on: "Conteúdo feito", off: "Conteúdo feito", at: "ig_used_at", by: "ig_used_by", icon: "✓" }
   };
   var COLS = "id, tool, board_name, list_name, stage, name, url, due, entered_list_at, last_activity, ai, ig, ig_hash, content_hash, " +
-    "ig_read_at, ig_read_by, ig_fav_at, ig_fav_by, ig_used_at, ig_used_by";
+    "ig_read_at, ig_read_by, ig_fav_at, ig_fav_by, ig_used_at, ig_used_by, ig_partner_at, ig_partner_by";
 
   var A = null;
   var S = { ready: false, cards: [], status: "", tool: "", tipo: "", fmt: "", q: "", openId: null, tab: "geral", busy: {} };
@@ -52,14 +55,22 @@
 
   /* ---------------- dados ---------------- */
   // Cache da aba: ao voltar para a tela mostra na hora o que já tinha e atualiza por trás.
-  function cacheKey() { return "flow_ig_cache_v1:" + ((window.FlowAccess && window.FlowAccess.email()) || ""); }
-  function cacheRead() { try { return JSON.parse(sessionStorage.getItem(cacheKey()) || "null"); } catch (e) { return null; } }
-  function cacheWrite() { try { sessionStorage.setItem(cacheKey(), JSON.stringify(S.cards)); } catch (e) {} }
+  function cacheKey() { return P() ? null : "flow_ig_cache_v1:" + ((window.FlowAccess && window.FlowAccess.email()) || ""); }
+  function cacheRead() { try { return cacheKey() ? JSON.parse(sessionStorage.getItem(cacheKey()) || "null") : null; } catch (e) { return null; } }
+  function cacheWrite() { try { if (cacheKey()) sessionStorage.setItem(cacheKey(), JSON.stringify(S.cards)); } catch (e) {} }
+
+  // Portal do Afiliado: os cards e as marcações vêm das funções portal_ig_* (só os cards liberados pela equipe).
+  function P() { return A && A.partner; }
 
   async function load() {
-    var r = await A.sb.from("trello_cards").select(COLS).eq("active", true).eq("is_bug", false).not("ai", "is", null);
-    if (r.error) throw r.error;
-    S.cards = (r.data || []).sort(function (a, b) {
+    var rows;
+    if (P()) rows = await P().load();
+    else {
+      var r = await A.sb.from("trello_cards").select(COLS).eq("active", true).eq("is_bug", false).not("ai", "is", null);
+      if (r.error) throw r.error;
+      rows = r.data;
+    }
+    S.cards = (rows || []).sort(function (a, b) {
       if (a.stage !== b.stage) return a.stage === "teste_cliente" ? -1 : 1;
       return since(b) - since(a);
     });
@@ -73,6 +84,7 @@
     if (S.status === "fav" && !c.ig_fav_at) return false;
     if (S.status === "todo" && c.ig_used_at) return false;
     if (S.status === "used" && !c.ig_used_at) return false;
+    if (S.status === "shared" && !c.ig_partner_at) return false;
     var q = S.q.trim().toLowerCase();
     if (q && (title(c) + " " + c.name + " " + (c.tool || "")).toLowerCase().indexOf(q) < 0) return false;
     return true;
@@ -80,10 +92,13 @@
 
   /* ---------------- esqueleto ---------------- */
   function build(root) {
+    var sub = P()
+      ? "Novidades das ferramentas Flow prontas para virar conteúdo no seu Instagram: o que foi feito, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags. Marque o que já leu, o que achou interessante e o que já virou conteúdo; as marcações são só suas."
+      : "Cada melhoria e funcionalidade nova das ferramentas vira pauta: o que foi feito, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags. Correções de bug ficam de fora. Marque o que já leu, o que achou interessante e o que já virou conteúdo; a equipe toda vê as marcações. Use \"Mostrar aos influencers\" para liberar a pauta no Portal do Afiliado.";
     root.innerHTML =
       '<section class="ch-hero ig-hero">' +
-        '<div class="ch-hero-main"><div class="ch-kicker">Instagram</div><h3 class="ch-title">Conteúdo das atualizações Flow</h3>' +
-          '<p class="ch-sub">Cada melhoria e funcionalidade nova das ferramentas vira pauta: o que foi feito, roteiro de Reels cena a cena, carrossel, stories, legenda e hashtags. Correções de bug ficam de fora. Marque o que já leu, o que achou interessante e o que já virou conteúdo; a equipe toda vê as marcações.</p></div>' +
+        '<div class="ch-hero-main"><div class="ch-kicker">' + (P() ? "Pautas Instagram" : "Instagram") + '</div><h3 class="ch-title">Conteúdo das atualizações Flow</h3>' +
+          '<p class="ch-sub">' + esc(sub) + "</p></div>" +
       "</section>" +
       '<div class="ig-tiles" id="ig-tiles"></div>' +
       '<div class="ig-filters">' +
@@ -119,6 +134,7 @@
     else if (act === "close") closeDrawer();
     else if (act === "tab") { S.tab = v; renderDrawer(); }
     else if (act === "flag") { e.stopPropagation(); toggle(id, v); }
+    else if (act === "share") { e.stopPropagation(); toggleShare(id); }
     else if (act === "copy") copy(id, v);
   }
 
@@ -128,19 +144,20 @@
   function renderTop() {
     var all = S.cards, n = function (f) { return all.filter(f).length; };
     var unread = n(function (c) { return !c.ig_read_at; }), fav = n(function (c) { return !!c.ig_fav_at; }),
-      used = n(function (c) { return !!c.ig_used_at; }), feat = n(function (c) { return tipo(c) === "Nova funcionalidade"; });
+      used = n(function (c) { return !!c.ig_used_at; }), feat = n(function (c) { return tipo(c) === "Nova funcionalidade"; }),
+      shared = n(function (c) { return !!c.ig_partner_at; });
     var pct = all.length ? Math.round(used / all.length * 100) : 0;
     $("ig-tiles").innerHTML =
       tile("Atualizações", all.length, feat + " funcionalidades novas", "") +
-      tile("Não lidas", unread, unread ? "ainda ninguém marcou como lido" : "tudo lido", "unread") +
+      tile("Não lidas", unread, unread ? (P() ? "você ainda não marcou como lido" : "ainda ninguém marcou como lido") : "tudo lido", "unread") +
       tile("Interessantes", fav, "marcadas com ★", "fav") +
       tile("A produzir", all.length - used, "sem conteúdo feito", "todo") +
       '<button type="button" class="ig-tile ig-progress' + (S.status === "used" ? " on" : "") + '" data-act="status" data-v="used">' +
         "<small>Conteúdo feito</small><b class=\"num\">" + used + '<span> / ' + all.length + "</span></b>" +
         '<div class="ig-bar"><i style="width:' + pct + '%"></i></div><span>' + pct + "% das atualizações já viraram conteúdo</span></button>";
 
-    var counts = { "": all.length, unread: unread, fav: fav, todo: all.length - used, used: used };
-    $("ig-status").innerHTML = STATUS.map(function (s) {
+    var counts = { "": all.length, unread: unread, fav: fav, todo: all.length - used, used: used, shared: shared };
+    $("ig-status").innerHTML = STATUS.filter(function (s) { return !(P() && s[0] === "shared"); }).map(function (s) {
       return '<button type="button" class="btn' + (S.status === s[0] ? " btn-primary" : "") + '" data-act="status" data-v="' + s[0] + '">' + esc(s[1]) + " · " + counts[s[0]] + "</button>";
     }).join("");
     $("ig-tool").innerHTML = [""].concat(TOOLS).map(function (t) {
@@ -165,14 +182,22 @@
 
   function flagBtn(c, f, compact) {
     var F = FLAGS[f], on = !!c[F.at], busy = S.busy[c.id + f];
-    var tip = on ? F.on + " por " + (c[F.by] || "alguém") + " em " + fmtDateTime(c[F.at]) + ". Clique para desmarcar." : "Marcar: " + F.on;
+    var tip = on ? F.on + " por " + (P() ? "você" : c[F.by] || "alguém") + " em " + fmtDateTime(c[F.at]) + ". Clique para desmarcar." : "Marcar: " + F.on;
     return '<button type="button" class="ig-flag f-' + f + (on ? " on" : "") + '" data-act="flag" data-id="' + c.id + '" data-v="' + f + '" aria-pressed="' + on + '" title="' + esc(tip) + '"' + (busy ? " disabled" : "") + ">" +
       '<span aria-hidden="true">' + F.icon + "</span>" + (compact ? "" : "<em>" + esc(on ? F.on : F.off) + "</em>") + "</button>";
+  }
+  // Só na tela da equipe: libera (ou tira) o card do menu Pautas Instagram do Portal do Afiliado.
+  function shareBtn(c, compact) {
+    if (P()) return "";
+    var on = !!c.ig_partner_at, busy = S.busy[c.id + "share"];
+    var tip = on ? "Visível aos influencers desde " + fmtDateTime(c.ig_partner_at) + (c.ig_partner_by ? " (por " + c.ig_partner_by + ")" : "") + ". Clique para esconder." : "Mostrar esta pauta aos influencers no Portal do Afiliado";
+    return '<button type="button" class="ig-flag f-share' + (on ? " on" : "") + '" data-act="share" data-id="' + c.id + '" aria-pressed="' + on + '" title="' + esc(tip) + '"' + (busy ? " disabled" : "") + ">" +
+      '<span aria-hidden="true">⇪</span>' + (compact ? "" : "<em>" + (on ? "Visível aos influencers" : "Mostrar aos influencers") + "</em>") + "</button>";
   }
 
   function renderGrid() {
     var list = S.cards.filter(match);
-    if (!S.cards.length) { $("ig-grid").innerHTML = '<div class="panel ig-empty">Nenhuma atualização com textos ainda. Os cards aparecem aqui assim que os textos dos Cards Trello forem gerados.</div>'; return; }
+    if (!S.cards.length) { $("ig-grid").innerHTML = '<div class="panel ig-empty">' + (P() ? "A equipe Flow ainda não liberou pautas para você. Assim que liberar, elas aparecem aqui." : "Nenhuma atualização com textos ainda. Os cards aparecem aqui assim que os textos dos Cards Trello forem gerados.") + '</div>'; return; }
     if (!list.length) { $("ig-grid").innerHTML = '<div class="panel ig-empty">Nada com esses filtros.</div>'; return; }
     $("ig-grid").innerHTML = list.map(function (c) {
       var p = pack(c), fmt = p.formato_ideal;
@@ -182,7 +207,7 @@
         "<h4>" + esc(title(c)) + "</h4>" +
         '<p class="ig-pub">' + esc(p.publico || "") + "</p>" +
         (arr(p.ganchos)[0] ? '<p class="ig-hook">“' + esc(p.ganchos[0]) + '”</p>' : "") +
-        '<div class="ig-card-foot"><div class="ig-flags">' + flagBtn(c, "read", true) + flagBtn(c, "fav", true) + flagBtn(c, "used", true) + "</div>" +
+        '<div class="ig-card-foot"><div class="ig-flags">' + flagBtn(c, "read", true) + flagBtn(c, "fav", true) + flagBtn(c, "used", true) + shareBtn(c, true) + "</div>" +
           '<span class="ig-meta">' + esc(c.list_name) + (since(c) ? " · " + fmtDate(c.entered_list_at || c.last_activity) : "") + "</span></div>" +
         "</article>";
     }).join("");
@@ -201,10 +226,11 @@
       '<div class="ig-d-head">' +
         '<div><div class="ig-card-top"><span class="ig-tool">' + esc(c.tool || c.board_name) + '</span><span class="ig-type">' + esc(tipo(c)) + "</span>" +
           (p.formato_ideal ? '<span class="ig-fmt">Formato ideal: ' + esc(p.formato_ideal) + "</span>" : "") + "</div>" +
-          "<h3>" + esc(title(c)) + '</h3><div class="ig-orig">Card: ' + esc(c.name) + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener">abrir no Trello ↗</a>' : "") + "</div></div>" +
+          "<h3>" + esc(title(c)) + "</h3>" +
+          (P() ? "" : '<div class="ig-orig">Card: ' + esc(c.name) + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener">abrir no Trello ↗</a>' : "") + "</div>") + "</div>" +
         '<button type="button" class="btn btn-ghost ig-x" data-act="close" aria-label="Fechar">✕</button>' +
       "</div>" +
-      '<div class="ig-flags big">' + flagBtn(c, "read") + flagBtn(c, "fav") + flagBtn(c, "used") + "</div>" +
+      '<div class="ig-flags big">' + flagBtn(c, "read") + flagBtn(c, "fav") + flagBtn(c, "used") + shareBtn(c) + "</div>" +
       (p.fallback ? '<div class="ig-note">O roteiro completo desta atualização ainda está sendo escrito. Por enquanto aparecem as ideias básicas.</div>' : "") +
       '<div class="ig-tabs">' + TABS.map(function (t) {
         return '<button type="button" class="btn' + (S.tab === t[0] ? " btn-primary" : "") + '" data-act="tab" data-v="' + t[0] + '">' + esc(t[1]) + "</button>";
@@ -318,7 +344,9 @@
     c[F.by] = on ? "você" : null;
     if (f === "used" && on && !c.ig_read_at) { c.ig_read_at = c[F.at]; c.ig_read_by = "você"; }
     S.busy[id + f] = true; render();
-    var r = await A.sb.rpc("trello_ig_flag", { p_id: id, p_flag: f, p_on: on });
+    var r;
+    if (P()) { try { r = { data: await P().flag(id, f, on) }; } catch (e) { r = { error: e }; } }
+    else r = await A.sb.rpc("trello_ig_flag", { p_id: id, p_flag: f, p_on: on });
     delete S.busy[id + f];
     if (r.error) {
       c[F.at] = before.at; c[F.by] = before.by; c.ig_read_at = before.rat; c.ig_read_by = before.rby;
@@ -327,6 +355,24 @@
     Object.assign(c, r.data || {});
     render();
     cacheWrite();
+  }
+
+  async function toggleShare(id) {
+    var c = byId(id);
+    if (!c || P() || S.busy[id + "share"]) return;
+    var on = !c.ig_partner_at, before = { at: c.ig_partner_at, by: c.ig_partner_by };
+    c.ig_partner_at = on ? new Date().toISOString() : null; c.ig_partner_by = on ? "você" : null; // otimista
+    S.busy[id + "share"] = true; render();
+    var r = await A.sb.rpc("trello_ig_share", { p_id: id, p_on: on });
+    delete S.busy[id + "share"];
+    if (r.error) {
+      c.ig_partner_at = before.at; c.ig_partner_by = before.by;
+      render(); A.toast("Não foi possível salvar: " + r.error.message, true); return;
+    }
+    Object.assign(c, r.data || {});
+    render();
+    cacheWrite();
+    A.toast(on ? "Pauta liberada para os influencers." : "Pauta escondida dos influencers.");
   }
 
   /* ---------------- API pública ---------------- */

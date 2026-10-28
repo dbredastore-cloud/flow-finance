@@ -159,7 +159,49 @@
     renderPeriodChips();
     setPeriod(S.period);
     loadExtras();
+    loadPautasCount();
   }
+
+  /* ---------------- menu: Resultados · Pautas Instagram ---------------- */
+  // Pautas Instagram: os cards que a equipe liberou (portal_ig_cards), com Lido/Interessante/Conteúdo feito só deste
+  // afiliado (portal_ig_flag). Usa o mesmo módulo da tela da equipe (assets/instagram-hub.js), sem o link do Trello.
+  var pautasReady = false;
+  function pautasInit() {
+    if (pautasReady) return;
+    pautasReady = true;
+    window.InstagramHub.init({
+      root: $("ig-view"), sb: sb, toast: toast,
+      partner: {
+        preview: !!(S.me && S.me.preview),
+        load: function () { return rpc("portal_ig_cards"); },
+        flag: function (id, flag, on) {
+          if (S.me && S.me.preview) return Promise.reject(new Error("Na visão da equipe as marcações ficam travadas: cada afiliado marca as próprias."));
+          return sb.rpc("portal_ig_flag", { p_id: id, p_flag: flag, p_on: on }).then(function (r) { if (r.error) throw r.error; return r.data; });
+        }
+      }
+    });
+  }
+  // Quantas pautas o afiliado ainda não leu (bolinha no menu).
+  async function loadPautasCount() {
+    try {
+      var cards = await rpc("portal_ig_cards") || [];
+      var n = cards.filter(function (c) { return !c.ig_read_at; }).length;
+      $("pautas-n").hidden = !n; $("pautas-n").textContent = n;
+    } catch (e) { /* o menu funciona mesmo sem a contagem */ }
+  }
+  function openTab(tab) {
+    document.querySelectorAll(".pp-nav-i").forEach(function (b) {
+      var on = b.getAttribute("data-tab") === tab;
+      b.classList.toggle("on", on);
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
+    $("tab-results").hidden = tab !== "results";
+    $("tab-pautas").hidden = tab !== "pautas";
+    if (tab === "pautas") { pautasInit(); window.InstagramHub.show().then(loadPautasCount); }
+    else { window.InstagramHub && pautasReady && window.InstagramHub.hide(); loadPautasCount(); }
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll(".pp-nav-i").forEach(function (b) { b.addEventListener("click", function () { openTab(b.getAttribute("data-tab")); }); });
 
   /* ---------------- período ---------------- */
   function range(p) {

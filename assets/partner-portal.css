@@ -219,3 +219,11 @@ span.pp-fu { cursor: default; display: inline-block; }
 .pp-aud-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-aud-row i { display: block; height: 6px; border-radius: 3px; background: var(--accent); opacity: .75; }
 .pp-aud-row b { text-align: right; font-weight: 600; }
+
+/* ---------- Menu do portal: Resultados · Pautas Instagram ---------- */
+.pp-main[hidden] { display: none; }
+.pp-nav { display: flex; gap: 4px; padding: 0 clamp(16px, 2.2vw, 40px); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.pp-nav-i { display: inline-flex; align-items: center; gap: 6px; padding: 12px 14px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--text-dim); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.pp-nav-i:hover { color: var(--text); }
+.pp-nav-i.on { color: var(--text); border-bottom-color: var(--accent); }
+.pp-nav-n { min-width: 20px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11.5px; font-weight: 700; text-align: center; }

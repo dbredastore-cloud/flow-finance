@@ -52,6 +52,7 @@
 .ig-flag.f-read.on { color: var(--accent-3); border-color: var(--accent-3); background: color-mix(in oklab, var(--accent-3) 12%, transparent); }
 .ig-flag.f-fav.on { color: var(--warning); border-color: var(--warning); background: color-mix(in oklab, var(--warning) 12%, transparent); }
 .ig-flag.f-used.on { color: var(--accent-ink); border-color: var(--good); background: var(--good); }
+.ig-flag.f-share.on { color: var(--accent-2, var(--accent)); border-color: var(--accent-2, var(--accent)); background: color-mix(in oklab, var(--accent-2, var(--accent)) 14%, transparent); }
 .ig-flags.big { margin: 4px 0 12px; }
 .ig-flags.big .ig-flag { height: 36px; padding: 0 14px; font-size: 13px; }
 

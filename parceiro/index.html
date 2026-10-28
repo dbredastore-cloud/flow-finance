@@ -14,12 +14,15 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
 <link rel="stylesheet" href="../assets/influencer-dash.css">
+<link rel="stylesheet" href="../assets/customer-health.css">
+<link rel="stylesheet" href="../assets/instagram-hub.css">
 <link rel="stylesheet" href="../assets/partner-portal.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
 <script src="../assets/influencer-dash.js"></script>
+<script src="../assets/instagram-hub.js"></script>
 </head>
 <body>
 
@@ -68,8 +71,12 @@
     <button class="btn btn-ghost" id="logout-btn" type="button">Sair</button>
   </header>
   <div class="pp-preview" id="preview-bar" hidden></div>
+  <nav class="pp-nav" aria-label="Menu do portal">
+    <button type="button" class="pp-nav-i on" data-tab="results" aria-current="page">Resultados</button>
+    <button type="button" class="pp-nav-i" data-tab="pautas">Pautas Instagram <span class="pp-nav-n" id="pautas-n" hidden></span></button>
+  </nav>
 
-  <main class="pp-main">
+  <main class="pp-main" id="tab-results">
     <section class="pp-period">
       <div class="pp-chips" id="period-chips" role="group" aria-label="Período"></div>
       <div class="pp-custom" id="period-custom" hidden>
@@ -108,6 +115,8 @@
 
     <p class="muted pp-foot">Dados da Kiwify (vendas e comissões), da YouTube Data API (canal) e da API do Instagram (perfil público), atualizados automaticamente. Valor = valor pago pelo cliente; comissão = o que a Kiwify credita a você.</p>
   </main>
+
+  <main class="pp-main" id="tab-pautas" hidden><div id="ig-view"></div></main>
 </div>
 <div id="toast" role="status"></div>
 <script src="../assets/partner-portal.js"></script>
