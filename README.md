@@ -113,7 +113,7 @@ Supabase → Project Settings → Edge Functions → Secrets:
 ## Acesso por menu (tela Equipe)
 
 - Cada pessoa em `app_admins` tem um perfil: **Admin** (`role = 'admin'`, vê todos os menus e gerencia a Equipe) ou **Acesso personalizado** (`role = 'custom'`, vê só os menus em `menus`). Quem já tinha acesso antes desta mudança ficou como Admin.
-- Menus: Financeiro → `fin.financeiro` (Home e ferramentas), `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`, `fin.instagram`, `fin.ideias`; Afiliados → `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`. A lista fica em `assets/flow-access.js`, na Edge Function `team-admin` e na migration `20261015_menu_access.sql`; menu novo precisa entrar nos três.
+- Menus: Financeiro → `fin.financeiro` (Home e ferramentas), `fin.health`, `fin.clients`, `fin.hours`, `fin.trello`, `fin.instagram`, `fin.ideias`, `fin.avisos`; Afiliados → `af.overview`, `af.base`, `af.flowinf`, `af.products`, `af.youtube`, `af.mercado`. A lista fica em `assets/flow-access.js`, na Edge Function `team-admin` e na migration `20261015_menu_access.sql`; menu novo precisa entrar nos três.
 - Proteção nos dados, não só na tela: as policies de cada tabela usam `public.can(array[...menus])`, então quem só tem Cards Trello não lê despesas nem pela API. `is_owner()` = perfil admin (tentativas de login, tela Equipe); `my_access()` devolve o perfil de quem está logado.
 - No painel, os itens do menu têm `data-menu`, os links entre painéis `data-page` e o link da Equipe `data-admin-only`; quem não tem nenhum menu de um painel é levado ao primeiro que pode ver.
 - Gerenciar: tela Equipe → **Editar acesso** (ou o seletor ao adicionar pessoa). Precisa sobrar sempre pelo menos um Admin.
@@ -154,6 +154,20 @@ Supabase → Project Settings → Edge Functions → Secrets:
 - **Comentários e Direct** do @useaflow entram sozinhos: a tarefa agendada do app Claude "Ideias dos usuários: comentários e Direct do @useaflow" (todo dia, 9h, com o app aberto) lê `ig_comments` e `ig_messages` no Supabase, classifica (ideia, dúvida, compra, problema; elogios ficam de fora) e grava com `ig_comment_id` / `ig_message_id` únicos, então pode rodar de novo sem duplicar.
 - **Caixinha de perguntas e enquetes** não saem pela API do Instagram: a equipe registra pelo botão **+ Registrar pedido**.
 - Acesso: menu `fin.ideias` na tela Equipe (leitura e escrita pelo mesmo menu).
+
+## Avisos (menu do /financeiro/)
+
+- O que está acontecendo no negócio, numa tela só (`assets/alerts.js`). As regras rodam no banco, sem IA e sem custo: `public.generate_alerts()` (migration `20261027_alerts.sql`) roda a cada 30 min (cron `alerts-generate`, minutos 3 e 33) e grava em `alerts`, um aviso por chave estável:
+  - **Faturamento:** cada ferramenta e o total, mês atual até agora contra o mês passado até o mesmo ponto (vendas pagas, valor líquido, de `kiwify_sales_snapshot`). Queda de 10% vira Atenção, de 25% vira Crítico e alta de 10% vira Bom.
+  - **Reembolsos:** reembolsos e chargebacks do mês contra o mesmo período do mês passado, pico de reembolsos nas últimas 24 h (com o dia das vendas reembolsadas) e meses fechados que mudaram na Kiwify (`revenue_alerts` ainda não vistos).
+  - **Afiliados** (só produtos das ferramentas): quem subiu ou caiu forte contra o mês passado, quem parou de vender (0 vendas em 7 dias depois de vender nas 2 semanas anteriores) e o top 5 do mês.
+  - **Influencers:** entregas do contrato no mês atual (stories pelo ritmo do mês; reel e YouTube na última semana) e pendências do mês fechado. A contagem é a maior entre o que foi lançado à mão em Influencers Flow e o que foi detectado: stories que citam a Flow e reels com "Flow…" na legenda (Instagram conectado no Portal), vídeos longos do YouTube com "flow" no título. Contratos que terminam em até 15 dias aparecem com o progresso até o bônus.
+  - **Instagram (@useaflow):** views da semana contra a anterior, seguidores ganhos ou perdidos e post com o dobro da mediana de views.
+  - **Sistema:** sincronização da Kiwify ou do Instagram parada.
+- Aviso que deixa de valer some sozinho (`resolved_at`). Aviso que muda de gravidade volta como não visto. "Marcar como visto" vale para todos (`alert_set_seen`). Botão **Recalcular agora** roda as regras na hora.
+- **Resumo da IA:** a Edge Function `supabase/functions/alerts-digest/` roda as regras, manda os avisos abertos para o Claude Haiku (`claude-haiku-5-5`, esforço baixo) e grava o texto em `alert_digests`. A IA só escreve sobre os números que as regras já calcularam. Roda todo dia às 8h de Brasília (cron `alerts-digest`, 11h UTC, com `x-cron-secret`) e manda no Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, os mesmos do aviso de login). O botão **Gerar resumo da IA** da tela gera na hora, sem Telegram. Custo: uma chamada por dia com poucos milhares de tokens, frações de centavo (bem menos de US$ 1 por mês).
+- Secret `ANTHROPIC_API_KEY` (Supabase → Edge Functions → Secrets, cadastrado direto lá, nunca no chat). Sem ele, o resumo sai montado pelas próprias regras e a tela avisa.
+- Acesso: menu `fin.avisos` na tela Equipe (`alerts` e `alert_digests` só abrem para esse menu; admin vê tudo).
 
 ## Velocidade
 
