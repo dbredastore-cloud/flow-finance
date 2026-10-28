@@ -45,6 +45,8 @@ end $$;
 
 -- Portal: cards liberados, no mesmo formato que a tela da equipe usa (sem url do Trello e sem as marcações da equipe).
 -- ig_read_at / ig_fav_at / ig_used_at são as marcações DESTE afiliado.
+-- De `ai` só sai o que a pauta usa (título, tipo, ideias básicas e o "o que é"); os textos internos da equipe
+-- (Slack da TB e o resto do "Para mim") não vão para o portal.
 create or replace function public.portal_ig_cards(p_email text default null)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare e text := public.portal_target(p_email);
@@ -53,7 +55,10 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
              'id', c.id, 'tool', c.tool, 'board_name', c.board_name, 'list_name', c.list_name, 'stage', c.stage, 'name', c.name,
-             'entered_list_at', c.entered_list_at, 'last_activity', c.last_activity, 'ai', c.ai, 'ig', c.ig,
+             'entered_list_at', c.entered_list_at, 'last_activity', c.last_activity,
+             'ai', jsonb_strip_nulls(jsonb_build_object('titulo', c.ai->'titulo', 'tipo', c.ai->'tipo', 'instagram', c.ai->'instagram',
+                                                        'resumo', jsonb_build_object('o_que_e', c.ai#>'{resumo,o_que_e}'))),
+             'ig', c.ig,
              'shared_at', c.ig_partner_at,
              'ig_read_at', f.read_at, 'ig_fav_at', f.fav_at, 'ig_used_at', f.used_at)
            order by c.ig_partner_at desc)

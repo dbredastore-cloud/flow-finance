@@ -221,7 +221,7 @@
     var c = byId(S.openId);
     if (!c) { closeDrawer(); return; }
     var p = pack(c);
-    var body = ({ geral: tabGeral, reels: tabReels, carrossel: tabCarrossel, stories: tabStories, legenda: tabLegenda, textos: tabTextos }[S.tab] || tabGeral)(c, p);
+    var body = ({ geral: tabGeral, reels: tabReels, carrossel: tabCarrossel, stories: tabStories, legenda: tabLegenda, textos: P() ? null : tabTextos }[S.tab] || tabGeral)(c, p);
     $("ig-drawer").innerHTML =
       '<div class="ig-d-head">' +
         '<div><div class="ig-card-top"><span class="ig-tool">' + esc(c.tool || c.board_name) + '</span><span class="ig-type">' + esc(tipo(c)) + "</span>" +
@@ -232,7 +232,8 @@
       "</div>" +
       '<div class="ig-flags big">' + flagBtn(c, "read") + flagBtn(c, "fav") + flagBtn(c, "used") + shareBtn(c) + "</div>" +
       (p.fallback ? '<div class="ig-note">O roteiro completo desta atualização ainda está sendo escrito. Por enquanto aparecem as ideias básicas.</div>' : "") +
-      '<div class="ig-tabs">' + TABS.map(function (t) {
+      // No portal a aba "Para mim e Slack" (textos internos da equipe) não aparece.
+      '<div class="ig-tabs">' + TABS.filter(function (t) { return !(P() && t[0] === "textos"); }).map(function (t) {
         return '<button type="button" class="btn' + (S.tab === t[0] ? " btn-primary" : "") + '" data-act="tab" data-v="' + t[0] + '">' + esc(t[1]) + "</button>";
       }).join("") + "</div>" +
       '<div class="ig-d-body">' + body + "</div>";
