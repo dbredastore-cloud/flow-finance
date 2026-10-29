@@ -46,8 +46,11 @@ async function graph(cfg: Cfg, token: string, path: string, params: Record<strin
 
 // A API de mensagens usa o token da Página ligada ao Instagram da Flow.
 async function pageToken(cfg: Cfg) {
-  const js = await graph(cfg, cfg.token, "me/accounts", { fields: "id,name,access_token,instagram_business_account{id}", limit: "100" });
-  const page = (js.data ?? []).find((p: any) => p.instagram_business_account?.id === cfg.id);
+  const js = await graph(cfg, cfg.token, "me/accounts", { fields: "id,name,access_token,instagram_business_account{id},connected_instagram_account{id}", limit: "100" });
+  const linked = (p: any) => p.instagram_business_account?.id === cfg.id || p.connected_instagram_account?.id === cfg.id;
+  let page = (js.data ?? []).find(linked);
+  // A Meta às vezes demora a mostrar a ligação no campo; com uma Página só, tenta por ela (as conversas confirmam).
+  if (!page && (js.data ?? []).length === 1) page = js.data[0];
   if (!page) {
     const seen = (js.data ?? []).map((p: any) => p.name + (p.instagram_business_account?.id ? " (Instagram " + p.instagram_business_account.id + ")" : " (sem Instagram ligado)"));
     throw new Fail("permission", "Nenhuma Página do Facebook ligada ao Instagram da Flow está atribuída ao usuário do sistema. Atribua a Página (Controle total) e gere o token de novo. " +
@@ -69,7 +72,14 @@ async function run(cfg: Cfg, full: boolean) {
   let next: string | null = `${pg.pageId}/conversations`;
   let params: Record<string, string> = { platform: "instagram", fields: "id,updated_time,participants", limit: "50" };
   for (let page = 0; next && page < 40; page++) {
-    const js: any = await graph(cfg, pg.token, next, params);
+    let js: any;
+    try { js = await graph(cfg, pg.token, next, params); }
+    catch (e) {
+      if (page === 0 && e instanceof Fail && e.code !== "token" && e.code !== "rate") {
+        throw new Fail(e.code === "permission" ? "permission" : "api", "A Página Flow Tools não abriu as conversas do Instagram. Confira se o @useaflow está ligado a ela (Página → Configurações → Contas vinculadas → Instagram) e se \"Permitir acesso a mensagens\" está ligado no app. [" + e.message.slice(0, 220) + "]");
+      }
+      throw e;
+    }
     convs.push(...(js.data ?? []));
     next = js.paging?.next ?? null;
     params = {};
