@@ -56,10 +56,11 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix")]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary")]);
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
+    S.tmb = r[2].error || !r[2].data || !r[2].data.pedidos ? null : r[2].data; // alunos da TMB (boleto parcelado)
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -248,7 +249,7 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + mixSec() + usoSec + venc;
+    el.innerHTML = assSec + mixSec() + (s.software === "all" ? tmbSec() : "") + usoSec + venc;
     drawExpiry(s.vencimentos || {});
   }
 
@@ -274,6 +275,33 @@
         return '<div class="ch-mix-row"><span>' + esc(c.combo.replace(/Flow(Pages|Tracking|Spy)/g, "Flow $1")) + '</span><span class="ch-mix-t"><i style="width:' + (c.n / maxC * 100).toFixed(1) + '%"></i></span><b class="num">' + fmtInt(c.n) + "</b></div>";
       }).join("") + "</div>" : "") +
       '<button type="button" class="btn ch-mix-go" data-flt="ass:multi">Ver na lista quem usa 2 ou mais</button></section>';
+  }
+
+  // Alunos da TMB: cursos, comunidade e combos vendidos no boleto parcelado (lidos da API da TMB a cada 30 min).
+  function tmbSec() {
+    var t = S.tmb;
+    if (!t) return "";
+    var fin = t.financeiro || {}, n = function (k) { return Number(fin[k]) || 0; };
+    var prods = (t.produtos || []).filter(function (p) { return p.efetivados || p.cancelados; });
+    var toolName = { flowpages: "Flow Pages", flowtracking: "Flow Tracking", flowspy: "Flow Spy" };
+    return '<section class="panel ch-sec"><div class="panel-head"><h3>Alunos da TMB</h3>' +
+      '<span class="muted" style="font-size:12px">Cursos, comunidade e combos no boleto parcelado · última leitura ' + esc(fmtDateTime(t.ultima_leitura)) + "</span></div>" +
+      '<div class="ch-tiles">' +
+        tile("Alunos", fmtInt(t.alunos), "e-mails com pedido efetivado", "") +
+        tile("Pedidos efetivados", fmtInt(t.efetivados), fmtInt(t.cancelados) + " cancelados", "") +
+        tile("Valor vendido", fmtBRL(t.valor_vendido), "ticket médio " + fmtBRL(t.ticket_medio), "", "Soma do valor total dos pedidos efetivados (todas as parcelas).") +
+        tile("Parcelas", String(t.parcelas_media || "—").replace(".", ","), "em média por pedido", "") +
+        tile("Quitados", fmtInt(n("Quitado")), pct(n("Quitado"), t.efetivados) + " dos efetivados", "") +
+        tile("Em dia", fmtInt(n("Adimplente")), pct(n("Adimplente"), t.efetivados) + " dos efetivados", "") +
+        tile("Inadimplentes", fmtInt(n("Inadimplente")), pct(n("Inadimplente"), t.efetivados) + " dos efetivados", "") +
+        tile("Também clientes Flow", fmtInt(t.tambem_flow), pct(t.tambem_flow, t.alunos) + " dos alunos", "", "Alunos da TMB com o mesmo e-mail de um cliente dos softwares na Kiwify.") +
+      "</div>" +
+      '<div class="table-scroll"><table class="health-table"><thead><tr><th>Produto</th><th>Libera</th><th>Efetivados</th><th>Cancelados</th><th>Alunos</th><th>Valor vendido</th><th>Inadimplentes</th><th>Último pedido</th></tr></thead><tbody>' +
+      (prods.map(function (p) {
+        return "<tr><td>" + esc(p.nome) + "</td><td>" + esc((p.ferramentas || []).map(function (k) { return toolName[k] || k; }).join(", ") || "—") +
+          '</td><td class="num">' + fmtInt(p.efetivados || 0) + '</td><td class="num">' + fmtInt(p.cancelados || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) +
+          '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
+      }).join("") || '<tr><td colspan="8" class="empty">Sem pedidos.</td></tr>') + "</tbody></table></div></section>";
   }
 
   function drawExpiry(venc) {
@@ -366,8 +394,10 @@
     var dr = $("ch-drawer");
     dr.innerHTML = '<p class="muted" style="padding:20px">Carregando…</p>';
     dr.classList.add("on"); $("ch-scrim").classList.add("on"); dr.setAttribute("aria-hidden", "false");
-    var r = await A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams()));
+    var rs = await Promise.all([A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams())), A.sb.rpc("tmb_customer", { p_email: email })]);
+    var r = rs[0];
     if (r.error) { dr.innerHTML = '<p class="muted" style="padding:20px">Erro: ' + esc(r.error.message) + "</p>"; return; }
+    r.data.tmb = rs[1].error ? [] : rs[1].data || [];
     renderCustomer(r.data);
   }
   function closeDrawer() {
@@ -406,7 +436,11 @@
     }).join("");
     $("ch-drawer").innerHTML =
       '<div class="ch-d-top"><div><h3>' + esc(c.nome || c.email) + "</h3><span>" + esc(c.email) + '</span></div><div class="ch-d-acts"><button class="btn" type="button" data-copy="' + esc(c.email) + '">Copiar e-mail</button><button class="btn btn-ghost" id="ch-d-close" type="button" aria-label="Fechar">✕</button></div></div>' +
-      cards + '<h4 class="ch-d-h">Compras</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Software</th><th>Plano</th><th>Status</th><th>Valor</th></tr></thead><tbody>' + (compras || '<tr><td colspan="5" class="empty">Sem compras.</td></tr>') + "</tbody></table></div>";
+      cards + '<h4 class="ch-d-h">Compras</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Software</th><th>Plano</th><th>Status</th><th>Valor</th></tr></thead><tbody>' + (compras || '<tr><td colspan="5" class="empty">Sem compras.</td></tr>') + "</tbody></table></div>" +
+      ((c.tmb || []).length ? '<h4 class="ch-d-h">Compras na TMB</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Produto</th><th>Pedido</th><th>Financeiro</th><th>Parcelas</th><th>Valor</th></tr></thead><tbody>' +
+        c.tmb.map(function (x) {
+          return "<tr><td>" + fmtDate(x.data) + "</td><td>" + esc(x.produto) + "</td><td>" + esc(x.status) + "</td><td>" + esc(x.financeiro || "—") + '</td><td class="num">' + (x.parcelas ? fmtInt(x.parcelas) + "x " + fmtBRL(x.parcela) : "—") + '</td><td class="num">' + fmtBRL(x.valor) + "</td></tr>";
+        }).join("") + "</tbody></table></div>" : "");
   }
 
   /* ---------------- janelas (critérios, importação, integração) ---------------- */
