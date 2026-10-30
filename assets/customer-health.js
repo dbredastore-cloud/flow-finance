@@ -56,7 +56,7 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation"), loadStudents()]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation"), loadStudents(S.stu.plat), loadToolAccess(S.ta.plat)]);
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
@@ -249,7 +249,8 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + mixSec() + (s.software === "all" ? studentsSec() + bundleSec() : "") + usoSec + venc;
+    var all = s.software === "all";
+    el.innerHTML = assSec + (all ? toolAccessSec() : "") + mixSec() + (all ? studentsSec() + bundleSec() : "") + usoSec + venc;
     drawExpiry(s.vencimentos || {});
   }
 
@@ -265,7 +266,7 @@
       return '<div class="ch-mix-c"><small>' + label + '</small><b class="num">' + fmtInt(v) + '</b><span>' + pct(v, total) + " " + sub + '</span><div class="ch-mix-bar"><i style="width:' + w.toFixed(1) + '%"></i></div></div>';
     };
     var maxC = Math.max.apply(null, combos.map(function (c) { return c.n; }).concat([1]));
-    return '<section class="panel ch-sec ch-mix"><div class="panel-head"><h3>Quantos softwares cada cliente usa</h3>' +
+    return '<section class="panel ch-sec ch-mix"><div class="panel-head"><h3>Quantos softwares cada cliente usa · assinaturas Kiwify</h3>' +
       '<div class="ch-mix-tg" role="group" aria-label="Base">' +
         '<button type="button" class="pay-chip' + (act ? " on" : "") + '" data-mix="ativos">Assinatura em dia agora</button>' +
         '<button type="button" class="pay-chip' + (!act ? " on" : "") + '" data-mix="historico">Já compraram (histórico)</button></div></div>' +
@@ -325,17 +326,90 @@
     A.toast("Preços de referência salvos e rateio recalculado.");
   }
 
+  /* ---------------- Clientes ativos por ferramenta ---------------- */
+  // tool_access_summary: e-mail único por ferramenta, juntando a assinatura (Kiwify) e o combo vitalício
+  // (Kiwify, TMB e Hotmart). Quem tinha assinatura e comprou o combo conta uma vez, como vitalício, e entra
+  // em "migraram". Abas: todas as plataformas ou só os acessos vindos de compras em uma delas.
+  var TA_PLAT = [["todas", "Todas"], ["kiwify", "Kiwify"], ["tmb", "TMB"], ["hotmart", "Hotmart"]];
+  S.ta = { plat: "todas", data: {}, seq: 0 };
+  try { var savedTa = safeGet("flow_ch_tool_access"); if (TA_PLAT.some(function (p) { return p[0] === savedTa; })) S.ta.plat = savedTa; } catch (e) {}
+  async function loadToolAccess(plat) {
+    var r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
+    S.ta.data[plat] = r.error ? null : r.data;
+  }
+  function taRow(label, n, total, tip, cls) {
+    return '<div class="ch-ta-row' + (cls ? " " + cls : "") + '"' + (tip ? ' title="' + esc(tip) + '"' : "") + "><span>" + label + '</span><b class="num">' + fmtInt(n) + '</b><small class="num">' + pct(n, total) + "</small></div>";
+  }
+  function toolAccessSec() {
+    var k = S.ta.plat, d = S.ta.data[k];
+    var tabs = TA_PLAT.map(function (p) {
+      return '<button type="button" class="pay-chip' + (p[0] === k ? " on" : "") + '" data-ta-plat="' + p[0] + '" aria-pressed="' + (p[0] === k) + '">' + p[1] + "</button>";
+    }).join("");
+    var body;
+    if (!d) body = '<p class="muted" style="font-size:12.5px">Carregando…</p>';
+    else {
+      var q = d.por_qtd || {}, n = function (x) { return Number(q[x]) || 0; };
+      body = '<div class="ch-tiles">' +
+          tile("Pessoas ativas", fmtInt(d.pessoas_ativas), "e-mails únicos com 1+ ferramenta", "", "Assinatura em dia ou vitalício em pelo menos uma ferramenta.") +
+          tile("Com vitalício", fmtInt(d.pessoas_vitalicio), pct(d.pessoas_vitalicio, d.pessoas_ativas) + " das pessoas ativas", "", "Compraram o combo vitalício: as três ferramentas, sem vencimento.") +
+          tile("Com assinatura em dia", fmtInt(d.pessoas_assinatura), "mensal, semestral ou anual", "") +
+          tile("Ativos em 1 ferramenta", fmtInt(n(1)), pct(n(1), d.pessoas_ativas) + " das pessoas ativas", "") +
+          tile("Em 2 ferramentas", fmtInt(n(2)), pct(n(2), d.pessoas_ativas) + " das pessoas ativas", "") +
+          tile("Nas 3 ferramentas", fmtInt(n(3)), pct(n(3), d.pessoas_ativas) + " das pessoas ativas", "") +
+        "</div>" +
+        '<div class="ch-ta-cards">' + (d.ferramentas || []).map(function (t) {
+          var ass = t.assinatura_ativa, vit = t.vitalicios, tot = t.ativos, w = tot ? ass / tot * 100 : 0;
+          return '<div class="ch-ta-card"><div class="ch-ta-h"><b>' + esc(SW[t.tool] || t.name) + '</b><span class="muted">' + fmtInt(t.clientes) + " já tiveram acesso</span></div>" +
+            '<div class="ch-ta-big"><strong class="num">' + fmtInt(tot) + "</strong><span>clientes ativos (e-mail único)</span></div>" +
+            '<div class="ch-ta-split" role="img" aria-label="Assinatura ' + fmtInt(ass) + ", vitalício " + fmtInt(vit) + '"><i style="width:' + w.toFixed(1) + '%"></i><i class="vit" style="width:' + (100 - w).toFixed(1) + '%"></i></div>' +
+            '<div class="ch-ta-leg"><span><i></i>Assinatura ' + fmtInt(ass) + '</span><span><i class="vit"></i>Vitalício ' + fmtInt(vit) + "</span></div>" +
+            '<div class="ch-ta-rows">' +
+              taRow("Assinatura em dia", ass, tot) +
+              taRow("Vitalício", vit, tot, "Compraram o combo vitalício (nunca vence).") +
+              taRow("↳ migraram da assinatura", t.migraram, tot, "Tinham plano mensal, semestral ou anual e passaram para o vitalício. Contam uma vez só.", "sub") +
+              taRow("↳ entraram já no vitalício", t.vitalicio_novos, tot, "Primeiro acesso à ferramenta veio pelo combo vitalício.", "sub") +
+              taRow("Renovaram (2+ pagamentos)", t.renovaram, ass, "Assinantes em dia que já pagaram mais de uma vez. % sobre a assinatura em dia.") +
+              taRow("Vencem em 30 dias", t.vence_30, ass, "Assinatura em dia que vence nos próximos 30 dias. % sobre a assinatura em dia.", "warn") +
+              taRow("Em carência", t.carencia, t.clientes, "Venceu há até 15 dias. % sobre todos que já tiveram acesso.", "warn") +
+              taRow("Cancelaram", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar. % sobre todos que já tiveram acesso.", "neg") +
+            "</div></div>";
+        }).join("") + "</div>" +
+        '<p class="muted ch-stu-note">' + (k === "todas"
+          ? "Juntando Kiwify, TMB e Hotmart: cada e-mail conta uma vez por ferramenta. Quem tinha assinatura e comprou o combo vitalício aparece como vitalício e em “migraram”."
+          : "Só os acessos que vieram de compras na " + esc(TA_PLAT.filter(function (p) { return p[0] === k; })[0][1]) + ". Assinaturas das ferramentas são vendidas na Kiwify; na TMB e na Hotmart o acesso vem do combo vitalício.") + "</p>";
+    }
+    return '<section class="panel ch-sec ch-ta" id="ch-ta"><div class="panel-head"><h3>Clientes ativos por ferramenta</h3>' +
+      '<div class="ch-stu-tabs" role="group" aria-label="Plataforma">' + tabs + "</div></div>" + body + "</section>";
+  }
+  function renderToolAccess() {
+    var el = $("ch-ta");
+    if (!el) return;
+    var tmp = document.createElement("div");
+    tmp.innerHTML = toolAccessSec();
+    el.replaceWith(tmp.firstChild);
+  }
+  async function toolAccessPlat(plat) {
+    S.ta.plat = plat;
+    safeSet("flow_ch_tool_access", plat);
+    renderToolAccess();
+    if (S.ta.data[plat]) return;
+    var seq = ++S.ta.seq;
+    await loadToolAccess(plat);
+    if (seq === S.ta.seq) renderToolAccess();
+  }
+
   /* ---------------- Alunos por plataforma ---------------- */
-  // Kiwify (cursos, comunidade e combos; as ferramentas já estão acima), TMB (boleto parcelado) e Hotmart
-  // (vendas como produtora). Cada plataforma tem o seu seletor de produtos: os cards e a tabela mostram só
-  // os produtos escolhidos (nenhum marcado = todos). A escolha fica guardada neste navegador.
+  // Todas (as três juntas, aluno contado uma vez por e-mail), Kiwify (todos os produtos, ferramentas
+  // inclusive), TMB (boleto parcelado) e Hotmart (vendas como produtora). Cada aba tem o seu seletor de
+  // produtos: os cards e a tabela mostram só os escolhidos (nenhum marcado = todos), guardado neste navegador.
   var STU = {
+    todas: { label: "Todas", rpc: "students_all_summary", num: false },
     kiwify: { label: "Kiwify", rpc: "kiwify_students_summary", num: false },
     tmb: { label: "TMB", rpc: "tmb_summary", num: true },
     hotmart: { label: "Hotmart", rpc: "hotmart_summary", num: true }
   };
   var STU_KEY = "flow_ch_students";
-  S.stu = { plat: "kiwify", sel: { kiwify: null, tmb: null, hotmart: null }, data: {}, open: false, q: "", seq: 0 };
+  S.stu = { plat: "todas", sel: { todas: null, kiwify: null, tmb: null, hotmart: null }, data: {}, open: false, q: "", seq: 0 };
   try {
     var savedStu = JSON.parse(safeGet(STU_KEY) || "null");
     if (savedStu && STU[savedStu.plat]) S.stu.plat = savedStu.plat;
@@ -370,6 +444,18 @@
   function stuTiles(k, d) {
     var fin = d.financeiro || {}, f = function (x) { return Number(fin[x]) || 0; };
     var flow = tile("Também clientes Flow", fmtInt(d.tambem_flow), pct(d.tambem_flow, d.alunos) + " dos alunos", "", "Alunos com o mesmo e-mail de um cliente dos softwares Flow.");
+    if (k === "todas") {
+      var pp = d.por_plataforma || {};
+      return [
+        tile("Alunos", fmtInt(d.alunos), "e-mails únicos nas 3 plataformas", "", "Kiwify " + fmtInt(pp.Kiwify || 0) + " · TMB " + fmtInt(pp.TMB || 0) + " · Hotmart " + fmtInt(pp.Hotmart || 0) + " (quem comprou em mais de uma conta uma vez só)."),
+        tile("Vendas", fmtInt(d.vendas), "pagas, efetivadas ou aprovadas", ""),
+        moneyTile("Valor vendido", d.valor, "soma das 3 plataformas", "Kiwify: líquido. TMB: valor total do pedido. Hotmart: preço em reais."),
+        tile("Ticket médio", esc(brlShort(d.ticket_medio)), "por venda", ""),
+        tile("Em 2+ plataformas", fmtInt(d.multi_plataforma), pct(d.multi_plataforma, d.alunos) + " dos alunos", "", "Mesmo e-mail com compra em mais de uma plataforma."),
+        tile("Devoluções", fmtInt(d.devolvidas), "reembolso, chargeback ou cancelamento", ""),
+        flow
+      ];
+    }
     if (k === "tmb") return [
       tile("Alunos", fmtInt(d.alunos), "e-mails com pedido efetivado", ""),
       tile("Pedidos efetivados", fmtInt(d.efetivados), fmtInt(d.cancelados) + " cancelados", ""),
@@ -415,7 +501,7 @@
         '<div class="ch-stu-list">' + prods.map(function (p) {
           var n = p.efetivados != null ? p.efetivados : p.vendas;
           return '<label data-name="' + esc(String(p.nome || "").toLowerCase()) + '"' + (q && String(p.nome || "").toLowerCase().indexOf(q) < 0 ? " hidden" : "") + '><input type="checkbox" data-stu-prod value="' + esc(p.id) + '"' + (on[p.id] ? " checked" : "") + '>' +
-            '<span class="ch-stu-name">' + esc(p.nome) + '</span><span class="ch-stu-n num">' + fmtInt(n || 0) + "</span></label>";
+            '<span class="ch-stu-name">' + esc(p.nome) + (p.plataforma ? ' <em class="ch-stu-plat">' + esc(p.plataforma) + "</em>" : "") + '</span><span class="ch-stu-n num">' + fmtInt(n || 0) + "</span></label>";
         }).join("") + "</div>" +
         '<p class="muted ch-stu-hint">Nenhum marcado = todos. Os números acima mudam na hora.</p>' +
       "</div></div>";
@@ -432,9 +518,9 @@
       head = "<th>Produto</th><th>Libera</th><th>Efetivados</th><th>Cancelados</th><th>Alunos</th><th>Valor vendido</th><th>Inadimplentes</th><th>Último pedido</th>";
       row = function (p) { return '<td class="ch-stu-prod">' + esc(p.nome) + "</td><td>" + tools(p) + '</td><td class="num">' + fmtInt(p.efetivados) + '</td><td class="num">' + fmtInt(p.cancelados) + '</td><td class="num">' + fmtInt(p.alunos) + '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td>"; };
     } else {
-      var money = k === "kiwify" ? "Valor líquido" : "Valor (R$)";
-      head = "<th>Produto</th>" + (k === "hotmart" ? "<th>Libera</th>" : "") + "<th>Vendas</th><th>Alunos</th><th>" + money + "</th><th>Reembolsos</th><th>Última venda</th>";
-      row = function (p) { return '<td class="ch-stu-prod">' + esc(p.nome) + "</td>" + (k === "hotmart" ? "<td>" + tools(p) + "</td>" : "") + '<td class="num">' + fmtInt(p.vendas) + '</td><td class="num">' + fmtInt(p.alunos) + '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.reembolsos) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td>"; };
+      var money = k === "kiwify" ? "Valor líquido" : k === "todas" ? "Valor" : "Valor (R$)";
+      head = "<th>Produto</th>" + (k === "todas" ? '<th class="l">Plataforma</th>' : "") + (k === "hotmart" ? "<th>Libera</th>" : "") + "<th>Vendas</th><th>Alunos</th><th>" + money + "</th><th>" + (k === "todas" ? "Devoluções" : "Reembolsos") + "</th><th>Última venda</th>";
+      row = function (p) { return '<td class="ch-stu-prod">' + esc(p.nome) + "</td>" + (k === "todas" ? '<td class="l">' + esc(p.plataforma) + "</td>" : "") + (k === "hotmart" ? "<td>" + tools(p) + "</td>" : "") + '<td class="num">' + fmtInt(p.vendas) + '</td><td class="num">' + fmtInt(p.alunos) + '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.reembolsos) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td>"; };
     }
     var cols = (head.match(/<th>/g) || []).length;
     return '<div class="table-scroll"><table class="health-table ch-stu-table"><thead><tr>' + head + "</tr></thead><tbody>" +
@@ -448,14 +534,15 @@
     }).join("");
     var note = "";
     if (d && k === "hotmart" && d.afiliado && d.afiliado.vendas) note = "Fora desta conta: " + fmtInt(d.afiliado.vendas) + " vendas como afiliada, em " + fmtInt(d.afiliado.produtos) + " produtos de terceiros.";
-    if (d && k === "kiwify") note = "Vendas de cursos, comunidade e combos na Kiwify. As ferramentas Flow estão nos cards do topo.";
+    if (d && k === "kiwify") note = "Todos os produtos da Kiwify, ferramentas Flow inclusive (as renovações de assinatura contam como vendas).";
+    if (d && k === "todas") note = "Aluno contado uma vez por e-mail, mesmo comprando em mais de uma plataforma.";
     var since = d && (d.primeira_venda ? "desde " + fmtDate(d.primeira_venda) + " · " : "");
     return '<section class="panel ch-sec ch-stu" id="ch-stu"><div class="panel-head"><h3>Alunos por plataforma</h3>' +
       '<div class="ch-stu-tabs" role="group" aria-label="Plataforma">' + tabs + "</div></div>" +
-      (d ? '<div class="ch-stu-bar">' + stuPicker(k, d) + '<span class="muted ch-stu-meta">' + esc((since || "") + "última leitura " + fmtDateTime(d.ultima_leitura)) + "</span></div>" +
+      (d ? '<div class="ch-stu-bar">' + stuPicker(k, d) + (d.ultima_leitura ? '<span class="muted ch-stu-meta">' + esc((since || "") + "última leitura " + fmtDateTime(d.ultima_leitura)) + "</span>" : "") + "</div>" +
           '<div class="ch-tiles ch-stu-tiles">' + stuTiles(k, d).join("") + "</div>" + stuTable(k, d) +
           (note ? '<p class="muted ch-stu-note">' + esc(note) + "</p>" : "")
-        : '<p class="muted" style="font-size:12.5px">Sem dados de ' + STU[k].label + " ainda.</p>") +
+        : '<p class="muted" style="font-size:12.5px">Carregando ' + STU[k].label + "…</p>") +
       "</section>";
   }
   function renderStudents() {
@@ -479,7 +566,11 @@
   function studentsClick(e) {
     var t = e.target;
     var plat = t.closest("[data-stu-plat]");
-    if (plat) { S.stu.plat = plat.dataset.stuPlat; S.stu.open = false; S.stu.q = ""; stuSave(); renderStudents(); return true; }
+    if (plat) {
+      S.stu.plat = plat.dataset.stuPlat; S.stu.open = false; S.stu.q = ""; stuSave(); renderStudents();
+      if (!S.stu.data[S.stu.plat]) studentsReload(); // cada aba carrega quando é aberta pela primeira vez
+      return true;
+    }
     if (t.closest("[data-stu-open]")) { S.stu.open = !S.stu.open; renderStudents(); return true; }
     var k = S.stu.plat, d = S.stu.data[k];
     if (t.closest("[data-stu-all]")) { S.stu.sel[k] = (d && d.produtos || []).map(function (p) { return p.id; }); studentsReload(); return true; }
@@ -859,6 +950,8 @@
       var bsave = e.target.closest("[data-bundle-save]");
       if (bsave) return saveBundle(bsave.dataset.bundleSave);
       if (studentsClick(e)) return;
+      var ta = e.target.closest("[data-ta-plat]");
+      if (ta) return toolAccessPlat(ta.dataset.taPlat);
       var flt = e.target.closest("[data-flt]");
       if (flt && !flt.disabled) return applyTile(flt.dataset.flt);
       var act = e.target.closest("[data-act]");
