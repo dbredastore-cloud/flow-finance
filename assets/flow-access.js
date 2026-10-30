@@ -9,17 +9,14 @@
 window.FlowAccess = (function () {
   "use strict";
 
-  // Mesmas chaves da migration e da Edge Function team-admin.
+  // Mesmas chaves da migration e da Edge Function team-admin. Uma chave pode ficar em outro painel que
+  // não o do prefixo (ex.: fin.hours está no Biancode, fin.instagram nos Afiliados): o prefixo só nomeia.
   var CATALOG = [
     { page: "financeiro", label: "Financeiro", href: "../financeiro/", menus: [
       ["fin.financeiro", "Home e ferramentas"],
+      ["fin.avisos", "Avisos (alertas e resumo da IA)"],
       ["fin.health", "Flow Health"],
-      ["fin.clients", "Saúde dos clientes"],
-      ["fin.hours", "Horas de dev."],
-      ["fin.trello", "Cards Trello"],
-      ["fin.instagram", "Instagram (@useaflow, pautas e radar)"],
-      ["fin.ideias", "Ideias dos usuários (aba do @useaflow)"],
-      ["fin.avisos", "Avisos (alertas e resumo da IA)"]
+      ["fin.clients", "Saúde dos clientes"]
     ] },
     { page: "afiliados", label: "Afiliados", href: "../afiliados/", menus: [
       ["af.overview", "Visão geral"],
@@ -28,7 +25,13 @@ window.FlowAccess = (function () {
       ["af.products", "Produtos"],
       ["af.youtube", "YouTube"],
       ["af.mercado", "Rastrear Mercado"],
-      ["af.favoritos", "Canais favoritos"]
+      ["af.favoritos", "Canais favoritos"],
+      ["fin.instagram", "Instagram (@useaflow, pautas e radar)"],
+      ["fin.ideias", "Ideias dos usuários (aba do @useaflow)"]
+    ] },
+    { page: "biancode", label: "Biancode", href: "../biancode/", menus: [
+      ["fin.hours", "Horas de dev."],
+      ["fin.trello", "Cards Trello"]
     ] }
   ];
 

@@ -309,6 +309,10 @@
 <link rel="stylesheet" href="../assets/influencer-dash.css">
 <link rel="stylesheet" href="../assets/yt-favorites.css">
 <link rel="stylesheet" href="../assets/ai-insights.css">
+<link rel="stylesheet" href="../assets/instagram-hub.css">
+<link rel="stylesheet" href="../assets/instagram-perf.css">
+<link rel="stylesheet" href="../assets/ig-radar.css">
+<link rel="stylesheet" href="../assets/user-ideas.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -320,6 +324,11 @@
 <script src="../assets/influencer-dash.js"></script>
 <script src="../assets/yt-favorites.js"></script>
 <script src="../assets/ai-insights.js"></script>
+<script src="../assets/instagram-perf.js"></script>
+<script src="../assets/instagram-hub.js"></script>
+<script src="../assets/ig-radar.js"></script>
+<script src="../assets/user-ideas.js"></script>
+<script src="../assets/useaflow.js"></script>
 </head>
 <body>
 
@@ -365,9 +374,14 @@
       <button class="nav-btn fnav-item" data-view="youtube" data-menu="af.youtube"><i data-ic="play"></i><span>YouTube</span></button>
       <button class="nav-btn fnav-item" data-view="mercado" data-menu="af.mercado"><i data-ic="radar"></i><span>Rastrear Mercado</span></button>
       <button class="nav-btn fnav-item" data-view="favoritos" data-menu="af.favoritos"><i data-ic="heart"></i><span>Canais favoritos</span></button>
+      <div class="fnav-group">Instagram</div>
+      <button class="nav-btn fnav-item" data-view="useaflow" data-menu-any="fin.instagram,fin.ideias"><i data-ic="camera"></i><span>@useaflow</span></button>
+      <button class="nav-btn fnav-item" data-view="instagram" data-menu="fin.instagram"><i data-ic="play"></i><span>Pautas Instagram</span></button>
+      <button class="nav-btn fnav-item" data-view="radar" data-menu="fin.instagram"><i data-ic="radar"></i><span>Radar Instagram</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item" href="../biancode/" data-page="biancode"><i data-ic="code"></i><span>Biancode</span></a>
       <a class="fnav-item" href="../equipe/" data-admin-only><i data-ic="shield"></i><span>Equipe</span></a>
     </nav>
     <div class="sidebar-foot fnav-foot">
@@ -526,6 +540,11 @@
 
     <!-- Canais favoritos (assets/yt-favorites.js) -->
     <section id="view-favoritos" hidden></section>
+
+    <!-- Instagram (vieram do Financeiro): @useaflow (assets/useaflow.js), Pautas (instagram-hub.js) e Radar (ig-radar.js) -->
+    <section id="view-useaflow" hidden></section>
+    <section id="view-instagram" hidden></section>
+    <section id="view-radar" hidden></section>
   </main>
 </div>
 
@@ -1962,28 +1981,46 @@
   });
 
   /* ---------------- Navegação e filtros ---------------- */
-  var VIEW_TITLES = { overview: "Visão geral", base: "Afiliados", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado", favoritos: "Canais favoritos" };
+  var VIEW_TITLES = { overview: "Visão geral", base: "Afiliados", flowinf: "Influencers Flow", products: "Produtos", youtube: "YouTube", mercado: "Rastrear Mercado", favoritos: "Canais favoritos",
+    useaflow: "@useaflow", instagram: "Pautas Instagram", radar: "Radar Instagram" };
+  // Telas do Instagram: usam os menus fin.* de antes (mesmas permissões no banco); o @useaflow abre com
+  // Instagram ou Ideias. As outras telas usam "af." + nome. INSIGHT_KEY = chave dos Insights da IA.
+  var IG_MENU = { useaflow: "fin.instagram,fin.ideias", instagram: "fin.instagram", radar: "fin.instagram" };
+  var INSIGHT_KEY = { useaflow: "fin.useaflow", instagram: "fin.instagram", radar: "fin.radar" };
+  function canViewKey(k) { return (IG_MENU[k] || "af." + k).split(",").some(function (m) { return window.FlowAccess.can(m); }); }
+  function hasAffiliateMenus() { return Object.keys(VIEW_TITLES).some(function (k) { return !IG_MENU[k] && canViewKey(k); }); }
   // Acesso por menu: tela que a pessoa não pode ver cai na primeira liberada.
   function allowedView(v) {
-    if (v && window.FlowAccess.can("af." + v)) return v;
-    return Object.keys(VIEW_TITLES).filter(function (k) { return window.FlowAccess.can("af." + k); })[0] || "overview";
+    if (v && VIEW_TITLES[v] && canViewKey(v)) return v;
+    return Object.keys(VIEW_TITLES).filter(canViewKey)[0] || "overview";
   }
   function setView(v) {
     v = allowedView(v);
     state.view = v;
     safeSet("flow_aff_view", v);
     Object.keys(VIEW_TITLES).forEach(function (k) { $("view-" + k).hidden = k !== v; });
-    $("filters").hidden = v === "flowinf" || v === "mercado" || v === "favoritos"; // contratos, radar e favoritos não usam o período/produtos do topo
+    $("filters").hidden = v === "flowinf" || v === "mercado" || v === "favoritos" || !!IG_MENU[v]; // contratos, radar, favoritos e Instagram não usam o período/produtos do topo
+    document.querySelector(".sync-box").hidden = !!IG_MENU[v]; // a sincronização é das vendas e afiliados
     window.MarketRadar.hide();
+    if (v !== "instagram") window.InstagramHub.hide();
+    if (v !== "useaflow") window.Useaflow.hide();
+    if (v !== "radar") window.IgRadar.hide();
     document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) { b.classList.toggle("active", b.dataset.view === v); });
     $("view-title").textContent = VIEW_TITLES[v];
-    AiInsights.show("af." + v); // Insights da IA da tela (menu_insights)
-    if (state.filtered) renderView(v);
+    AiInsights.show(INSIGHT_KEY[v] || "af." + v); // Insights da IA da tela (menu_insights)
+    // As telas do Instagram não dependem das vendas: abrem mesmo antes (ou sem) os dados dos afiliados.
+    if (v === "instagram") window.InstagramHub.show();
+    else if (v === "useaflow") window.Useaflow.show();
+    else if (v === "radar") window.IgRadar.show();
+    else if (state.filtered) renderView(v);
   }
   document.querySelectorAll(".nav-btn[data-view]").forEach(function (b) {
     b.addEventListener("click", function () { setView(b.dataset.view); });
   });
   AiInsights.init({ root: $("ai-insights"), sb: sb });
+  window.InstagramHub.init({ root: $("view-instagram"), sb: sb, toast: toast, url: SUPABASE_URL });
+  window.IgRadar.init({ root: $("view-radar"), sb: sb, toast: toast, url: SUPABASE_URL });
+  window.Useaflow.init({ root: $("view-useaflow"), sb: sb, toast: toast, url: SUPABASE_URL });
   window.MarketRadar.init({
     root: $("view-mercado"),
     sb: sb,
@@ -2099,6 +2136,10 @@
     if (!window.FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
     if (!window.FlowAccess.canPage("afiliados")) { location.replace(window.FlowAccess.firstHref() || "../financeiro/"); return; }
     window.FlowAccess.apply();
+    var hashView = location.hash.slice(1);
+    if (IG_MENU[hashView]) { safeSet("flow_aff_view", hashView); history.replaceState(null, "", location.pathname); }
+    // Só com os menus do Instagram: abre direto, sem carregar vendas e afiliados (o banco não liberaria).
+    if (!hasAffiliateMenus()) { showOnly("app"); setView(safeGet("flow_aff_view")); return; }
     // Canais favoritos: lê as estrelas já com o perfil de acesso carregado.
     window.YtFavorites.init({ root: $("view-favoritos"), sb: sb, toast: toast, dash: InfluencerDash, channelUrl: channelUrl });
     try { state.yt.widths = ytCleanWidths(JSON.parse(safeGet("flow_aff_ytw"))); } catch (e) { state.yt.widths = {}; }

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="referrer" content="no-referrer">
+<title>Flow Biancode</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/fin-page.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://jagmnogcpxeujtsrrotd.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/flow-theme.css">
+<link rel="stylesheet" href="../assets/flow-hud.css">
+<link rel="stylesheet" href="../assets/flow-nav.css">
+<link rel="stylesheet" href="../assets/dev-hours.css">
+<link rel="stylesheet" href="../assets/trello-cards.css">
+<link rel="stylesheet" href="../assets/ai-insights.css">
+<script src="../assets/flow-theme.js"></script>
+<script src="../assets/flow-hud.js"></script>
+<script src="../assets/flow-nav.js"></script>
+<script src="../assets/flow-access.js"></script>
+<script src="../assets/dev-hours.js"></script>
+<script src="../assets/trello-cards.js"></script>
+<script src="../assets/ai-insights.js"></script>
+<link rel="prefetch" href="../financeiro/">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/secure-login.js"></script>
+</head>
+<body>
+
+<div id="status-screen" style="display:none;">
+  <div class="login-card">
+    <h1 id="status-title">Carregando…</h1>
+    <p class="sub" id="status-text">Conectando ao painel.</p>
+    <button type="button" class="btn btn-primary" id="status-retry" style="display:none;">Tentar de novo</button>
+  </div>
+</div>
+
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <h1>Flow Biancode</h1>
+    <p class="sub">Entre com a mesma conta do painel.</p>
+    <form id="login-form">
+      <div class="field">
+        <label for="login-email">E-mail</label>
+        <input id="login-email" type="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Senha</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-submit">Entrar</button>
+      <div style="text-align:center; margin-top:12px;">
+        <button type="button" class="link-btn" id="reset-link">Esqueci minha senha</button>
+      </div>
+      <div id="login-msg"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app">
+  <aside class="sidebar fnav">
+    <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Biancode</small></div></div>
+    <nav class="fnav-menu" aria-label="Menu">
+      <div class="fnav-group">Biancode</div>
+      <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
+      <button class="fnav-item" id="trello-btn" type="button" data-menu="fin.trello"><i data-ic="grid"></i><span>Cards Trello</span></button>
+      <div class="fnav-group">Painéis Flow</div>
+      <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
+      <a class="fnav-item" href="../afiliados/" data-page="afiliados"><i data-ic="chart"></i><span>Afiliados</span></a>
+      <a class="fnav-item" href="./" aria-current="page"><i data-ic="code"></i><span>Biancode</span></a>
+      <a class="fnav-item" href="../equipe/" data-admin-only><i data-ic="shield"></i><span>Equipe</span></a>
+    </nav>
+    <div class="sidebar-foot fnav-foot">
+      <div class="fnav-user"><span class="fnav-avatar" id="user-avatar">·</span><span class="fnav-email note" id="user-email"></span></div>
+      <button class="fnav-item fnav-logout" id="logout-btn" type="button"><i data-ic="logout"></i><span>Sair</span></button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h2 id="tool-title">—</h2>
+    </div>
+    <div id="ai-insights" class="aii" hidden aria-label="Insights da IA"></div>
+    <div id="hours-view" hidden></div>
+    <div id="trello-view" hidden></div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* Painel Biancode: o que a Biancode (parceira de desenvolvimento) entrega e cobra em horas.
+   Telas: Horas de dev. (DevHours, menu fin.hours) e Cards Trello (TrelloCards, menu fin.trello).
+   As chaves de menu continuam fin.* porque são as mesmas do banco (permissões e regras de leitura). */
+(function () {
+  "use strict";
+  var SUPABASE_URL = "https://jagmnogcpxeujtsrrotd.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var VIEWS = {
+    hours: { menu: "fin.hours", title: "Horas de desenvolvimento", btn: "hours-btn", root: "hours-view" },
+    trello: { menu: "fin.trello", title: "Cards Trello", btn: "trello-btn", root: "trello-view" }
+  };
+  var state = { view: null };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function toast(msg, isError) {
+    var el = $("toast");
+    el.textContent = msg;
+    el.style.background = isError ? "var(--critical)" : "var(--accent)";
+    el.style.color = isError ? "var(--on-critical)" : "var(--accent-ink)";
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove("show"); }, 2600);
+  }
+  function safeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function safeSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+
+  /* ---------------- login ---------------- */
+  function showOnly(id) {
+    ["status-screen", "login-screen"].forEach(function (s) { $(s).style.display = s === id ? "flex" : "none"; });
+    $("app").classList.toggle("active", id === "app"); // #app aparece com .active (fin-page.css)
+  }
+  function showStatus(title, text, retry) {
+    $("status-title").textContent = title; $("status-text").textContent = text;
+    $("status-retry").style.display = retry ? "inline-flex" : "none";
+    showOnly("status-screen");
+  }
+  $("status-retry").addEventListener("click", function () { boot(); });
+  $("login-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var btn = $("login-submit"), msg = $("login-msg");
+    msg.innerHTML = ""; btn.disabled = true; btn.textContent = "Entrando…";
+    var res = await window.flowSecureLogin(sb, SUPABASE_URL, SUPABASE_ANON_KEY, $("login-email").value.trim(), $("login-password").value);
+    btn.disabled = false; btn.textContent = "Entrar";
+    if (res.error) { msg.innerHTML = '<div class="msg error">' + esc(res.error.message === "Invalid login credentials" || res.error.message === "E-mail ou senha incorretos." ? "Credenciais incorretas: o e-mail ou a senha foram digitados errado. Confira e tente de novo." : res.error.message) + "</div>"; return; }
+    boot();
+  });
+  $("logout-btn").addEventListener("click", async function () { await sb.auth.signOut(); showOnly("login-screen"); });
+  // "Esqueci minha senha": a tela de nova senha fica no Financeiro.
+  $("reset-link").addEventListener("click", async function () {
+    var email = $("login-email").value.trim(), msg = $("login-msg"), btn = this;
+    if (!email) { msg.innerHTML = '<div class="msg error">Digite seu e-mail acima primeiro.</div>'; return; }
+    btn.disabled = true; msg.innerHTML = '<div class="msg">Enviando o link…</div>';
+    var r = await window.flowRecoverPassword(sb, SUPABASE_URL, SUPABASE_ANON_KEY, email, window.location.origin + "/financeiro/");
+    btn.disabled = false; msg.innerHTML = r.message;
+  });
+  sb.auth.onAuthStateChange(function (ev) { if (ev === "SIGNED_OUT") showOnly("login-screen"); });
+
+  /* ---------------- telas ---------------- */
+  DevHours.init({ root: $("hours-view"), sb: sb, toast: toast });
+  TrelloCards.init({ root: $("trello-view"), sb: sb, toast: toast });
+  AiInsights.init({ root: $("ai-insights"), sb: sb });
+
+  function canView(v) { return !!VIEWS[v] && FlowAccess.can(VIEWS[v].menu); }
+  async function setView(v) {
+    if (!canView(v)) v = Object.keys(VIEWS).filter(canView)[0];
+    state.view = v;
+    safeSet("flow_bc_view", v);
+    Object.keys(VIEWS).forEach(function (k) {
+      $(VIEWS[k].root).hidden = k !== v;
+      $(VIEWS[k].btn).classList.toggle("active", k === v);
+    });
+    $("tool-title").textContent = VIEWS[v].title;
+    AiInsights.show(VIEWS[v].menu); // Insights da IA da tela (menu_insights)
+    if (v === "hours") await DevHours.show();
+    else await TrelloCards.show();
+  }
+  $("hours-btn").addEventListener("click", function () { setView("hours"); });
+  $("trello-btn").addEventListener("click", function () { setView("trello"); });
+  // Troca de modo claro/escuro: o gráfico das horas lê as cores ao desenhar.
+  window.addEventListener("flow-theme-change", function () { if (state.view === "hours") DevHours.redraw(); });
+
+  async function boot() {
+    showStatus("Carregando…", "Verificando sua sessão.", false);
+    var s = await sb.auth.getSession();
+    var session = s.data && s.data.session;
+    if (!session) { showOnly("login-screen"); return; }
+    $("user-email").textContent = session.user.email;
+    try { await FlowAccess.load(sb, session.user.id); } catch (e) {
+      showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
+      return;
+    }
+    if (!FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
+    if (!FlowAccess.canPage("biancode")) { location.replace(FlowAccess.firstHref() || "../financeiro/"); return; }
+    FlowAccess.apply();
+    showOnly("app");
+    await setView(safeGet("flow_bc_view") || "hours");
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
