@@ -56,11 +56,12 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary")]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary"), A.sb.rpc("hotmart_summary")]);
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
     S.tmb = r[2].error || !r[2].data || !r[2].data.pedidos ? null : r[2].data; // alunos da TMB (boleto parcelado)
+    S.hotmart = r[3].error || !r[3].data || !r[3].data.ultima_leitura ? null : r[3].data; // vendas da Hotmart
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -249,7 +250,7 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + mixSec() + (s.software === "all" ? tmbSec() : "") + usoSec + venc;
+    el.innerHTML = assSec + mixSec() + (s.software === "all" ? tmbSec() + hotmartSec() : "") + usoSec + venc;
     drawExpiry(s.vencimentos || {});
   }
 
@@ -302,6 +303,34 @@
           '</td><td class="num">' + fmtInt(p.efetivados || 0) + '</td><td class="num">' + fmtInt(p.cancelados || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) +
           '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
       }).join("") || '<tr><td colspan="8" class="empty">Sem pedidos.</td></tr>') + "</tbody></table></div></section>";
+  }
+
+  // Alunos da Hotmart: vendas como produtora (cursos, comunidade, combos). As vendas como afiliada de
+  // produtos de terceiros ficam só na contagem do rodapé.
+  function hotmartSec() {
+    var h = S.hotmart;
+    if (!h) return "";
+    var prods = h.produtos || [];
+    var toolName = { flowpages: "Flow Pages", flowtracking: "Flow Tracking", flowspy: "Flow Spy" };
+    var af = h.afiliado || {};
+    return '<section class="panel ch-sec"><div class="panel-head"><h3>Alunos da Hotmart</h3>' +
+      '<span class="muted" style="font-size:12px">Vendas como produtora desde ' + esc(fmtDate(h.primeira_venda)) + " · última leitura " + esc(fmtDateTime(h.ultima_leitura)) + "</span></div>" +
+      '<div class="ch-tiles">' +
+        tile("Alunos", fmtInt(h.alunos), "e-mails com compra aprovada", "") +
+        tile("Vendas aprovadas", fmtInt(h.vendas), fmtInt(h.assinaturas) + " de assinatura", "") +
+        tile("Valor em reais", fmtBRL(h.valor_brl), h.vendas_outras_moedas ? fmtInt(h.vendas_outras_moedas) + " vendas em outras moedas fora da soma" : "preço das vendas aprovadas", "", "Soma do preço das vendas aprovadas em BRL. A comissão líquida não vem nesse relatório da Hotmart.") +
+        tile("Reembolsos", fmtInt(h.reembolsos), pct(h.reembolsos, h.vendas + h.reembolsos) + " das vendas", "") +
+        tile("Chargebacks", fmtInt(h.chargebacks), "", "") +
+        tile("Também clientes Flow", fmtInt(h.tambem_flow), pct(h.tambem_flow, h.alunos) + " dos alunos", "", "Alunos da Hotmart com o mesmo e-mail de um cliente dos softwares na Kiwify.") +
+      "</div>" +
+      '<div class="table-scroll"><table class="health-table"><thead><tr><th>Produto</th><th>Libera</th><th>Vendas</th><th>Alunos</th><th>Valor (R$)</th><th>Reembolsos</th><th>Última venda</th></tr></thead><tbody>' +
+      (prods.map(function (p) {
+        return "<tr><td>" + esc(p.nome) + "</td><td>" + esc((p.ferramentas || []).map(function (k) { return toolName[k] || k; }).join(", ") || "—") +
+          '</td><td class="num">' + fmtInt(p.vendas || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) + '</td><td class="num">' + fmtBRL(p.valor_brl || 0) +
+          '</td><td class="num">' + fmtInt(p.reembolsos || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
+      }).join("") || '<tr><td colspan="7" class="empty">Sem vendas.</td></tr>') + "</tbody></table></div>" +
+      (af.vendas ? '<p class="muted" style="font-size:12px;margin-top:8px">Fora desta conta de alunos: ' + fmtInt(af.vendas) + " vendas como afiliada, em " + fmtInt(af.produtos) + " produtos de terceiros.</p>" : "") +
+      "</section>";
   }
 
   function drawExpiry(venc) {
@@ -394,10 +423,11 @@
     var dr = $("ch-drawer");
     dr.innerHTML = '<p class="muted" style="padding:20px">Carregando…</p>';
     dr.classList.add("on"); $("ch-scrim").classList.add("on"); dr.setAttribute("aria-hidden", "false");
-    var rs = await Promise.all([A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams())), A.sb.rpc("tmb_customer", { p_email: email })]);
+    var rs = await Promise.all([A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams())), A.sb.rpc("tmb_customer", { p_email: email }), A.sb.rpc("hotmart_customer", { p_email: email })]);
     var r = rs[0];
     if (r.error) { dr.innerHTML = '<p class="muted" style="padding:20px">Erro: ' + esc(r.error.message) + "</p>"; return; }
     r.data.tmb = rs[1].error ? [] : rs[1].data || [];
+    r.data.hotmart = rs[2].error ? [] : rs[2].data || [];
     renderCustomer(r.data);
   }
   function closeDrawer() {
@@ -440,6 +470,12 @@
       ((c.tmb || []).length ? '<h4 class="ch-d-h">Compras na TMB</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Produto</th><th>Pedido</th><th>Financeiro</th><th>Parcelas</th><th>Valor</th></tr></thead><tbody>' +
         c.tmb.map(function (x) {
           return "<tr><td>" + fmtDate(x.data) + "</td><td>" + esc(x.produto) + "</td><td>" + esc(x.status) + "</td><td>" + esc(x.financeiro || "—") + '</td><td class="num">' + (x.parcelas ? fmtInt(x.parcelas) + "x " + fmtBRL(x.parcela) : "—") + '</td><td class="num">' + fmtBRL(x.valor) + "</td></tr>";
+        }).join("") + "</tbody></table></div>" : "") +
+      ((c.hotmart || []).length ? '<h4 class="ch-d-h">Compras na Hotmart</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Produto</th><th>Status</th><th>Pagamento</th><th>Valor</th></tr></thead><tbody>' +
+        c.hotmart.map(function (x) {
+          var val = x.moeda && x.moeda !== "BRL" ? Number(x.valor).toLocaleString("pt-BR") + " " + esc(x.moeda) : fmtBRL(x.valor);
+          return "<tr><td>" + fmtDate(x.data) + "</td><td>" + esc(x.produto) + (x.como === "AFFILIATE" ? ' <span class="muted">(como afiliada)</span>' : "") + "</td><td>" + esc(x.status) + "</td><td>" +
+            esc(x.pagamento || "—") + (x.parcelas > 1 ? " " + fmtInt(x.parcelas) + "x" : "") + (x.assinatura ? " · recorrência " + fmtInt(x.recorrencia) : "") + '</td><td class="num">' + val + "</td></tr>";
         }).join("") + "</tbody></table></div>" : "");
   }
 
