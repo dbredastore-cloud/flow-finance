@@ -166,7 +166,7 @@ async function processMonth(p: { id: string; name: string; tool_id: string }, m:
   const agg = aggregate(fresh);
   let alert = false;
 
-  if (hasBase && closed) {
+  if (hasBase && closed && p.tool_id) { // combo sem ferramenta: sem aviso (não mexe no financeiro)
     const old = await readSnapshot(p.id, m);
     const oldById = new Map(old.map((s) => [s.id, s]));
     const freshIds = new Set(fresh.map((s) => s.id));
@@ -241,8 +241,16 @@ Deno.serve(async (req) => {
   const deadline = started + TIME_BUDGET_MS;
   let result: Record<string, unknown>;
   try {
-    const { data: products, error } = await sb.from("kiwify_products").select("id, name, tool_id").not("tool_id", "is", null);
+    const { data: toolProducts, error } = await sb.from("kiwify_products").select("id, name, tool_id").not("tool_id", "is", null);
     if (error) throw error;
+    // Produtos de combo (bundle_products) também são lidos, para o rateio; sem tool_id, ficam fora do financeiro.
+    const { data: bundleRefs, error: bErr } = await sb.from("bundle_products").select("product_id").eq("platform", "kiwify");
+    if (bErr) throw bErr;
+    const bundleIds = (bundleRefs ?? []).map((b) => b.product_id).filter((id) => !(toolProducts ?? []).some((p) => p.id === id));
+    const { data: bundleProducts } = bundleIds.length
+      ? await sb.from("kiwify_products").select("id, name, tool_id").in("id", bundleIds)
+      : { data: [] as { id: string; name: string; tool_id: string }[] };
+    const products = [...(toolProducts ?? []), ...(bundleProducts ?? [])];
     const { data: have } = await sb.from("kiwify_monthly_product").select("product_id, year, month, synced_at, snapshot_at");
     const info = new Map((have ?? []).map((r) => [ymKey(r.product_id, r), r]));
 

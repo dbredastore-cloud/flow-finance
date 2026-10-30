@@ -56,12 +56,13 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary"), A.sb.rpc("hotmart_summary")]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary"), A.sb.rpc("hotmart_summary"), A.sb.rpc("bundle_allocation")]);
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
     S.tmb = r[2].error || !r[2].data || !r[2].data.pedidos ? null : r[2].data; // alunos da TMB (boleto parcelado)
     S.hotmart = r[3].error || !r[3].data || !r[3].data.ultima_leitura ? null : r[3].data; // vendas da Hotmart
+    S.bundles = r[4].error ? [] : r[4].data || []; // rateio dos combos por item
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -250,7 +251,7 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + mixSec() + (s.software === "all" ? tmbSec() + hotmartSec() : "") + usoSec + venc;
+    el.innerHTML = assSec + mixSec() + (s.software === "all" ? bundleSec() + tmbSec() + hotmartSec() : "") + usoSec + venc;
     drawExpiry(s.vencimentos || {});
   }
 
@@ -303,6 +304,54 @@
           '</td><td class="num">' + fmtInt(p.efetivados || 0) + '</td><td class="num">' + fmtInt(p.cancelados || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) +
           '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
       }).join("") || '<tr><td colspan="8" class="empty">Sem pedidos.</td></tr>') + "</tbody></table></div></section>";
+  }
+
+  // Rateio dos combos (bundle_allocation): o valor líquido de cada venda do combo é dividido entre os
+  // itens na proporção do preço avulso de referência de cada um (editável aqui).
+  var PLAT = { kiwify: "Kiwify", tmb: "TMB", hotmart: "Hotmart" };
+  function bundleSec() {
+    return (S.bundles || []).map(function (b) {
+      var itens = b.itens || [], plats = b.plataformas || [];
+      var soma = itens.reduce(function (a, i) { return a + Number(i.preco_ref || 0); }, 0);
+      return '<section class="panel ch-sec" data-bundle="' + esc(b.id) + '"><div class="panel-head"><h3>Quanto vale cada item · ' + esc(b.nome) + "</h3>" +
+        '<span class="muted" style="font-size:12px">Rateio pelo preço avulso: o líquido de cada venda é dividido na proporção do preço de referência de cada item.</span></div>' +
+        '<div class="ch-tiles">' +
+          tile("Vendas", fmtInt(b.vendas), plats.map(function (p) { return PLAT[p.plataforma] + " " + fmtInt(p.vendas); }).join(" · ") || "nenhuma ainda", "") +
+          tile("Líquido recebido", fmtBRL(b.liquido), "bruto " + fmtBRL(b.bruto), "", "Kiwify: líquido da venda. TMB: total menos a taxa de administração (estimado). Hotmart: preço menos a taxa da Hotmart, só vendas em reais.") +
+          tile("Ticket líquido", fmtBRL(b.vendas ? b.liquido / b.vendas : null), "por venda", "") +
+        "</div>" +
+        '<div class="table-scroll"><table class="health-table"><thead><tr><th>Item</th><th>Preço avulso de referência (R$)</th><th>Peso</th><th>Por venda</th><th>Total rateado</th></tr></thead><tbody>' +
+        itens.map(function (i) {
+          return "<tr><td>" + esc(i.nome) + '</td><td><input type="number" min="0" step="1" class="ch-bundle-price" data-comp="' + esc(i.componente) + '" value="' + esc(Number(i.preco_ref)) + '" aria-label="Preço de referência de ' + esc(i.nome) + '" style="width:110px"></td>' +
+            '<td class="num">' + pct(Number(i.preco_ref), soma, 1) + '</td><td class="num">' + fmtBRL(i.por_venda) + '</td><td class="num">' + fmtBRL(i.liquido) + "</td></tr>";
+        }).join("") + "</tbody></table></div>" +
+        '<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-bundle-save="' + esc(b.id) + '">Salvar preços de referência</button>' +
+        '<span class="muted" style="font-size:12px">Use a mesma base para todos os itens (ex.: preço do plano anual avulso).</span></div>' +
+        (plats.length ? '<div class="table-scroll" style="margin-top:12px"><table class="health-table"><thead><tr><th>Plataforma</th><th>Vendas</th><th>Bruto</th><th>Líquido</th><th>Primeira</th><th>Última</th></tr></thead><tbody>' +
+          plats.map(function (p) {
+            return "<tr><td>" + esc(PLAT[p.plataforma] || p.plataforma) + '</td><td class="num">' + fmtInt(p.vendas) + '</td><td class="num">' + fmtBRL(p.bruto) + '</td><td class="num">' + fmtBRL(p.liquido) +
+              '</td><td class="num">' + fmtDate(p.primeira) + '</td><td class="num">' + fmtDate(p.ultima) + "</td></tr>";
+          }).join("") + "</tbody></table></div>" : "") +
+        "</section>";
+    }).join("");
+  }
+  async function saveBundle(id) {
+    var sec = document.querySelector('[data-bundle="' + id + '"]');
+    if (!sec) return;
+    var now = new Date().toISOString(), inputs = sec.querySelectorAll(".ch-bundle-price");
+    for (var k = 0; k < inputs.length; k++) {
+      var v = Number(inputs[k].value);
+      if (!isFinite(v) || v < 0) { A.toast("Preço inválido em um dos itens.", true); return; }
+    }
+    for (var j = 0; j < inputs.length; j++) {
+      var r = await A.sb.from("bundle_components").update({ ref_price: Number(inputs[j].value), updated_at: now, updated_by: A.userId ? A.userId() : null })
+        .eq("bundle_id", id).eq("component", inputs[j].dataset.comp);
+      if (r.error) { A.toast("Não foi possível salvar: " + r.error.message, true); return; }
+    }
+    var res = await A.sb.rpc("bundle_allocation");
+    if (!res.error) S.bundles = res.data || [];
+    renderDetail();
+    A.toast("Preços de referência salvos e rateio recalculado.");
   }
 
   // Alunos da Hotmart: vendas como produtora (cursos, comunidade, combos). As vendas como afiliada de
@@ -680,6 +729,8 @@
       if (tab) { S.sw = tab.dataset.tab; S.f.plano = ""; S.page = 0; renderCards(); renderTabs(); renderDetail(); renderFilters(); loadList(); return; }
       var mix = e.target.closest("[data-mix]");
       if (mix) { S.mixMode = mix.dataset.mix; renderDetail(); return; }
+      var bsave = e.target.closest("[data-bundle-save]");
+      if (bsave) return saveBundle(bsave.dataset.bundleSave);
       var flt = e.target.closest("[data-flt]");
       if (flt && !flt.disabled) return applyTile(flt.dataset.flt);
       var act = e.target.closest("[data-act]");
