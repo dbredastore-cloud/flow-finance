@@ -360,8 +360,15 @@
         "</div>" +
         '<div class="ch-ta-cards">' + (d.ferramentas || []).map(function (t) {
           var ass = t.assinatura_ativa, vit = t.vitalicios, tot = t.ativos, w = tot ? ass / tot * 100 : 0;
-          return '<div class="ch-ta-card"><div class="ch-ta-h"><b>' + esc(SW[t.tool] || t.name) + '</b><span class="muted">' + fmtInt(t.clientes) + " já tiveram acesso</span></div>" +
-            '<div class="ch-ta-big"><strong class="num">' + fmtInt(tot) + "</strong><span>clientes ativos (e-mail único)</span></div>" +
+          return '<div class="ch-ta-card"><div class="ch-ta-h"><b>' + esc(SW[t.tool] || t.name) + '</b><span class="muted">' + fmtInt(t.devolveram) + " saíram por reembolso</span></div>" +
+            '<div class="ch-ta-big"><strong class="num">' + fmtInt(tot) + "</strong><span>com acesso hoje (e-mail único)</span></div>" +
+            // Origem: bate com as plataformas (ex.: as vendas da ferramenta na Kiwify são os "assinantes").
+            '<div class="ch-ta-orig" title="Cada e-mail conta uma vez: quem comprou a ferramenta e também o combo aparece só uma vez.">' +
+              "<div><span>Compraram " + esc(SW[t.tool] || t.name) + (k === "todas" || k === "kiwify" ? " (Kiwify)" : "") + '</span><b class="num">' + fmtInt(t.assinantes) + "</b></div>" +
+              '<div><span>Receberam pelo combo vitalício</span><b class="num">+ ' + fmtInt(t.via_combo) + "</b></div>" +
+              '<div><span>Estão nos dois (contam uma vez)</span><b class="num">− ' + fmtInt(t.ambos) + "</b></div>" +
+              '<div class="eq"><span>Já tiveram acesso pago</span><b class="num">= ' + fmtInt(t.assinantes + t.via_combo - t.ambos) + "</b></div>" +
+            "</div>" +
             '<div class="ch-ta-split" role="img" aria-label="Assinatura ' + fmtInt(ass) + ", vitalício " + fmtInt(vit) + '"><i style="width:' + w.toFixed(1) + '%"></i><i class="vit" style="width:' + (100 - w).toFixed(1) + '%"></i></div>' +
             '<div class="ch-ta-leg"><span><i></i>Assinatura ' + fmtInt(ass) + '</span><span><i class="vit"></i>Vitalício ' + fmtInt(vit) + "</span></div>" +
             '<div class="ch-ta-rows">' +

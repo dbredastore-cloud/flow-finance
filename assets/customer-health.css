@@ -242,3 +242,9 @@ body.ch-noscroll { overflow: hidden; }
 .ch-mix-go { width: auto; margin-top: 12px; padding: 7px 14px; }
 .ch-ta-row.tot { border-top: 1px dashed var(--border-strong); margin-top: 2px; padding-top: 6px; }
 .ch-ta-row.tot span { color: var(--text); font-weight: 600; }
+.ch-ta-orig { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px dashed var(--border-strong); font-size: 12px; }
+.ch-ta-orig div { display: flex; justify-content: space-between; gap: 10px; }
+.ch-ta-orig span { color: var(--text-muted); min-width: 0; }
+.ch-ta-orig b { font-weight: 600; white-space: nowrap; }
+.ch-ta-orig .eq { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 4px; }
+.ch-ta-orig .eq span { color: var(--text-dim); }
