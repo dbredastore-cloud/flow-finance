@@ -1,4 +1,5 @@
-// Sincroniza afiliados e vendas com comissão da Kiwify para o Supabase.
+// Sincroniza afiliados e vendas com comissão da Kiwify para o Supabase, e guarda as vendas dos produtos
+// que não são ferramenta (alunos de cursos, comunidade e combos) em kiwify_sales_snapshot.
 //
 // Chamado pelo pg_cron (header x-cron-secret) ou pelo botão "Sincronizar" do
 // painel (JWT de usuário logado). Cada execução trabalha até ~110s: primeiro
@@ -194,14 +195,35 @@ function phoneOf(c: any): string | null {
   return d.length <= 11 ? "55" + d : d;
 }
 
+// Alunos da Kiwify: toda venda de produto que não é ferramenta (cursos, comunidade, combos) vai para
+// kiwify_sales_snapshot, no mesmo formato do kiwify-revenue (que cuida das ferramentas e do financeiro).
+let toolProducts = new Set<string>();
+function snapshotRow(s: any) {
+  const d = new Date(Date.parse(s.created_at) - 3 * 3600_000); // mês no horário de Brasília
+  return {
+    id: s.id, product_id: s.product.id, year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, status: s.status ?? null,
+    net_amount: cents(s.net_amount ?? s.payment?.net_amount), charge_amount: cents(s.payment?.charge_amount),
+    customer_name: s.customer?.name ?? null, customer_email: s.customer?.email ?? null,
+    payment_method: s.payment_method ?? null, sale_created_at: s.created_at ?? null,
+    approved_at: iso(s.approved_date), refunded_at: iso(s.refunded_at), kiwify_updated_at: iso(s.updated_at),
+    synced_at: new Date().toISOString(),
+    plan_id: s.product?.plan_id ?? null, plan_name: s.product?.plan_name ?? null,
+    parent_order_id: s.parent_order_id ?? null, utm_source: s.tracking?.utm_source ?? s.tracking?.src ?? null,
+  };
+}
+
 async function saveSales(sales: any[]) {
   const rows: any[] = [];
+  const students: any[] = [];
   const affiliates = new Map<string, any>();
   for (const s of sales) {
+    if (s.product?.id) {
+      await ensureProduct(s.product.id, s.product.name);
+      if (!toolProducts.has(s.product.id) && s.created_at) students.push(snapshotRow(s));
+    }
     const ac = affiliateOf(s);
     if (!ac) continue;
     const email = String(ac.email).trim().toLowerCase();
-    if (s.product?.id) await ensureProduct(s.product.id, s.product.name);
     rows.push({
       id: s.id,
       affiliate_email: email,
@@ -232,6 +254,10 @@ async function saveSales(sales: any[]) {
   }
   if (rows.length) {
     const { error } = await sb.from("affiliate_sales").upsert(rows, { onConflict: "id" });
+    if (error) throw error;
+  }
+  if (students.length) {
+    const { error } = await sb.from("kiwify_sales_snapshot").upsert(students, { onConflict: "id" });
     if (error) throw error;
   }
   return rows.length;
@@ -358,6 +384,7 @@ Deno.serve(async (req) => {
   let result: Record<string, unknown> = {};
   try {
     tools = (await sb.from("tools").select("id, slug, name")).data ?? [];
+    toolProducts = new Set(((await sb.from("kiwify_products").select("id").not("tool_id", "is", null)).data ?? []).map((p) => p.id));
     const affiliates = await syncAffiliates();
     const backfill = await syncBackfill(stats);
     let recentComplete = false;
@@ -374,10 +401,17 @@ Deno.serve(async (req) => {
         phones = { done: c.done, cursor: c.end };
       } else phones = { done: true };
     }
+    // Passada única para trazer os alunos (vendas de produtos que não são ferramenta) do histórico todo:
+    // antes só as vendas com afiliado eram guardadas. Mesma regra: só no tempo que sobra.
+    let students: Record<string, unknown> | null = null;
+    if (backfill.done && recentComplete && timeLeft()) {
+      const c = await syncBackfill(stats, "students_backfill");
+      students = { done: c.done, cursor: c.end };
+    }
     result = {
       ok: true, affiliates, ...stats,
       backfill_done: backfill.done, backfill_cursor: backfill.end,
-      recent_complete: recentComplete, phones, seconds: Math.round((Date.now() - started) / 1000),
+      recent_complete: recentComplete, phones, students, seconds: Math.round((Date.now() - started) / 1000),
     };
   } catch (e) {
     result = { ok: false, error: String((e as Error)?.message ?? e), ...stats };

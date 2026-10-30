@@ -56,13 +56,11 @@
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("tmb_summary"), A.sb.rpc("hotmart_summary"), A.sb.rpc("bundle_allocation")]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation"), loadStudents()]);
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
-    S.tmb = r[2].error || !r[2].data || !r[2].data.pedidos ? null : r[2].data; // alunos da TMB (boleto parcelado)
-    S.hotmart = r[3].error || !r[3].data || !r[3].data.ultima_leitura ? null : r[3].data; // vendas da Hotmart
-    S.bundles = r[4].error ? [] : r[4].data || []; // rateio dos combos por item
+    S.bundles = r[2].error ? [] : r[2].data || []; // rateio dos combos por item
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -251,7 +249,7 @@
       '<span class="muted" style="font-size:12px">' + fmtInt(s.vencem_90) + " cliente(s) vencem em até 90 dias" + (s.com_uso > 0 || hasUsage() ? ", " + fmtInt(s.vencem_90_sem_uso) + " deles sem uso recente (candidatos a reativação)" : "") + "</span></div>" +
       '<div class="chart-wrap"><div id="ch-expiry"></div></div></section>';
 
-    el.innerHTML = assSec + mixSec() + (s.software === "all" ? bundleSec() + tmbSec() + hotmartSec() : "") + usoSec + venc;
+    el.innerHTML = assSec + mixSec() + (s.software === "all" ? studentsSec() + bundleSec() : "") + usoSec + venc;
     drawExpiry(s.vencimentos || {});
   }
 
@@ -279,33 +277,6 @@
       '<button type="button" class="btn ch-mix-go" data-flt="ass:multi">Ver na lista quem usa 2 ou mais</button></section>';
   }
 
-  // Alunos da TMB: cursos, comunidade e combos vendidos no boleto parcelado (lidos da API da TMB a cada 30 min).
-  function tmbSec() {
-    var t = S.tmb;
-    if (!t) return "";
-    var fin = t.financeiro || {}, n = function (k) { return Number(fin[k]) || 0; };
-    var prods = (t.produtos || []).filter(function (p) { return p.efetivados || p.cancelados; });
-    var toolName = { flowpages: "Flow Pages", flowtracking: "Flow Tracking", flowspy: "Flow Spy" };
-    return '<section class="panel ch-sec"><div class="panel-head"><h3>Alunos da TMB</h3>' +
-      '<span class="muted" style="font-size:12px">Cursos, comunidade e combos no boleto parcelado · última leitura ' + esc(fmtDateTime(t.ultima_leitura)) + "</span></div>" +
-      '<div class="ch-tiles">' +
-        tile("Alunos", fmtInt(t.alunos), "e-mails com pedido efetivado", "") +
-        tile("Pedidos efetivados", fmtInt(t.efetivados), fmtInt(t.cancelados) + " cancelados", "") +
-        tile("Valor vendido", fmtBRL(t.valor_vendido), "ticket médio " + fmtBRL(t.ticket_medio), "", "Soma do valor total dos pedidos efetivados (todas as parcelas).") +
-        tile("Parcelas", String(t.parcelas_media || "—").replace(".", ","), "em média por pedido", "") +
-        tile("Quitados", fmtInt(n("Quitado")), pct(n("Quitado"), t.efetivados) + " dos efetivados", "") +
-        tile("Em dia", fmtInt(n("Adimplente")), pct(n("Adimplente"), t.efetivados) + " dos efetivados", "") +
-        tile("Inadimplentes", fmtInt(n("Inadimplente")), pct(n("Inadimplente"), t.efetivados) + " dos efetivados", "") +
-        tile("Também clientes Flow", fmtInt(t.tambem_flow), pct(t.tambem_flow, t.alunos) + " dos alunos", "", "Alunos da TMB com o mesmo e-mail de um cliente dos softwares na Kiwify.") +
-      "</div>" +
-      '<div class="table-scroll"><table class="health-table"><thead><tr><th>Produto</th><th>Libera</th><th>Efetivados</th><th>Cancelados</th><th>Alunos</th><th>Valor vendido</th><th>Inadimplentes</th><th>Último pedido</th></tr></thead><tbody>' +
-      (prods.map(function (p) {
-        return "<tr><td>" + esc(p.nome) + "</td><td>" + esc((p.ferramentas || []).map(function (k) { return toolName[k] || k; }).join(", ") || "—") +
-          '</td><td class="num">' + fmtInt(p.efetivados || 0) + '</td><td class="num">' + fmtInt(p.cancelados || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) +
-          '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
-      }).join("") || '<tr><td colspan="8" class="empty">Sem pedidos.</td></tr>') + "</tbody></table></div></section>";
-  }
-
   // Rateio dos combos (bundle_allocation): o valor líquido de cada venda do combo é dividido entre os
   // itens na proporção do preço avulso de referência de cada um (editável aqui).
   var PLAT = { kiwify: "Kiwify", tmb: "TMB", hotmart: "Hotmart" };
@@ -317,15 +288,15 @@
         '<span class="muted" style="font-size:12px">Rateio pelo preço avulso: o líquido de cada venda é dividido na proporção do preço de referência de cada item.</span></div>' +
         '<div class="ch-tiles">' +
           tile("Vendas", fmtInt(b.vendas), plats.map(function (p) { return PLAT[p.plataforma] + " " + fmtInt(p.vendas); }).join(" · ") || "nenhuma ainda", "") +
-          tile("Líquido recebido", fmtBRL(b.liquido), "bruto " + fmtBRL(b.bruto), "", "Kiwify: líquido da venda. TMB: total menos a taxa de administração (estimado). Hotmart: preço menos a taxa da Hotmart, só vendas em reais.") +
-          tile("Ticket líquido", fmtBRL(b.vendas ? b.liquido / b.vendas : null), "por venda", "") +
+          moneyTile("Líquido recebido", b.liquido, "bruto " + brlShort(b.bruto), "Kiwify: líquido da venda. TMB: total menos a taxa de administração (estimado). Hotmart: preço menos a taxa da Hotmart, só vendas em reais.") +
+          tile("Ticket líquido", esc(brlShort(b.vendas ? b.liquido / b.vendas : null)), "por venda", "") +
         "</div>" +
         '<div class="table-scroll"><table class="health-table"><thead><tr><th>Item</th><th>Preço avulso de referência (R$)</th><th>Peso</th><th>Por venda</th><th>Total rateado</th></tr></thead><tbody>' +
         itens.map(function (i) {
-          return "<tr><td>" + esc(i.nome) + '</td><td><input type="number" min="0" step="1" class="ch-bundle-price" data-comp="' + esc(i.componente) + '" value="' + esc(Number(i.preco_ref)) + '" aria-label="Preço de referência de ' + esc(i.nome) + '" style="width:110px"></td>' +
+          return "<tr><td>" + esc(i.nome) + '</td><td><input type="number" min="0" step="1" class="ch-bundle-price" data-comp="' + esc(i.componente) + '" value="' + esc(Number(i.preco_ref)) + '" aria-label="Preço de referência de ' + esc(i.nome) + '"></td>' +
             '<td class="num">' + pct(Number(i.preco_ref), soma, 1) + '</td><td class="num">' + fmtBRL(i.por_venda) + '</td><td class="num">' + fmtBRL(i.liquido) + "</td></tr>";
         }).join("") + "</tbody></table></div>" +
-        '<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-bundle-save="' + esc(b.id) + '">Salvar preços de referência</button>' +
+        '<div class="ch-bundle-foot"><button type="button" class="btn btn-primary" data-bundle-save="' + esc(b.id) + '">Salvar preços de referência</button>' +
         '<span class="muted" style="font-size:12px">Use a mesma base para todos os itens (ex.: preço do plano anual avulso).</span></div>' +
         (plats.length ? '<div class="table-scroll" style="margin-top:12px"><table class="health-table"><thead><tr><th>Plataforma</th><th>Vendas</th><th>Bruto</th><th>Líquido</th><th>Primeira</th><th>Última</th></tr></thead><tbody>' +
           plats.map(function (p) {
@@ -354,33 +325,184 @@
     A.toast("Preços de referência salvos e rateio recalculado.");
   }
 
-  // Alunos da Hotmart: vendas como produtora (cursos, comunidade, combos). As vendas como afiliada de
-  // produtos de terceiros ficam só na contagem do rodapé.
-  function hotmartSec() {
-    var h = S.hotmart;
-    if (!h) return "";
-    var prods = h.produtos || [];
+  /* ---------------- Alunos por plataforma ---------------- */
+  // Kiwify (cursos, comunidade e combos; as ferramentas já estão acima), TMB (boleto parcelado) e Hotmart
+  // (vendas como produtora). Cada plataforma tem o seu seletor de produtos: os cards e a tabela mostram só
+  // os produtos escolhidos (nenhum marcado = todos). A escolha fica guardada neste navegador.
+  var STU = {
+    kiwify: { label: "Kiwify", rpc: "kiwify_students_summary", num: false },
+    tmb: { label: "TMB", rpc: "tmb_summary", num: true },
+    hotmart: { label: "Hotmart", rpc: "hotmart_summary", num: true }
+  };
+  var STU_KEY = "flow_ch_students";
+  S.stu = { plat: "kiwify", sel: { kiwify: null, tmb: null, hotmart: null }, data: {}, open: false, q: "", seq: 0 };
+  try {
+    var savedStu = JSON.parse(safeGet(STU_KEY) || "null");
+    if (savedStu && STU[savedStu.plat]) S.stu.plat = savedStu.plat;
+    if (savedStu && savedStu.sel) Object.keys(STU).forEach(function (k) { if (Array.isArray(savedStu.sel[k])) S.stu.sel[k] = savedStu.sel[k]; });
+  } catch (e) {}
+  function stuSave() { safeSet(STU_KEY, JSON.stringify({ plat: S.stu.plat, sel: S.stu.sel })); }
+  function stuParams(k) {
+    var sel = S.stu.sel[k];
+    if (!sel || !sel.length) return { p_products: null };
+    return { p_products: STU[k].num ? sel.map(Number) : sel };
+  }
+  async function loadStudents(only) {
+    var keys = only ? [only] : Object.keys(STU);
+    var res = await Promise.all(keys.map(function (k) { return A.sb.rpc(STU[k].rpc, stuParams(k)); }));
+    keys.forEach(function (k, i) { S.stu.data[k] = res[i].error ? null : res[i].data; });
+  }
+
+  // Valor em reais que cabe no card: a partir de R$ 100 mil vira "R$ 833,4 mil" / "R$ 7,10 mi"
+  // (o valor exato fica no title do card).
+  function brlShort(n) {
+    if (n == null || !isFinite(n)) return "—";
+    var a = Math.abs(n);
+    if (a >= 1e6) return "R$ " + (n / 1e6).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " mi";
+    if (a >= 1e5) return "R$ " + (n / 1e3).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " mil";
+    return fmtBRL(n);
+  }
+  function moneyTile(label, n, sub, tip) {
+    return tile(label, esc(brlShort(n)), sub, "", (tip ? tip + " " : "") + "Valor exato: " + fmtBRL(n) + ".");
+  }
+  function decimal(n) { return n == null ? "—" : Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 1 }); }
+
+  function stuTiles(k, d) {
+    var fin = d.financeiro || {}, f = function (x) { return Number(fin[x]) || 0; };
+    var flow = tile("Também clientes Flow", fmtInt(d.tambem_flow), pct(d.tambem_flow, d.alunos) + " dos alunos", "", "Alunos com o mesmo e-mail de um cliente dos softwares Flow.");
+    if (k === "tmb") return [
+      tile("Alunos", fmtInt(d.alunos), "e-mails com pedido efetivado", ""),
+      tile("Pedidos efetivados", fmtInt(d.efetivados), fmtInt(d.cancelados) + " cancelados", ""),
+      moneyTile("Valor vendido", d.valor_vendido, "ticket médio " + brlShort(d.ticket_medio), "Soma do valor total dos pedidos efetivados (todas as parcelas)."),
+      tile("Parcelas", decimal(d.parcelas_media), "em média por pedido", ""),
+      tile("Quitados", fmtInt(f("Quitado")), pct(f("Quitado"), d.efetivados) + " dos efetivados", ""),
+      tile("Em dia", fmtInt(f("Adimplente")), pct(f("Adimplente"), d.efetivados) + " dos efetivados", ""),
+      tile("Inadimplentes", fmtInt(f("Inadimplente")), pct(f("Inadimplente"), d.efetivados) + " dos efetivados", ""),
+      flow
+    ];
+    if (k === "hotmart") return [
+      tile("Alunos", fmtInt(d.alunos), "e-mails com compra aprovada", ""),
+      tile("Vendas aprovadas", fmtInt(d.vendas), fmtInt(d.assinaturas) + " de assinatura", ""),
+      moneyTile("Valor vendido", d.valor_brl, d.vendas_outras_moedas ? fmtInt(d.vendas_outras_moedas) + " em outra moeda fora da soma" : "vendas em reais", "Soma do preço das vendas aprovadas em reais. A comissão líquida não vem nesse relatório da Hotmart."),
+      tile("Ticket médio", esc(brlShort(d.ticket_medio)), "por venda em reais", ""),
+      tile("Parcelas", decimal(d.parcelas_media), "em média por venda", ""),
+      tile("Reembolsos", fmtInt(d.reembolsos), pct(d.reembolsos, d.vendas + d.reembolsos) + " das vendas", ""),
+      tile("Chargebacks", fmtInt(d.chargebacks), pct(d.chargebacks, d.vendas + d.chargebacks) + " das vendas", ""),
+      flow
+    ];
+    return [
+      tile("Alunos", fmtInt(d.alunos), "e-mails com compra paga", ""),
+      tile("Vendas pagas", fmtInt(d.vendas), fmtInt(d.recusadas) + " recusadas", ""),
+      moneyTile("Valor líquido", d.liquido, "bruto " + brlShort(d.bruto), "Líquido das vendas pagas (já sem taxa da Kiwify e comissão de afiliado)."),
+      tile("Ticket médio", esc(brlShort(d.ticket_medio)), "líquido por venda", ""),
+      tile("Reembolsos", fmtInt(d.reembolsos), pct(d.reembolsos, d.vendas + d.reembolsos) + " das vendas", ""),
+      tile("Chargebacks", fmtInt(d.chargebacks), pct(d.chargebacks, d.vendas + d.chargebacks) + " das vendas", ""),
+      flow
+    ];
+  }
+
+  function stuPicker(k, d) {
+    var prods = d.produtos || [], sel = S.stu.sel[k] || [], on = {};
+    sel.forEach(function (id) { on[id] = true; });
+    var label = sel.length ? fmtInt(sel.length) + " de " + fmtInt(prods.length) + " produtos" : "Todos os produtos (" + fmtInt(prods.length) + ")";
+    var q = S.stu.q.toLowerCase();
+    return '<div class="ch-stu-pick">' +
+      '<button type="button" class="ch-stu-btn" data-stu-open aria-expanded="' + S.stu.open + '"><span>' + esc(label) + '</span><span class="ch-stu-caret">▾</span></button>' +
+      (sel.length ? '<button type="button" class="btn btn-ghost ch-stu-clear" data-stu-none>Limpar seleção</button>' : "") +
+      '<div class="ch-stu-panel"' + (S.stu.open ? "" : " hidden") + '>' +
+        '<div class="ch-stu-acts"><input type="search" id="ch-stu-q" placeholder="Buscar produto…" aria-label="Buscar produto" value="' + esc(S.stu.q) + '">' +
+          '<button type="button" class="link-btn" data-stu-all>Selecionar todos</button><button type="button" class="link-btn" data-stu-none>Limpar</button></div>' +
+        '<div class="ch-stu-list">' + prods.map(function (p) {
+          var n = p.efetivados != null ? p.efetivados : p.vendas;
+          return '<label data-name="' + esc(String(p.nome || "").toLowerCase()) + '"' + (q && String(p.nome || "").toLowerCase().indexOf(q) < 0 ? " hidden" : "") + '><input type="checkbox" data-stu-prod value="' + esc(p.id) + '"' + (on[p.id] ? " checked" : "") + '>' +
+            '<span class="ch-stu-name">' + esc(p.nome) + '</span><span class="ch-stu-n num">' + fmtInt(n || 0) + "</span></label>";
+        }).join("") + "</div>" +
+        '<p class="muted ch-stu-hint">Nenhum marcado = todos. Os números acima mudam na hora.</p>' +
+      "</div></div>";
+  }
+
+  function stuTable(k, d) {
+    var sel = S.stu.sel[k], on = {};
+    (sel || []).forEach(function (id) { on[id] = true; });
+    var prods = (d.produtos || []).filter(function (p) { return sel && sel.length ? on[p.id] : (p.efetivados || p.vendas || p.cancelados || p.reembolsos); });
     var toolName = { flowpages: "Flow Pages", flowtracking: "Flow Tracking", flowspy: "Flow Spy" };
-    var af = h.afiliado || {};
-    return '<section class="panel ch-sec"><div class="panel-head"><h3>Alunos da Hotmart</h3>' +
-      '<span class="muted" style="font-size:12px">Vendas como produtora desde ' + esc(fmtDate(h.primeira_venda)) + " · última leitura " + esc(fmtDateTime(h.ultima_leitura)) + "</span></div>" +
-      '<div class="ch-tiles">' +
-        tile("Alunos", fmtInt(h.alunos), "e-mails com compra aprovada", "") +
-        tile("Vendas aprovadas", fmtInt(h.vendas), fmtInt(h.assinaturas) + " de assinatura", "") +
-        tile("Valor em reais", fmtBRL(h.valor_brl), h.vendas_outras_moedas ? fmtInt(h.vendas_outras_moedas) + " vendas em outras moedas fora da soma" : "preço das vendas aprovadas", "", "Soma do preço das vendas aprovadas em BRL. A comissão líquida não vem nesse relatório da Hotmart.") +
-        tile("Reembolsos", fmtInt(h.reembolsos), pct(h.reembolsos, h.vendas + h.reembolsos) + " das vendas", "") +
-        tile("Chargebacks", fmtInt(h.chargebacks), "", "") +
-        tile("Também clientes Flow", fmtInt(h.tambem_flow), pct(h.tambem_flow, h.alunos) + " dos alunos", "", "Alunos da Hotmart com o mesmo e-mail de um cliente dos softwares na Kiwify.") +
-      "</div>" +
-      '<div class="table-scroll"><table class="health-table"><thead><tr><th>Produto</th><th>Libera</th><th>Vendas</th><th>Alunos</th><th>Valor (R$)</th><th>Reembolsos</th><th>Última venda</th></tr></thead><tbody>' +
-      (prods.map(function (p) {
-        return "<tr><td>" + esc(p.nome) + "</td><td>" + esc((p.ferramentas || []).map(function (k) { return toolName[k] || k; }).join(", ") || "—") +
-          '</td><td class="num">' + fmtInt(p.vendas || 0) + '</td><td class="num">' + fmtInt(p.alunos || 0) + '</td><td class="num">' + fmtBRL(p.valor_brl || 0) +
-          '</td><td class="num">' + fmtInt(p.reembolsos || 0) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td></tr>";
-      }).join("") || '<tr><td colspan="7" class="empty">Sem vendas.</td></tr>') + "</tbody></table></div>" +
-      (af.vendas ? '<p class="muted" style="font-size:12px;margin-top:8px">Fora desta conta de alunos: ' + fmtInt(af.vendas) + " vendas como afiliada, em " + fmtInt(af.produtos) + " produtos de terceiros.</p>" : "") +
+    var tools = function (p) { return esc((p.ferramentas || []).map(function (x) { return toolName[x] || x; }).join(", ") || "—"); };
+    var head, row;
+    if (k === "tmb") {
+      head = "<th>Produto</th><th>Libera</th><th>Efetivados</th><th>Cancelados</th><th>Alunos</th><th>Valor vendido</th><th>Inadimplentes</th><th>Último pedido</th>";
+      row = function (p) { return '<td class="ch-stu-prod">' + esc(p.nome) + "</td><td>" + tools(p) + '</td><td class="num">' + fmtInt(p.efetivados) + '</td><td class="num">' + fmtInt(p.cancelados) + '</td><td class="num">' + fmtInt(p.alunos) + '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.inadimplentes) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td>"; };
+    } else {
+      var money = k === "kiwify" ? "Valor líquido" : "Valor (R$)";
+      head = "<th>Produto</th>" + (k === "hotmart" ? "<th>Libera</th>" : "") + "<th>Vendas</th><th>Alunos</th><th>" + money + "</th><th>Reembolsos</th><th>Última venda</th>";
+      row = function (p) { return '<td class="ch-stu-prod">' + esc(p.nome) + "</td>" + (k === "hotmart" ? "<td>" + tools(p) + "</td>" : "") + '<td class="num">' + fmtInt(p.vendas) + '</td><td class="num">' + fmtInt(p.alunos) + '</td><td class="num">' + fmtBRL(p.valor || 0) + '</td><td class="num">' + fmtInt(p.reembolsos) + '</td><td class="num">' + fmtDate(p.ultimo) + "</td>"; };
+    }
+    var cols = (head.match(/<th>/g) || []).length;
+    return '<div class="table-scroll"><table class="health-table ch-stu-table"><thead><tr>' + head + "</tr></thead><tbody>" +
+      (prods.map(function (p) { return "<tr>" + row(p) + "</tr>"; }).join("") || '<tr><td colspan="' + cols + '" class="empty">Sem vendas.</td></tr>') + "</tbody></table></div>";
+  }
+
+  function studentsSec() {
+    var k = S.stu.plat, d = S.stu.data[k];
+    var tabs = Object.keys(STU).map(function (x) {
+      return '<button type="button" class="pay-chip' + (x === k ? " on" : "") + '" data-stu-plat="' + x + '" aria-pressed="' + (x === k) + '">' + STU[x].label + "</button>";
+    }).join("");
+    var note = "";
+    if (d && k === "hotmart" && d.afiliado && d.afiliado.vendas) note = "Fora desta conta: " + fmtInt(d.afiliado.vendas) + " vendas como afiliada, em " + fmtInt(d.afiliado.produtos) + " produtos de terceiros.";
+    if (d && k === "kiwify") note = "Vendas de cursos, comunidade e combos na Kiwify. As ferramentas Flow estão nos cards do topo.";
+    var since = d && (d.primeira_venda ? "desde " + fmtDate(d.primeira_venda) + " · " : "");
+    return '<section class="panel ch-sec ch-stu" id="ch-stu"><div class="panel-head"><h3>Alunos por plataforma</h3>' +
+      '<div class="ch-stu-tabs" role="group" aria-label="Plataforma">' + tabs + "</div></div>" +
+      (d ? '<div class="ch-stu-bar">' + stuPicker(k, d) + '<span class="muted ch-stu-meta">' + esc((since || "") + "última leitura " + fmtDateTime(d.ultima_leitura)) + "</span></div>" +
+          '<div class="ch-tiles ch-stu-tiles">' + stuTiles(k, d).join("") + "</div>" + stuTable(k, d) +
+          (note ? '<p class="muted ch-stu-note">' + esc(note) + "</p>" : "")
+        : '<p class="muted" style="font-size:12.5px">Sem dados de ' + STU[k].label + " ainda.</p>") +
       "</section>";
   }
+  function renderStudents() {
+    var el = $("ch-stu");
+    if (!el) return;
+    var focus = document.activeElement && document.activeElement.id === "ch-stu-q";
+    var tmp = document.createElement("div");
+    tmp.innerHTML = studentsSec();
+    el.replaceWith(tmp.firstChild);
+    if (focus) { var q = $("ch-stu-q"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+  }
+  async function studentsReload() {
+    var k = S.stu.plat, seq = ++S.stu.seq;
+    stuSave();
+    var el = $("ch-stu");
+    if (el) el.classList.add("ch-loading");
+    await loadStudents(k);
+    if (seq !== S.stu.seq) return; // outra escolha chegou antes
+    renderStudents();
+  }
+  function studentsClick(e) {
+    var t = e.target;
+    var plat = t.closest("[data-stu-plat]");
+    if (plat) { S.stu.plat = plat.dataset.stuPlat; S.stu.open = false; S.stu.q = ""; stuSave(); renderStudents(); return true; }
+    if (t.closest("[data-stu-open]")) { S.stu.open = !S.stu.open; renderStudents(); return true; }
+    var k = S.stu.plat, d = S.stu.data[k];
+    if (t.closest("[data-stu-all]")) { S.stu.sel[k] = (d && d.produtos || []).map(function (p) { return p.id; }); studentsReload(); return true; }
+    if (t.closest("[data-stu-none]")) { S.stu.sel[k] = null; studentsReload(); return true; }
+    return false;
+  }
+  function studentsPick(input) {
+    var k = S.stu.plat, sel = (S.stu.sel[k] || []).slice(), i = sel.indexOf(input.value);
+    if (input.checked && i < 0) sel.push(input.value);
+    if (!input.checked && i >= 0) sel.splice(i, 1);
+    S.stu.sel[k] = sel.length ? sel : null;
+    clearTimeout(S.stu.timer);
+    S.stu.timer = setTimeout(studentsReload, 250); // várias marcações seguidas viram uma consulta só
+  }
+  function studentsFilterList(q) {
+    S.stu.q = q;
+    q = q.trim().toLowerCase();
+    document.querySelectorAll(".ch-stu-list label").forEach(function (l) { l.hidden = !!q && l.dataset.name.indexOf(q) < 0; });
+  }
+  // Fecha o seletor ao clicar fora dele.
+  document.addEventListener("click", function (e) {
+    if (S.stu.open && !e.target.closest(".ch-stu-pick")) { S.stu.open = false; var p = document.querySelector(".ch-stu-panel"); if (p) p.hidden = true; var b = document.querySelector("[data-stu-open]"); if (b) b.setAttribute("aria-expanded", "false"); }
+  });
 
   function drawExpiry(venc) {
     var el = $("ch-expiry");
@@ -472,11 +594,12 @@
     var dr = $("ch-drawer");
     dr.innerHTML = '<p class="muted" style="padding:20px">Carregando…</p>';
     dr.classList.add("on"); $("ch-scrim").classList.add("on"); dr.setAttribute("aria-hidden", "false");
-    var rs = await Promise.all([A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams())), A.sb.rpc("tmb_customer", { p_email: email }), A.sb.rpc("hotmart_customer", { p_email: email })]);
+    var rs = await Promise.all([A.sb.rpc("health_customer", Object.assign({ p_email: email }, critParams())), A.sb.rpc("tmb_customer", { p_email: email }), A.sb.rpc("hotmart_customer", { p_email: email }), A.sb.rpc("kiwify_customer", { p_email: email })]);
     var r = rs[0];
     if (r.error) { dr.innerHTML = '<p class="muted" style="padding:20px">Erro: ' + esc(r.error.message) + "</p>"; return; }
     r.data.tmb = rs[1].error ? [] : rs[1].data || [];
     r.data.hotmart = rs[2].error ? [] : rs[2].data || [];
+    r.data.kiwify = rs[3].error ? [] : rs[3].data || [];
     renderCustomer(r.data);
   }
   function closeDrawer() {
@@ -516,6 +639,10 @@
     $("ch-drawer").innerHTML =
       '<div class="ch-d-top"><div><h3>' + esc(c.nome || c.email) + "</h3><span>" + esc(c.email) + '</span></div><div class="ch-d-acts"><button class="btn" type="button" data-copy="' + esc(c.email) + '">Copiar e-mail</button><button class="btn btn-ghost" id="ch-d-close" type="button" aria-label="Fechar">✕</button></div></div>' +
       cards + '<h4 class="ch-d-h">Compras</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Software</th><th>Plano</th><th>Status</th><th>Valor</th></tr></thead><tbody>' + (compras || '<tr><td colspan="5" class="empty">Sem compras.</td></tr>') + "</tbody></table></div>" +
+      ((c.kiwify || []).length ? '<h4 class="ch-d-h">Cursos e combos na Kiwify</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Produto</th><th>Status</th><th>Pagamento</th><th>Valor</th></tr></thead><tbody>' +
+        c.kiwify.map(function (x) {
+          return "<tr><td>" + fmtDate(x.data) + "</td><td>" + esc(x.produto) + "</td><td>" + esc(x.status) + "</td><td>" + esc(x.pagamento || "—") + '</td><td class="num">' + fmtBRL(x.valor) + "</td></tr>";
+        }).join("") + "</tbody></table></div>" : "") +
       ((c.tmb || []).length ? '<h4 class="ch-d-h">Compras na TMB</h4><div class="table-scroll"><table class="health-table"><thead><tr><th>Data</th><th>Produto</th><th>Pedido</th><th>Financeiro</th><th>Parcelas</th><th>Valor</th></tr></thead><tbody>' +
         c.tmb.map(function (x) {
           return "<tr><td>" + fmtDate(x.data) + "</td><td>" + esc(x.produto) + "</td><td>" + esc(x.status) + "</td><td>" + esc(x.financeiro || "—") + '</td><td class="num">' + (x.parcelas ? fmtInt(x.parcelas) + "x " + fmtBRL(x.parcela) : "—") + '</td><td class="num">' + fmtBRL(x.valor) + "</td></tr>";
@@ -731,6 +858,7 @@
       if (mix) { S.mixMode = mix.dataset.mix; renderDetail(); return; }
       var bsave = e.target.closest("[data-bundle-save]");
       if (bsave) return saveBundle(bsave.dataset.bundleSave);
+      if (studentsClick(e)) return;
       var flt = e.target.closest("[data-flt]");
       if (flt && !flt.disabled) return applyTile(flt.dataset.flt);
       var act = e.target.closest("[data-act]");
@@ -749,10 +877,12 @@
     });
     var map = { "ch-f-ass": "ass", "ch-f-uso": "uso", "ch-f-ultimo": "ultimo", "ch-f-freq": "freq", "ch-f-plano": "plano" };
     root.addEventListener("change", function (e) {
+      if (e.target.matches("[data-stu-prod]")) return studentsPick(e.target);
       var k = map[e.target.id];
       if (k) { S.f[k] = e.target.value; S.page = 0; renderDetail(); loadList(); }
     });
     root.addEventListener("input", function (e) {
+      if (e.target.id === "ch-stu-q") return studentsFilterList(e.target.value);
       if (e.target.id !== "ch-f-q") return;
       S.f.q = e.target.value;
       clearTimeout(S.qTimer);
