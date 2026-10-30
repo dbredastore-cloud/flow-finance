@@ -10,7 +10,9 @@
     ["ativo", "Assinatura em dia", "Cobertura vigente e faltam mais de 30 dias para vencer.", "--accent"],
     ["vence_30", "Vence em 30 dias", "Cobertura vigente, mas vence em até 30 dias: hora de trabalhar a renovação.", "--warning"],
     ["carencia", "Em carência", "Venceu há até 15 dias e ainda pode renovar.", "--accent-2"],
-    ["cancelou", "Cancelou", "Venceu há mais de 15 dias sem nova compra.", "--critical"]
+    ["cancelou", "Cancelou", "Venceu há mais de 15 dias sem nova compra (não conta teste/cortesia nem quem tem o combo vitalício).", "--critical"],
+    ["vitalicio", "Passou ao vitalício", "A assinatura venceu, mas tem o combo vitalício: segue com acesso.", "--accent-3"],
+    ["teste", "Teste ou cortesia", "Compra de teste ou cortesia (plano Teste ou menos de R$ 5): fora da conta de cancelamento.", "--text-muted"]
   ];
   var ASS_EXTRA = [["renovou", "Renovaram (2+ pagamentos)"], ["multi", "Usam 2+ softwares"], ["reembolso", "Reembolsaram ou chargeback"]];
   var USO = [
@@ -106,7 +108,7 @@
   }
 
   /* ---------------- agregação do software escolhido ---------------- */
-  var NUM_KEYS = ["clientes", "ass_ativo", "ass_vence_30", "ass_carencia", "ass_cancelou", "reembolsaram", "renovaram", "multi_produto", "com_uso", "hoje", "d7", "d30",
+  var NUM_KEYS = ["clientes", "ass_ativo", "ass_vence_30", "ass_carencia", "ass_cancelou", "ass_vitalicio", "ass_teste", "reembolsaram", "renovaram", "multi_produto", "com_uso", "hoje", "d7", "d30",
     "inativos", "nunca", "seg_muito", "seg_engajado", "seg_moderado", "seg_baixo", "vencem_90", "vencem_90_sem_uso", "devolveram", "devolveram_sairam"];
   function selStats() {
     var list = (S.sum && S.sum.softwares) || [];
@@ -216,7 +218,7 @@
         tile("Assinatura em dia", fmtInt(s.ass_ativo), pct(s.ass_ativo, s.clientes) + " da base", "ass:ativo", ASS[0][2]) +
         tile("Vencem em 30 dias", fmtInt(s.ass_vence_30), pct(s.ass_vence_30, s.clientes) + " da base", "ass:vence_30", ASS[1][2]) +
         tile("Em carência", fmtInt(s.ass_carencia), "venceram há até 15 dias", "ass:carencia", ASS[2][2]) +
-        tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base", "ass:cancelou", ASS[3][2]) +
+        tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base · fora: " + fmtInt(s.ass_vitalicio) + " vitalício, " + fmtInt(s.ass_teste) + " teste", "ass:cancelou", ASS[3][2]) +
         tile("Renovaram", fmtInt(s.renovaram), "2 ou mais pagamentos", "ass:renovou", "Clientes com mais de um pagamento neste software.") +
         tile("Usam 2+ softwares", fmtInt(s.multi_produto), pct(s.multi_produto, s.clientes) + " da base", "ass:multi", "Clientes que pagaram por mais de um software Flow.") +
         tile("Reembolsaram", fmtInt(s.devolveram), fmtInt(s.devolveram_sairam) + " saíram · " + fmtInt(s.reembolsaram) + " seguem clientes", "ass:reembolso",
@@ -379,7 +381,7 @@
               taRow("Renovaram (2+ pagamentos)", t.renovaram, ass, "Assinantes em dia que já pagaram mais de uma vez. % sobre a assinatura em dia.") +
               taRow("Vencem em 30 dias", t.vence_30, ass, "Assinatura em dia que vence nos próximos 30 dias. % sobre a assinatura em dia.", "warn") +
               taRow("Em carência", t.carencia, t.clientes, "Venceu há até 15 dias. % sobre todos que já tiveram acesso.", "warn") +
-              taRow("Cancelaram (venceu)", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar. % sobre todos que já tiveram acesso.", "neg") +
+              taRow("Cancelaram (venceu)", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar (não conta teste/cortesia). % sobre todos que já tiveram acesso.", "neg") +
               taRow("Reembolso ou chargeback", t.devolveram, t.clientes, "Todas as compras da ferramenta (ou do combo) foram reembolsadas ou contestadas: saiu sem acesso. % sobre todos que já tiveram acesso.", "neg") +
               taRow("Total de saídas", t.saidas, t.clientes, "Cancelaram por vencimento + reembolso ou chargeback.", "neg tot") +
             "</div></div>";
