@@ -207,7 +207,7 @@
           <ul>
             <li><strong>Cliente</strong>: e-mail distinto por ferramenta com pelo menos uma compra paga (fonte: Kiwify, horário de Brasília).</li>
             <li><strong>Novo cliente</strong>: a primeira compra paga daquele e-mail na ferramenta. Renovações não contam como cliente novo.</li>
-            <li><strong>Ativo</strong>: o último pagamento ainda cobre o período do plano (mensal = 1 mês, semestral = 6, anual = 12). <strong>Em carência</strong>: venceu há até 15 dias. <strong>Cancelou (churn)</strong>: venceu há mais de 15 dias sem nova compra.</li>
+            <li><strong>Ativo</strong>: o último pagamento ainda cobre o período do plano (mensal = 1 mês, semestral = 6, anual = 12). <strong>Em carência</strong>: venceu há até 15 dias. <strong>Cancelou (churn)</strong>: venceu há mais de 15 dias sem nova compra, sem contar compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício. <strong>Involuntário</strong>: houve cobrança recusada ou pendente perto do vencimento; <strong>voluntário</strong>: nenhuma tentativa. <strong>Reembolso (saíram)</strong>: reembolso ou chargeback de quem não ficou com nenhuma compra paga; conta à parte.</li>
             <li><strong>Taxa de renovação</strong>: dos pagamentos que já venceram, quantos tiveram um novo pagamento do mesmo cliente até 45 dias depois. <strong>Churn</strong> = 100% − renovação.</li>
             <li><strong>LTV histórico</strong>: receita líquida total ÷ clientes. <strong>LTV projetado</strong>: ticket líquido médio × pagamentos esperados por cliente (1 ÷ churn).</li>
             <li><strong>MRR</strong>: receita recorrente mensal dos ativos (valor líquido do último pagamento ÷ meses do plano). <strong>ARR</strong> = MRR × 12.</li>
@@ -2070,7 +2070,8 @@
   var num = function (v) { return Number(v) || 0; };
   var SUM_KEYS = ["clientes", "ativos", "em_carencia", "cancelados", "mrr", "renov_devidas", "renovadas", "renov_devidas_mensal",
     "renovadas_mensal", "renov_devidas_anual", "renovadas_anual", "liquido_total", "pagamentos", "novos_ano", "renovacoes_ano",
-    "liquido_ano", "bruto_ano", "comissao_novos_ano", "reembolsos_ano", "chargebacks_ano", "aprovadas_ano", "marketing_ano", "despesas_ano"];
+    "liquido_ano", "bruto_ano", "comissao_novos_ano", "reembolsos_ano", "chargebacks_ano", "aprovadas_ano", "marketing_ano", "despesas_ano",
+    "cancelados_voluntario", "cancelados_involuntario", "vencidos_teste", "vencidos_com_vitalicio", "devolveram"];
 
   // Soma as ferramentas escolhidas e deriva as métricas (renovação, LTV, CAC…).
   function combine(rows) {
@@ -2304,7 +2305,11 @@
     rows.push(combine(all));
     var th = function (l, tip) { return "<th" + (tip ? ' title="' + escHtml(tip) + '"' : "") + ">" + l + "</th>"; };
     document.getElementById("health-tools").innerHTML =
-      "<thead><tr>" + th("Ferramenta") + th("Clientes") + th("Ativos") + th("Em carência", "Venceu há até 15 dias.") + th("Cancelaram") +
+      "<thead><tr>" + th("Ferramenta") + th("Clientes") + th("Ativos") + th("Em carência", "Venceu há até 15 dias.") +
+      th("Cancelaram", "Venceu há mais de 15 dias sem nova compra. Não conta compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício (segue com acesso).") +
+      th("Voluntário", "Cancelou sem nenhuma tentativa de cobrança no vencimento.") +
+      th("Involuntário", "Cancelou com cobrança recusada ou pendente entre 10 dias antes e 45 dias depois do vencimento (cartão, Pix…).") +
+      th("Reembolso (saíram)", "Reembolso ou chargeback de quem não tem nenhuma compra paga da ferramenta. Não entra em Cancelaram.") +
       th("Renovação", "Todos os planos.") + th("Renov. mensal") + th("Renov. anual") + th("Renovações/cliente") + th("Máx. pagamentos") +
       th("Ticket líquido") + th("LTV histórico") + th("LTV projetado") + th("CAC") + th("LTV/CAC") + th("Payback") + th("MRR") +
       th("Novos " + (state.health ? state.health.ano : "")) + th("Reembolso+chargeback", "No ano, sobre as vendas aprovadas.") + th("Custo total/novo", "Todas as despesas lançadas no ano ÷ novos clientes.") + "</tr></thead><tbody>" +
@@ -2312,7 +2317,8 @@
         var total = i === rows.length - 1;
         return "<tr" + (total ? ' style="font-weight:700;border-top:1px solid var(--border-strong)"' : "") + "><td>" + escHtml(total ? "Total (3 ferramentas)" : t.tool) + "</td>" +
           '<td class="num">' + fmtInt(t.clientes) + '</td><td class="num">' + fmtInt(t.ativos) + '</td><td class="num">' + fmtInt(t.em_carencia) +
-          '</td><td class="num">' + fmtInt(t.cancelados) + "</td>" +
+          '</td><td class="num" title="' + escHtml("Fora da conta: " + fmtInt(t.vencidos_com_vitalicio) + " com vitalício e " + fmtInt(t.vencidos_teste) + " compras de teste/cortesia") + '">' + fmtInt(t.cancelados) + "</td>" +
+          '<td class="num">' + fmtInt(t.cancelados_voluntario) + '</td><td class="num">' + fmtInt(t.cancelados_involuntario) + '</td><td class="num">' + fmtInt(t.devolveram) + "</td>" +
           "<td>" + (t.renov_rate == null ? '<span class="muted" title="Ainda não há vencimentos suficientes">sem histórico</span>' : pill(t.renov_rate, 0.5, 0.3) + pct(t.renov_rate) + "</span>") + "</td>" +
           '<td class="num">' + pct(t.renov_mensal) + '</td><td class="num">' + pct(t.renov_anual) + "</td>" +
           '<td class="num">' + dec(t.renov_por_cliente, 2) + '</td><td class="num">' + fmtInt(t.max_pagamentos) + "</td>" +
