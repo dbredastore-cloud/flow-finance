@@ -17,8 +17,6 @@ window.FinAnalysis = (function () {
   var MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   var CARDS = [
     { k: "mes_atual", c: "mes_anterior_mesmo_ponto", t: "Mês atual × mês anterior" },
-    { k: "mes_atual", c: "mes_atual_ano_passado", t: "Mês atual × ano passado" },
-    { k: "mes_anterior_fechado", c: "mes_anterior_ano_passado", t: "Mês fechado × ano passado", res: ["mes_anterior_fechado", "mes_anterior_ano_passado"] },
     { k: "ano_atual", c: "ano_passado_mesmo_ponto", t: "Ano × ano", res: ["ano_atual_meses_fechados", "ano_passado_mesmos_meses"] }
   ];
   var TOOL_COLOR = { FlowTracking: "var(--c-tracking, var(--accent-3))", FlowPages: "var(--c-pages, var(--accent))", FlowSpy: "var(--c-spy, var(--accent-2))" };

@@ -107,7 +107,7 @@
 
   /* ---------------- agregação do software escolhido ---------------- */
   var NUM_KEYS = ["clientes", "ass_ativo", "ass_vence_30", "ass_carencia", "ass_cancelou", "reembolsaram", "renovaram", "multi_produto", "com_uso", "hoje", "d7", "d30",
-    "inativos", "nunca", "seg_muito", "seg_engajado", "seg_moderado", "seg_baixo", "vencem_90", "vencem_90_sem_uso"];
+    "inativos", "nunca", "seg_muito", "seg_engajado", "seg_moderado", "seg_baixo", "vencem_90", "vencem_90_sem_uso", "devolveram", "devolveram_sairam"];
   function selStats() {
     var list = (S.sum && S.sum.softwares) || [];
     if (S.sw !== "all") return list.filter(function (s) { return s.software === S.sw; })[0] || null;
@@ -219,7 +219,8 @@
         tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base", "ass:cancelou", ASS[3][2]) +
         tile("Renovaram", fmtInt(s.renovaram), "2 ou mais pagamentos", "ass:renovou", "Clientes com mais de um pagamento neste software.") +
         tile("Usam 2+ softwares", fmtInt(s.multi_produto), pct(s.multi_produto, s.clientes) + " da base", "ass:multi", "Clientes que pagaram por mais de um software Flow.") +
-        tile("Reembolsaram", fmtInt(s.reembolsaram), "reembolso ou chargeback", "ass:reembolso") +
+        tile("Reembolsaram", fmtInt(s.devolveram), fmtInt(s.devolveram_sairam) + " saíram · " + fmtInt(s.reembolsaram) + " seguem clientes", "ass:reembolso",
+          "E-mails com reembolso ou chargeback no software. Os que saíram não têm outra compra paga; a lista abaixo mostra só os que seguem clientes.") +
       "</div>" + propBar(assParts, s.clientes) + "</section>";
 
     var usoSec;
@@ -371,7 +372,9 @@
               taRow("Renovaram (2+ pagamentos)", t.renovaram, ass, "Assinantes em dia que já pagaram mais de uma vez. % sobre a assinatura em dia.") +
               taRow("Vencem em 30 dias", t.vence_30, ass, "Assinatura em dia que vence nos próximos 30 dias. % sobre a assinatura em dia.", "warn") +
               taRow("Em carência", t.carencia, t.clientes, "Venceu há até 15 dias. % sobre todos que já tiveram acesso.", "warn") +
-              taRow("Cancelaram", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar. % sobre todos que já tiveram acesso.", "neg") +
+              taRow("Cancelaram (venceu)", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar. % sobre todos que já tiveram acesso.", "neg") +
+              taRow("Reembolso ou chargeback", t.devolveram, t.clientes, "Todas as compras da ferramenta (ou do combo) foram reembolsadas ou contestadas: saiu sem acesso. % sobre todos que já tiveram acesso.", "neg") +
+              taRow("Total de saídas", t.saidas, t.clientes, "Cancelaram por vencimento + reembolso ou chargeback.", "neg tot") +
             "</div></div>";
         }).join("") + "</div>" +
         '<p class="muted ch-stu-note">' + (k === "todas"

@@ -15,18 +15,18 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
-<link rel="stylesheet" href="../assets/customer-health.css?v=20261030b">
+<link rel="stylesheet" href="../assets/customer-health.css?v=20261030c">
 <link rel="stylesheet" href="../assets/alerts.css">
-<link rel="stylesheet" href="../assets/fin-analysis.css">
+<link rel="stylesheet" href="../assets/fin-analysis.css?v=20261030">
 <link rel="stylesheet" href="../assets/ai-insights.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
-<script src="../assets/customer-health.js?v=20261030b"></script>
+<script src="../assets/customer-health.js?v=20261030c"></script>
 <script src="../assets/alert-refunds.js"></script>
 <script src="../assets/alerts.js"></script>
-<script src="../assets/fin-analysis.js"></script>
+<script src="../assets/fin-analysis.js?v=20261030"></script>
 <script src="../assets/ai-insights.js"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -223,38 +223,6 @@
 
       <section class="panel" id="home-ai" hidden></section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h3>Receita, despesa e líquido — todas as ferramentas</h3>
-          <div class="legend">
-            <span><span class="dot" style="background:var(--accent)"></span>Faturamento</span>
-            <span><span class="dot" style="background:var(--accent-2)"></span>Despesas</span>
-            <span><span class="dot" style="background:var(--accent-3)"></span>Líquido</span>
-          </div>
-        </div>
-        <div class="chart-wrap">
-          <svg id="home-chart" viewBox="0 0 760 260" style="width:100%; height:auto; display:block;" role="img" aria-label="Faturamento, despesas e líquido somando as quatro ferramentas"></svg>
-          <div class="tooltip" id="home-tip"></div>
-        </div>
-      </section>
-
-      <div class="home-grid">
-        <section class="panel">
-          <div class="panel-head"><h3>Faturamento por ferramenta</h3><div class="legend" id="home-legend-rev"></div></div>
-          <div class="chart-wrap">
-            <svg id="home-rev-chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;" role="img" aria-label="Faturamento de cada ferramenta por mês"></svg>
-            <div class="tooltip" id="home-rev-tip"></div>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h3>Despesas por ferramenta</h3><div class="legend" id="home-legend-exp"></div></div>
-          <div class="chart-wrap">
-            <svg id="home-exp-chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;" role="img" aria-label="Despesas de cada ferramenta por mês"></svg>
-            <div class="tooltip" id="home-exp-tip"></div>
-          </div>
-        </section>
-      </div>
-
       <section class="panel" id="home-pay-panel">
         <div class="panel-head">
           <h3>Cartão Flow × Biancode</h3>
@@ -262,12 +230,6 @@
         </div>
         <p class="hint-text" id="home-pay-hint" style="margin-top:0"></p>
         <div class="hud-rings" id="home-pay-rings"></div>
-        <div class="pay-bar" id="home-pay-bar" role="img" aria-label="Proporção das despesas por forma de pagamento"></div>
-        <div class="legend" id="home-pay-legend" style="margin:10px 0 4px"></div>
-        <div class="chart-wrap">
-          <svg id="home-pay-chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;" role="img" aria-label="Despesas por forma de pagamento em cada mês"></svg>
-          <div class="tooltip" id="home-pay-tip"></div>
-        </div>
         <div class="table-scroll" style="margin-top:14px"><table class="health-table" id="home-pay-table"></table></div>
       </section>
 
@@ -286,21 +248,6 @@
     <div id="tool-view">
     <div class="kpi-row" id="kpi-row"></div>
     <div class="pay-strip" id="pay-strip" hidden></div>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h3>Receita, despesa e líquido por mês</h3>
-        <div class="legend">
-          <span><span class="dot" style="background:var(--accent)"></span>Faturamento</span>
-          <span><span class="dot" style="background:var(--accent-2)"></span>Despesas</span>
-          <span><span class="dot" style="background:var(--accent-3)"></span>Líquido</span>
-        </div>
-      </div>
-      <div class="chart-wrap">
-        <svg id="chart" viewBox="0 0 760 240" style="width:100%; height:auto; display:block;"></svg>
-        <div id="tooltip"></div>
-      </div>
-    </section>
 
     <section class="panel">
       <div class="panel-head"><h3>Detalhamento mensal</h3></div>
@@ -1679,7 +1626,7 @@
     renderCatManager();
     if (state.openMonth) { await refreshMonth(state.openMonth); return; }
     await loadSummary(state.activeToolId, state.range);
-    renderKpis(); renderTable(); renderChart(); renderPeriodBar();
+    renderKpis(); renderTable(); renderPeriodBar();
   }
 
   async function saveCategory(id, row) {
@@ -1789,265 +1736,12 @@
     await loadSummary(state.activeToolId, state.range);
     renderKpis();
     renderTable();
-    renderChart();
     renderPeriodBar();
     state.openMonth = m;
     renderTable();
     await state.categoriesReady;
     var items = await loadExpenseDetail(state.activeToolId, ymY(m), ymM(m));
     renderDetail(m, items);
-  }
-
-  /* ---------------- Chart ---------------- */
-  // Curva suave (Catmull-Rom → Bézier) por um trecho de pontos consecutivos.
-  function smoothPath(pts) {
-    if (pts.length === 1) return "M" + pts[0][0] + "," + pts[0][1];
-    var d = "M" + pts[0][0] + "," + pts[0][1];
-    for (var i = 0; i < pts.length - 1; i++) {
-      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-      d += " C" + (p1[0] + (p2[0] - p0[0]) / 6) + "," + (p1[1] + (p2[1] - p0[1]) / 6) + " " +
-        (p2[0] - (p3[0] - p1[0]) / 6) + "," + (p2[1] - (p3[1] - p1[1]) / 6) + " " + p2[0] + "," + p2[1];
-    }
-    return d;
-  }
-
-  /* ---------------- Gráficos ---------------- */
-  var chartSeq = 0;
-  var MONO = "JetBrains Mono, monospace";
-
-  function chartColors() {
-    var cs = getComputedStyle(document.documentElement);
-    var tok = function (k) { return cs.getPropertyValue(k).trim(); };
-    return { grid: tok("--chart-grid"), gridStrong: tok("--chart-grid-strong"), muted: tok("--text-muted"), fat: tok("--accent"), desp: tok("--accent-2"), liq: tok("--accent-3"), dot: tok("--dot-fill"), surface: tok("--surface-solid") };
-  }
-  function dotHtml(c) { return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' + c + '"></span>'; }
-  function svgMessage(svg, W, H, text) {
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.innerHTML = '<text x="' + (W / 2) + '" y="' + (H / 2) + '" text-anchor="middle" font-size="13" fill="' + chartColors().muted + '">' + escHtml(text) + "</text>";
-  }
-
-  // Rótulos do eixo X: só o mês quando o período cabe num ano; com o ano quando passa de um.
-  function axisLabels(rows) {
-    var multi = rows.length > 1 && ymY(rows[0]) !== ymY(rows[rows.length - 1]);
-    return rows.map(function (k) { return MONTHS[ymM(k) - 1].toUpperCase() + (multi ? "/" + String(ymY(k)).slice(2) : ""); });
-  }
-  function fmtShort(v) {
-    var a = Math.abs(v);
-    if (a >= 1e6) return (v / 1e6).toFixed(1).replace(".", ",") + "M";
-    if (a >= 1000) return Math.round(v / 1000) + "k";
-    return String(Math.round(v));
-  }
-
-  // Faturamento × despesas × líquido, no estilo minimalista: linhas suaves de 2px, área em degradê leve sob cada
-  // série, grade fina e marcador só no último ponto (e no hover). Com 1 ou 2 meses: barras arredondadas agrupadas.
-  // cfg: { svgId, tipId, rows: [ym], get(ym) -> { fat, desp, liq } | null }
-  function drawMoneyChart(cfg) {
-    var svg = document.getElementById(cfg.svgId), tooltip = document.getElementById(cfg.tipId);
-    if (!svg) return;
-    var rows = cfg.rows || [], n = rows.length;
-    // A escala acompanha a largura da tela (no celular o texto continua legível).
-    var cw = svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0;
-    var W = cw ? Math.max(340, Math.min(760, Math.round(cw))) : 760, H = W < 500 ? 230 : 250, padL = 46, padR = 12, padT = 12, padB = 26;
-    var plotW = W - padL - padR, plotH = H - padT - padB;
-    var data = rows.map(function (k) { return cfg.get(k); });
-    var vals = [];
-    data.forEach(function (d) { if (d) [d.fat, d.desp, d.liq].forEach(function (v) { if (v != null) vals.push(v); }); });
-    var mv = function (d, key) { return d && d[key] != null ? fmtBRL(d[key]) : "—"; };
-    if (!n || !vals.length) { svgMessage(svg, W, H, "Sem lançamentos neste período"); if (tooltip) tooltip.style.display = "none"; return; }
-
-    var C = chartColors(), uid = "m" + (++chartSeq), labels = axisLabels(rows);
-    var maxV = Math.max.apply(null, vals);
-    var minV = Math.min(0, Math.min.apply(null, vals));
-    if (maxV === minV) maxV = minV + 1;
-    var pad = (maxV - minV) * 0.08;
-    maxV += pad; if (minV < 0) minV -= pad;
-    var bars = n <= 2;
-    var slot = plotW / n;
-    function x(i) { return bars ? padL + slot * (i + 0.5) : (n === 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1)); }
-    function y(v) { return padT + plotH - ((v - minV) / (maxV - minV)) * plotH; }
-
-    var keys = ["fat", "desp", "liq"];
-    var colorOf = { fat: C.fat, desp: C.desp, liq: C.liq };
-    var html = "<defs>" + keys.map(function (k) { return FlowHud.area("a" + uid + k, colorOf[k], 0.14); }).join("") + "</defs>";
-
-    // Grade fina e rótulos pequenos (sem linhas verticais).
-    for (var g = 0; g <= 4; g++) {
-      var gv = minV + ((maxV - minV) * g) / 4, gy = y(gv);
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '"/>' +
-        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
-    }
-    var every = Math.ceil(n / Math.max(3, Math.floor(plotW / (labels[0] && labels[0].indexOf("/") >= 0 ? 46 : 34))));
-    for (var mi = 0; mi < n; mi++) {
-      if (mi % every === 0) html += '<text x="' + x(mi) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[mi] + "</text>";
-    }
-    if (minV < 0) html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="' + C.gridStrong + '"/>';
-
-    if (bars) {
-      var bw = Math.max(12, Math.min(40, slot * 0.14)), gap = 8, barsHtml = "";
-      html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" rx="8" fill="' + C.muted + '" opacity="0"/>';
-      data.forEach(function (d, i) {
-        if (!d) return;
-        keys.forEach(function (key, ki) {
-          var v = d[key];
-          if (v == null) return;
-          var bx = x(i) + (ki - 1) * (bw + gap) - bw / 2;
-          var top = v >= 0 ? y(v) : y(0), h = Math.max(3, Math.abs(y(v) - y(0)));
-          barsHtml += '<rect class="fx-bar" x="' + bx + '" y="' + top + '" width="' + bw + '" height="' + h + '" rx="5" fill="' + colorOf[key] + '" fill-opacity="0.9"/>' +
-            '<text x="' + (bx + bw / 2) + '" y="' + (v >= 0 ? top - 6 : top + h + 12) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtShort(v) + "</text>";
-        });
-      });
-      html += barsHtml;
-    } else {
-      // Trechos contínuos (meses sem dado interrompem a linha).
-      var series = { fat: [], desp: [], liq: [] };
-      data.forEach(function (d) { keys.forEach(function (key) { series[key].push(d ? d[key] : null); }); });
-      var runs = function (values) {
-        var out = [], cur = [];
-        values.forEach(function (v, i) { if (v === null) { if (cur.length) out.push(cur); cur = []; } else cur.push([x(i), y(v)]); });
-        if (cur.length) out.push(cur);
-        return out;
-      };
-      var base = y(Math.max(minV, 0));
-      keys.forEach(function (key) {
-        runs(series[key]).forEach(function (pts) {
-          if (pts.length < 2) return;
-          html += '<path class="fx-area" d="' + FlowHud.smooth(pts) + " L" + pts[pts.length - 1][0] + "," + base + " L" + pts[0][0] + "," + base + ' Z" fill="url(#a' + uid + key + ')"/>';
-        });
-      });
-      keys.forEach(function (key) {
-        runs(series[key]).forEach(function (pts) {
-          if (pts.length < 2) return;
-          html += '<path class="fx-line" d="' + FlowHud.smooth(pts) + '" fill="none" stroke="' + colorOf[key] + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
-        });
-        var lastI = -1;
-        series[key].forEach(function (v, i) {
-          if (v === null) return;
-          lastI = i;
-          html += '<circle class="fx-dot" data-s="' + key + '" data-i="' + i + '" cx="' + x(i) + '" cy="' + y(v) + '" r="0" fill="' + colorOf[key] + '" stroke="' + C.dot + '" stroke-width="2"/>';
-        });
-        if (lastI >= 0) html += '<circle class="fx-end" cx="' + x(lastI) + '" cy="' + y(series[key][lastI]) + '" r="3.5" fill="' + colorOf[key] + '" stroke="' + C.dot + '" stroke-width="2"/>';
-      });
-      html += '<line id="c' + uid + '" x1="0" x2="0" y1="' + padT + '" y2="' + (padT + plotH) + '" stroke="' + C.gridStrong + '" stroke-dasharray="3 3" class="fx-scan" opacity="0"/>';
-    }
-    html += '<rect id="h' + uid + '" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.innerHTML = html;
-
-    // Animação de "desenho": cada linha anima o próprio comprimento.
-    svg.querySelectorAll(".fx-line").forEach(function (p) {
-      p.style.setProperty("--len", Math.ceil(p.getTotalLength()) + 2);
-    });
-
-    var hit = svg.querySelector("#h" + uid), cross = svg.querySelector("#c" + uid), band = svg.querySelector("#b" + uid);
-    hit.addEventListener("mousemove", function (evt) {
-      var rect = svg.getBoundingClientRect();
-      var relX = ((evt.clientX - rect.left) / rect.width) * W;
-      var i = bars ? Math.floor((relX - padL) / slot) : Math.round(((relX - padL) / plotW) * (n - 1));
-      i = Math.max(0, Math.min(n - 1, i));
-      if (cross) { cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", "1"); }
-      if (band) { band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.08"); }
-      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", c.getAttribute("data-i") == i ? "4.5" : "0"); });
-      var d = data[i];
-      tooltip.innerHTML = '<div class="t-month">' + ymFull(rows[i]) + "</div>" +
-        '<div class="t-row"><span class="l">' + dotHtml(C.fat) + 'Faturamento</span><span class="num">' + mv(d, "fat") + "</span></div>" +
-        '<div class="t-row"><span class="l">' + dotHtml(C.desp) + 'Despesas</span><span class="num">' + mv(d, "desp") + "</span></div>" +
-        '<div class="t-row"><span class="l">' + dotHtml(C.liq) + 'Líquido</span><span class="num">' + mv(d, "liq") + "</span></div>";
-      tooltip.style.display = "block";
-      var wrapWidth = svg.parentElement.getBoundingClientRect().width;
-      var px = (x(i) / W) * wrapWidth;
-      tooltip.style.left = (px + 200 > wrapWidth ? px - 200 : px + 14) + "px";
-      tooltip.style.top = "6px";
-    });
-    hit.addEventListener("mouseleave", function () {
-      if (cross) cross.setAttribute("opacity", "0");
-      if (band) band.setAttribute("opacity", "0");
-      tooltip.style.display = "none";
-      svg.querySelectorAll(".fx-dot").forEach(function (c) { c.setAttribute("r", "0"); });
-    });
-  }
-
-  // Barras empilhadas por mês, uma cor por ferramenta (cantos arredondados, sem efeitos).
-  // cfg: { svgId, tipId, rows: [ym], series: [{ name, color, get(ym) -> número }], empty }
-  function drawStackedChart(cfg) {
-    var svg = document.getElementById(cfg.svgId), tooltip = document.getElementById(cfg.tipId);
-    if (!svg) return;
-    var rows = cfg.rows || [], n = rows.length;
-    var cw = svg.parentElement ? svg.parentElement.getBoundingClientRect().width : 0;
-    var W = cw ? Math.max(320, Math.min(520, Math.round(cw))) : 520, H = 230, padL = 42, padR = 8, padT = 12, padB = 26;   // viewBox ≈ largura real: texto legível
-    var plotW = W - padL - padR, plotH = H - padT - padB;
-    var totals = rows.map(function (k) { return cfg.series.reduce(function (s, se) { return s + Math.max(0, Number(se.get(k)) || 0); }, 0); });
-    var maxT = totals.length ? Math.max.apply(null, totals) : 0;
-    if (!n || !(maxT > 0)) { svgMessage(svg, W, H, cfg.empty || "Sem lançamentos neste período"); if (tooltip) tooltip.style.display = "none"; return; }
-
-    var C = chartColors(), uid = "s" + (++chartSeq), labels = axisLabels(rows);
-    var maxV = maxT * 1.08, slot = plotW / n, bw = Math.max(4, Math.min(30, slot * 0.6));
-    function y(v) { return padT + plotH - (v / maxV) * plotH; }
-    var html = "";
-    for (var g = 0; g <= 4; g++) {
-      var gv = (maxV * g) / 4, gy = y(gv);
-      html += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + gy + '" y2="' + gy + '" stroke="' + C.grid + '"/>' +
-        '<text x="' + (padL - 10) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + fmtCompact(gv) + "</text>";
-    }
-    var multi = labels[0] && labels[0].indexOf("/") >= 0;
-    var every = Math.ceil(n / Math.max(3, Math.floor(plotW / (multi ? 46 : 30))));
-    html += '<rect id="b' + uid + '" x="0" y="' + padT + '" width="' + slot + '" height="' + plotH + '" rx="8" fill="' + C.muted + '" opacity="0"/>';
-    var stacks = "", labelsHtml = "";
-    rows.forEach(function (k, i) {
-      var cx = padL + slot * (i + 0.5), acc = 0;
-      var parts = cfg.series.map(function (se) { return { se: se, v: Math.max(0, Number(se.get(k)) || 0) }; }).filter(function (p) { return p.v > 0; });
-      parts.forEach(function (p, pi) {
-        var h = (p.v / maxV) * plotH, top = y(acc + p.v), isTop = pi === parts.length - 1;
-        // Só a ponta da pilha tem canto arredondado; o resto fica reto e encostado.
-        stacks += '<path class="fx-bar" d="' + roundedBar(cx - bw / 2, top, bw, Math.max(1, h), isTop ? Math.min(5, bw / 2) : 0) + '" fill="' + p.se.color + '" fill-opacity="0.92"/>';
-        acc += p.v;
-      });
-      if (i % every === 0) labelsHtml += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" font-size="9.5" fill="' + C.muted + '" font-family="' + MONO + '">' + labels[i] + "</text>";
-    });
-    html += stacks + labelsHtml;
-    html += '<rect id="h' + uid + '" x="' + padL + '" y="' + padT + '" width="' + plotW + '" height="' + plotH + '" fill="transparent" style="cursor:crosshair"/>';
-    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-    svg.innerHTML = html;
-
-    var hit = svg.querySelector("#h" + uid), band = svg.querySelector("#b" + uid);
-    hit.addEventListener("mousemove", function (evt) {
-      var rect = svg.getBoundingClientRect();
-      var relX = ((evt.clientX - rect.left) / rect.width) * W;
-      var i = Math.max(0, Math.min(n - 1, Math.floor((relX - padL) / slot)));
-      band.setAttribute("x", padL + slot * i); band.setAttribute("opacity", "0.08");
-      var k = rows[i];
-      tooltip.innerHTML = '<div class="t-month">' + ymFull(k) + "</div>" +
-        cfg.series.map(function (se) { return '<div class="t-row"><span class="l">' + dotHtml(se.color) + escHtml(se.name) + '</span><span class="num">' + fmtBRL(Number(se.get(k)) || 0) + "</span></div>"; }).join("") +
-        '<div class="t-row" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><span class="l">Total</span><span class="num">' + fmtBRL(totals[i]) + "</span></div>";
-      tooltip.style.display = "block";
-      var wrapWidth = svg.parentElement.getBoundingClientRect().width;
-      var px = (padL + slot * (i + 0.5)) / W * wrapWidth;
-      tooltip.style.left = (px + 210 > wrapWidth ? px - 210 : px + 14) + "px";
-      tooltip.style.top = "6px";
-    });
-    hit.addEventListener("mouseleave", function () { band.setAttribute("opacity", "0"); tooltip.style.display = "none"; });
-  }
-  // Barra com os cantos de cima arredondados (r = 0 deixa reta).
-  function roundedBar(x, y, w, h, r) {
-    r = Math.min(r, w / 2, h);
-    return "M" + x + "," + (y + h) + " L" + x + "," + (y + r) + " Q" + x + "," + y + " " + (x + r) + "," + y + " L" + (x + w - r) + "," + y + " Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + " L" + (x + w) + "," + (y + h) + " Z";
-  }
-
-  function renderChart() {
-    drawMoneyChart({
-      svgId: "chart", tipId: "tooltip", rows: state.rows,
-      get: function (k) {
-        var r = state.summaryByMonth[k];
-        if (!r) return null;
-        // Mês só com despesa (sem receita lançada) não entra como "faturamento zero" no gráfico.
-        var hasRev = r.has_revenue !== false;
-        return { fat: hasRev ? Number(r.faturamento) || 0 : null, desp: Number(r.total_despesas) || 0, liq: hasRev ? Number(r.liquido) || 0 : null };
-      }
-    });
-  }
-  function fmtCompact(v) {
-    var abs = Math.abs(v);
-    if (abs >= 1000) return (v / 1000).toFixed(0) + "k";
-    return v.toFixed(0);
   }
 
   /* ---------------- Tool / year selection ---------------- */
@@ -2076,11 +1770,11 @@
   async function showSummary(toolId) {
     var range = state.range;
     var cached = finCache.summaries[rangeKey(toolId, range)];
-    if (cached) { applySummary(cached); renderKpis(); renderTable(); renderChart(); renderPeriodBar(); }
+    if (cached) { applySummary(cached); renderKpis(); renderTable(); renderPeriodBar(); }
     var fresh = await loadSummary(toolId, range);
     if (toolId !== state.activeToolId || !sameRange(range, state.range) || state.view !== "tool") return;
     // Só redesenha (e reanima o gráfico) se algo mudou.
-    if (!cached || JSON.stringify(cached) !== JSON.stringify(fresh)) { renderKpis(); renderTable(); renderChart(); }
+    if (!cached || JSON.stringify(cached) !== JSON.stringify(fresh)) { renderKpis(); renderTable(); }
     renderPeriodBar();
   }
 
@@ -2198,24 +1892,6 @@
       kpiTile("Custo por novo usuário", fmtBRL(custoNovo), null, "Despesas totais do período ÷ Novos usuários do período.");
     renderPeriodBar();
 
-    drawMoneyChart({
-      svgId: "home-chart", tipId: "home-tip", rows: rows,
-      get: function (k) {
-        var any = false, anyRev = false, fat = 0, desp = 0;
-        per.forEach(function (s) { var c = s.byYm[k]; if (c) { any = true; if (c.hasRev) anyRev = true; fat += c.fat; desp += c.desp; } });
-        return any ? { fat: anyRev ? fat : null, desp: desp, liq: anyRev ? fat - desp : null } : null;
-      }
-    });
-    var series = function (key) {
-      return per.map(function (s) {
-        return { name: s.tool.name, color: s.color, get: function (k) { var c = s.byYm[k]; return c ? c[key] : 0; } };
-      });
-    };
-    drawStackedChart({ svgId: "home-rev-chart", tipId: "home-rev-tip", rows: rows, series: series("fat"), empty: "Sem faturamento neste período" });
-    drawStackedChart({ svgId: "home-exp-chart", tipId: "home-exp-tip", rows: rows, series: series("desp"), empty: "Sem despesas neste período" });
-    var legend = per.map(function (s) { return '<span><span class="dot" style="background:' + s.color + '"></span>' + escHtml(s.tool.name) + "</span>"; }).join("");
-    document.getElementById("home-legend-rev").innerHTML = legend;
-    document.getElementById("home-legend-exp").innerHTML = legend;
     renderHomePay();
 
     // Resumo por ferramenta (com linha de total).
@@ -2295,7 +1971,7 @@
       ? "Nenhuma despesa lançada neste período."
       : mode === "all"
         ? "Despesas do período por forma de pagamento, somando as quatro ferramentas." + (tot.none ? " " + fmtBRL(tot.none) + " ainda sem classificar (marque Cartão Flow ou Biancode em cada despesa)." : "")
-        : "Só o que foi pago em " + label[mode] + ", por ferramenta e por mês.";
+        : "Só o que foi pago em " + label[mode] + ", por ferramenta.";
 
     // Gauges: quanto das despesas do período foi pago de cada forma.
     document.getElementById("home-pay-rings").innerHTML = ["cartao", "biancode", "none"].filter(function (k) { return k !== "none" || tot.none > 0; }).map(function (k) {
@@ -2303,26 +1979,6 @@
       return '<div class="hud-gauge">' + FlowHud.ring({ pct: share, color: colors[k], size: 84, ticks: 40, label: label[k], text: all > 0 ? Math.round(share) + "%" : "—" }) +
         '<div class="hud-gauge-t"><span>' + label[k] + "</span><b>" + escHtml(fmtBRL(tot[k])) + "</b></div></div>";
     }).join("");
-
-    var barParts = ["cartao", "biancode", "none"].filter(function (k) { return tot[k] > 0; });
-    document.getElementById("home-pay-bar").innerHTML = barParts.map(function (k) {
-      var w = (tot[k] / all * 100).toFixed(2);
-      return '<span class="pay-bar-seg' + (mode !== "all" && mode !== k ? " dim" : "") + '" style="width:' + w + "%;background:" + colors[k] + '" title="' + escHtml(label[k] + ": " + fmtBRL(tot[k]) + " (" + pctOf(tot[k]) + ")") + '">' + (tot[k] / all >= 0.12 ? escHtml(pctOf(tot[k])) : "") + "</span>";
-    }).join("");
-
-    var series, legend;
-    if (mode === "all") {
-      var keys = ["cartao", "biancode"].concat(tot.none > 0 ? ["none"] : []);
-      series = keys.map(function (k) {
-        return { name: label[k], color: colors[k], get: function (m) { return per.reduce(function (a, s) { var c = s.byYm[m]; return a + (c ? c.pay[k] : 0); }, 0); } };
-      });
-      legend = keys.map(function (k) { return '<span><span class="dot" style="background:' + colors[k] + '"></span>' + label[k] + "</span>"; }).join("");
-    } else {
-      series = per.map(function (s) { return { name: s.tool.name, color: s.color, get: function (m) { var c = s.byYm[m]; return c ? c.pay[mode] : 0; } }; });
-      legend = per.map(function (s) { return '<span><span class="dot" style="background:' + s.color + '"></span>' + escHtml(s.tool.name) + "</span>"; }).join("");
-    }
-    document.getElementById("home-pay-legend").innerHTML = legend;
-    drawStackedChart({ svgId: "home-pay-chart", tipId: "home-pay-tip", rows: rows, series: series, empty: mode === "all" ? "Sem despesas neste período" : "Nada pago em " + label[mode] + " neste período" });
 
     var money = function (v, on) { return '<td class="num' + (on ? " col-on" : "") + '">' + (v ? fmtBRL(v) : "—") + "</td>"; };
     var pcell = function (v, on) { return '<td class="num' + (on ? " col-on" : "") + '">' + (v ? pctOf(v) : "—") + "</td>"; };
@@ -3035,7 +2691,6 @@
     if (state.view === "health") { if (state.health) renderHealth(); }
     else if (state.view === "clients") CustomerHealth.redraw();
     else if (state.view === "home") { if (state.home) renderHome(); }
-    else if (state.activeToolId) renderChart();
   });
 
   boot();

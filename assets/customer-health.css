@@ -240,3 +240,5 @@ body.ch-noscroll { overflow: hidden; }
 .ch-mix-t i { display: block; height: 100%; border-radius: 999px; background: var(--accent-3); }
 .ch-mix-row b { text-align: right; color: var(--text); }
 .ch-mix-go { width: auto; margin-top: 12px; padding: 7px 14px; }
+.ch-ta-row.tot { border-top: 1px dashed var(--border-strong); margin-top: 2px; padding-top: 6px; }
+.ch-ta-row.tot span { color: var(--text); font-weight: 600; }
