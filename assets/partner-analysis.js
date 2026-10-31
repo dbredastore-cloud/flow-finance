@@ -81,8 +81,8 @@ window.PartnerAnalysis = (function () {
       var ok = done >= need;
       return '<div class="pa-dl"><div class="pa-dl-h"><span>' + lab + '</span><b class="' + (ok ? "ok" : "") + '">' + int(done) + "/" + int(need) + (ok ? " ✓" : "") + "</b></div>" + bar(done, need, exp, ok ? "ok" : "") + "</div>";
     };
-    return '<article class="fa-card"><div class="fa-card-t">Entregas de ' + esc(d.mes) + '</div><div class="fa-card-p">' +
-      (d.fechado ? "mês fechado" : "faltam " + d.dias_restantes + (d.dias_restantes === 1 ? " dia" : " dias") + " para fechar") + "</div>" +
+    return '<article class="fa-card"><div class="fa-card-t">Entregas do ' + esc(d.mes) + '</div><div class="fa-card-p">' +
+      (d.fechado ? "ciclo fechado" : "faltam " + d.dias_restantes + (d.dias_restantes === 1 ? " dia" : " dias") + " para fechar o ciclo") + "</div>" +
       (d.meta_stories ? row("Stories", d.stories, d.meta_stories, d.fechado ? null : d.stories_esperados_ate_hoje) : "") +
       (d.meta_reels ? row("Reels", d.reels, d.meta_reels) : "") +
       (d.meta_youtube ? row("Vídeo no YouTube", d.youtube, d.meta_youtube) : "") +

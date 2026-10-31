@@ -220,7 +220,7 @@ window.InfluencerDash = (function () {
       '<div class="sub">' + (S.ctx.heroNote || esc(a.email)) + (noC ? "" : " · contrato " + period) + "</div>" +
       '<div class="sub">' + (ch ? esc(ch.title || "") + (ch.handle ? " · " + esc(ch.handle) : "") + (ch.country ? " · " + esc(ch.country) : "") +
         (ch.channel_created ? " · no YouTube desde " + new Date(ch.channel_created).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "") : "Canal do YouTube não cadastrado na ficha do influencer") + "</div>" +
-      (noC ? "" : '<div class="sub">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(c.bonus_sales_target) + " vendas · por mês: " +
+      (noC ? "" : '<div class="sub">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(c.bonus_sales_target) + " vendas · por ciclo (renova todo dia " + new Date(c.start_date + "T12:00:00").getDate() + "): " +
         c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div>") +
       '<div class="sub">' + S.ctx.socials + (ch && ch.fetched_at ? ' · dados do YouTube lidos em ' + new Date(ch.fetched_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "") + "</div></div></section>";
 
@@ -233,7 +233,7 @@ window.InfluencerDash = (function () {
         kf("Comissão", fmtBRL(sl.commission || 0), "paga ao influencer") + "</div></section>";
     } else body += '<section class="mr-fsec"><h3>Resultado do contrato <small class="muted">vendas das ferramentas Flow na vigência</small></h3><div class="mr-fkpis">' +
       kf("Vendas", fmtInt(tot.count), "ferramentas Flow") + kf("Faturamento", fmtBRL(tot.amount), "valor cobrado do cliente") +
-      kf("Comissão paga", fmtBRL(tot.commission), c.commission_pct + "% combinado") + kf("Fixo + bônus", fmtBRL(tot.fixed + tot.bonus), months.length + " mês(es) de contrato") +
+      kf("Comissão paga", fmtBRL(tot.commission), c.commission_pct + "% combinado") + kf("Fixo + bônus", fmtBRL(tot.fixed + tot.bonus), months.length + " ciclo(s) de contrato") +
       kf("Custo total", fmtBRL(cost), "fixo + comissão + bônus") +
       kf("Resultado", '<span class="' + (result >= 0 ? "good" : "bad") + '">' + fmtBRL(result) + "</span>", "líquido do produtor − fixo − bônus", "Líquido do produtor (já sem taxa e comissão) − fixo − bônus.") +
       kf("Custo por venda", tot.count ? fmtBRL(cost / tot.count) : "—", "custo total ÷ vendas") +
@@ -275,7 +275,7 @@ window.InfluencerDash = (function () {
     var fAgg = agg(vf), rest = agg(m.inC.filter(function (v) { return !v.fx.length; }));
     body += '<section class="mr-fsec"><h3>' + (fav() ? "Desde a liberação do acesso" : noC ? "Vídeos baixados" : "Na vigência do contrato") + ' <small class="muted">' + fmtDate(m.w.start) + " a " + fmtDate(m.w.end) + "</small></h3><div class=\"mr-fkpis\">" +
       kf("Vídeos publicados", fmtInt(A_.n), fmtInt(longs.length) + " vídeos · " + fmtInt(shorts.length) + " Shorts") +
-      (noC ? "" : kf("Meta do YouTube", fmtInt(longs.length) + " / " + fmtInt(metaTotal), c.youtube_per_month + " por mês × " + months.length + " mês(es)", "Vídeos longos publicados (Shorts não contam) contra a meta mensal do contrato.")) +
+      (noC ? "" : kf("Meta do YouTube", fmtInt(longs.length) + " / " + fmtInt(metaTotal), c.youtube_per_month + " por ciclo × " + months.length + " ciclo(s)", "Vídeos longos publicados (Shorts não contam) contra a meta de cada ciclo de 1 mês do contrato.")) +
       kf("Views nesses vídeos", fmtN(A_.views), fmtInt(A_.views) + " no total", "Views de hoje dos vídeos publicados na vigência.") +
       kf("Média de views", fmtN(A_.avg), "por vídeo publicado") + kf("Mediana de views", fmtN(A_.med), "não distorce com vídeo viral") +
       kf("Curtidas", fmtN(A_.likes), fmtN(A_.n ? A_.likes / A_.n : null) + " por vídeo") + kf("Comentários", fmtN(A_.comments), fmtN(A_.n ? A_.comments / A_.n : null) + " por vídeo") +
@@ -292,15 +292,15 @@ window.InfluencerDash = (function () {
       '<div class="mr-fnote">Nenhum vídeo publicado na vigência entre os dados que temos.</div>') + "</section>";
     if (noC) body += '<div class="mr-f2"><section class="mr-fsec"><h3>Vídeos por mês</h3><p class="mr-hint">Verde: longos; cinza: Shorts.</p><div class="mr-chart" id="fd-months"></div></section>' +
       '<section class="mr-fsec"><h3>Dia da semana que publica</h3><p class="mr-hint">Vídeos por dia da semana (horário de Brasília).</p><div class="mr-chart" id="fd-dow"></div></section></div>';
-    else body += '<div class="fd-f3"><section class="mr-fsec"><h3>Vídeos por mês × meta</h3><p class="mr-hint">Verde: longos; cinza: Shorts; linha: meta mensal.</p><div class="mr-chart" id="fd-months"></div></section>' +
-      '<section class="mr-fsec"><h3>Vendas Flow por mês</h3><p class="mr-hint">Vendas das ferramentas Flow por mês de contrato.</p><div class="mr-chart" id="fd-sales"></div></section>' +
+    else body += '<div class="fd-f3"><section class="mr-fsec"><h3>Vídeos por ciclo × meta</h3><p class="mr-hint">Verde: longos; cinza: Shorts; linha: meta do ciclo. Cada barra é o ciclo que começa na data indicada.</p><div class="mr-chart" id="fd-months"></div></section>' +
+      '<section class="mr-fsec"><h3>Vendas Flow por ciclo</h3><p class="mr-hint">Vendas das ferramentas Flow em cada ciclo de 1 mês do contrato.</p><div class="mr-chart" id="fd-sales"></div></section>' +
       '<section class="mr-fsec"><h3>Dia da semana que publica</h3><p class="mr-hint">Vídeos da vigência por dia (horário de Brasília).</p><div class="mr-chart" id="fd-dow"></div></section></div>';
 
     /* entregas por mês */
-    if (!noC) body += '<section class="mr-fsec"><h3>Entregas por mês</h3><div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Mês</th><th>Vídeos</th><th>Shorts</th><th>Citam a Flow</th><th>Meta vídeos</th><th>Stories</th><th>Reels</th><th>Vendas Flow</th><th>Custo</th></tr></thead><tbody>' +
+    if (!noC) body += '<section class="mr-fsec"><h3>Entregas por ciclo <small class="muted">1 mês a partir da data de assinatura</small></h3><div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Ciclo</th><th>Vídeos</th><th>Shorts</th><th>Citam a Flow</th><th>Meta vídeos</th><th>Stories</th><th>Reels</th><th>Vendas Flow</th><th>Custo</th></tr></thead><tbody>' +
       months.slice().reverse().map(function (r) {
         var mv = monthVids(m, r), okV = mv.longs.length >= c.youtube_per_month;
-        return "<tr" + (r.current ? ' class="fi-current"' : "") + '><td class="l">' + MONTHS[r.month - 1] + "/" + String(r.year).slice(2) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
+        return "<tr" + (r.current ? ' class="fi-current"' : "") + '><td class="l">' + mLabel(r) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
           '<td class="num">' + mv.longs.length + '</td><td class="num">' + mv.shorts.length + '</td><td class="num">' + mv.flow.length + '</td>' +
           '<td class="num"><span class="status ' + (okV ? "ok" : r.current ? "wait" : "bad") + '">' + mv.longs.length + "/" + c.youtube_per_month + '</span></td>' +
           '<td class="num"><span class="status ' + (r.okStories ? "ok" : r.current ? "wait" : "bad") + '">' + r.stories + "/" + c.stories_per_month + '</span></td>' +
@@ -334,8 +334,13 @@ window.InfluencerDash = (function () {
     return out;
   }
 
+  // Linha de mês: ciclo do contrato (from/to, a partir da data de assinatura) ou mês do calendário (sem contrato).
+  function mRange(r) { return r.from ? [r.from.getTime(), r.to.getTime()] : [new Date(r.year, r.month - 1, 1).getTime(), new Date(r.year, r.month, 1).getTime()]; }
+  function mLabel(r) { return r.from ? r.cycle + "º · " + r.label : MONTHS[r.month - 1] + "/" + String(r.year).slice(2); }
+  function mShort(r) { return r.from ? String(r.from.getDate()).padStart(2, "0") + "/" + String(r.from.getMonth() + 1).padStart(2, "0") : MONTHS[r.month - 1] + "/" + String(r.year).slice(2); }
+
   function monthVids(m, r) {
-    var a = new Date(r.year, r.month - 1, 1).getTime(), b = new Date(r.year, r.month, 1).getTime();
+    var w = mRange(r), a = w[0], b = w[1];
     var list = m.vids.filter(function (v) { return v.ms >= a && v.ms < b; });
     return { longs: list.filter(function (v) { return !v.short; }), shorts: list.filter(function (v) { return v.short; }), flow: list.filter(function (v) { return v.fx.length; }) };
   }
@@ -400,8 +405,8 @@ window.InfluencerDash = (function () {
   // Reels que o Instagram mostra no mês (para conferir com o que foi lançado à mão no contrato).
   function igMonthHint(r) {
     if (!S.ig || !S.ig.account || !S.ig.account.username) return "";
-    var x = igIn(new Date(r.year, r.month - 1, 1).getTime(), new Date(r.year, r.month, 1).getTime());
-    return '<div class="muted" style="font-size:11px" title="Lido no Instagram: reels e posts do feed publicados no mês">IG: ' + x.reels.length + " reels · " + x.feed.length + " feed</div>";
+    var w = mRange(r), x = igIn(w[0], w[1]);
+    return '<div class="muted" style="font-size:11px" title="Lido no Instagram: reels e posts do feed publicados no ciclo">IG: ' + x.reels.length + " reels · " + x.feed.length + " feed</div>";
   }
   function instaSection(m) {
     var link = S.ctx.instagram, ig = S.ig, acc = ig && ig.account;
@@ -496,13 +501,13 @@ window.InfluencerDash = (function () {
     el.innerHTML = s + "</svg>";
   }
   function drawMonths(m) {
-    var months = nc() ? pseudoMonths(m) : S.ctx.info.months, labels = months.map(function (r) { return MONTHS[r.month - 1] + "/" + String(r.year).slice(2); });
+    var months = nc() ? pseudoMonths(m) : S.ctx.info.months, labels = months.map(mShort);
     var longs = [], shorts = [];
     months.forEach(function (r) { var mv = monthVids(m, r); longs.push(mv.longs.length); shorts.push(mv.shorts.length); });
     stackedMonths($("fd-months"), labels, longs, shorts, nc() ? 0 : (S.ctx.c.youtube_per_month || 0), "vídeos");
   }
   function drawSales() {
-    var months = S.ctx.info.months, labels = months.map(function (r) { return MONTHS[r.month - 1] + "/" + String(r.year).slice(2); });
+    var months = S.ctx.info.months, labels = months.map(mShort);
     stackedMonths($("fd-sales"), labels, months.map(function (r) { return r.count; }), null, 0, "vendas");
   }
   function drawDow(m) {

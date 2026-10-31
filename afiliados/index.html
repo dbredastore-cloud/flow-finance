@@ -2225,7 +2225,16 @@
     });
   }
 
-  // Meses do contrato (do início até o fim do contrato ou o mês atual), com os números de cada um.
+  // Ciclo k do contrato: começa no mesmo dia da assinatura, k meses depois (dia 31 vira o último dia de meses curtos).
+  function cycleStart(start, k) {
+    var y = start.getFullYear(), m = start.getMonth() + k, last = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(start.getDate(), last));
+  }
+  function ddmm(d) { return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); }
+
+  // Ciclos de entrega do contrato: 1 mês a partir da data de assinatura (ex.: 18/10 a 17/11, 18/11 a 17/12...),
+  // do início até o fim do contrato ou o ciclo atual, com os números de cada um. Cada ciclo é gravado em
+  // influencer_deliverables pelo ano/mês em que começa.
   function contractMonths(c) {
     var flowIds = flowProductIds();
     var start = new Date(c.start_date + "T00:00:00");
@@ -2238,10 +2247,12 @@
     var channel = (state.yt.channels || []).find(function (x) { return x.c.affiliate_email === c.affiliate_email; });
     var months = [], cum = 0, bonusMonth = null;
     var lastMonth = end && end < now ? end : now;
-    for (var d = new Date(start.getFullYear(), start.getMonth(), 1); d <= lastMonth; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-      var mStart = d, mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    for (var k = 0, d = start; d <= lastMonth; k++, d = cycleStart(start, k)) {
+      var mStart = d, mEnd = cycleStart(start, k + 1);
       var ms = sales.filter(function (s) { var t = new Date(s.sale_created_at); return t >= mStart && t < mEnd; });
-      var row = { year: d.getFullYear(), month: d.getMonth() + 1, sales: ms, count: ms.length, amount: 0, net: 0, commission: 0, pcts: {} };
+      var row = { year: d.getFullYear(), month: d.getMonth() + 1, cycle: k + 1, from: mStart, to: mEnd,
+        label: ddmm(mStart) + " a " + ddmm(end && end < mEnd ? end : new Date(mEnd.getFullYear(), mEnd.getMonth(), mEnd.getDate() - 1)),
+        sales: ms, count: ms.length, amount: 0, net: 0, commission: 0, pcts: {} };
       ms.forEach(function (s) {
         row.amount += Number(s.amount) || 0; row.net += Number(s.net_amount) || 0; row.commission += Number(s.commission) || 0;
         var p = salePct(s); if (p != null) row.pcts[p] = (row.pcts[p] || 0) + 1;
@@ -2290,12 +2301,11 @@
       box.innerHTML = '<section class="panel"><p class="empty">Nenhum influencer contratado ainda. No menu <strong>Afiliados</strong>, clique na estrela ☆ ao lado do nome para adicionar.</p></section>';
       return;
     }
-    var now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1;
     var k = { count: 0, amount: 0, cost: 0, delivered: 0, required: 0 };
     var cards = list.map(function (c) {
       var a = state.byEmail[c.affiliate_email] || { email: c.affiliate_email, name: c.affiliate_email };
       var info = contractMonths(c);
-      var cur = info.months.find(function (r) { return r.year === y && r.month === m; });
+      var cur = info.months.find(function (r) { return r.current; });
       if (cur) {
         k.count += cur.count; k.amount += cur.amount; k.cost += cur.cost;
         k.required += c.stories_per_month + c.reels_per_month + c.youtube_per_month;
@@ -2305,10 +2315,10 @@
     });
     $("fi-kpis").innerHTML =
       kpi("Contratados", fmtInt(list.length)) +
-      kpi("Vendas no mês", fmtInt(k.count), "ferramentas Flow, " + MONTHS[m - 1].toLowerCase() + "/" + y) +
-      kpi("Faturamento no mês", fmtBRL(k.amount)) +
-      kpi("Custo no mês", fmtBRL(k.cost), "fixo + comissão + bônus") +
-      kpi("Conteúdos entregues", k.required ? Math.round(k.delivered / k.required * 100) + "%" : "—", fmtInt(k.delivered) + " de " + fmtInt(k.required) + " no mês");
+      kpi("Vendas no ciclo atual", fmtInt(k.count), "ferramentas Flow, ciclo de cada contrato") +
+      kpi("Faturamento no ciclo", fmtBRL(k.amount)) +
+      kpi("Custo no ciclo", fmtBRL(k.cost), "fixo + comissão + bônus") +
+      kpi("Conteúdos entregues", k.required ? Math.round(k.delivered / k.required * 100) + "%" : "—", fmtInt(k.delivered) + " de " + fmtInt(k.required) + " no ciclo atual");
     box.innerHTML = cards.join("");
   }
 
@@ -2335,9 +2345,9 @@
           esc(Object.keys(r.pcts).map(function (x) { return x + "% em " + r.pcts[x] + " venda(s)"; }).join(", ") +
             (Math.abs(mp - Number(c.commission_pct)) > 0.5 ? " — contrato prevê " + Number(c.commission_pct) + "%" : "")) + '">' + mp + "%</span>";
       var key = c.id + "|" + r.year + "|" + r.month;
-      var ytTitle = r.ytDetected.length ? "Detectados no canal: " + r.ytDetected.map(function (v) { return v.title; }).join(" · ") : (info.channel ? "Nenhum vídeo com 'Flow' no título neste mês" : "Canal do YouTube não cadastrado na ficha");
+      var ytTitle = r.ytDetected.length ? "Detectados no canal: " + r.ytDetected.map(function (v) { return v.title; }).join(" · ") : (info.channel ? "Nenhum vídeo com 'Flow' no título neste ciclo" : "Canal do YouTube não cadastrado na ficha");
       return '<tr class="' + (r.current ? "fi-current" : "") + '">' +
-        '<td class="l">' + MONTHS[r.month - 1] + "/" + String(r.year).slice(2) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
+        '<td class="l"><span class="muted">' + r.cycle + "º</span> " + r.label + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
         '<td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td>" +
         "<td>" + pctCell + "</td>" +
         '<td class="num">' + fmtBRL(r.fixed) + '</td><td class="num">' + (r.bonus ? '<span class="pct-tag">' + fmtBRL(r.bonus) + "</span>" : "—") + '</td><td class="num">' + fmtBRL(r.cost) + "</td>" +
@@ -2351,7 +2361,7 @@
       '<div class="fi-head"><div class="who"><div class="n" style="font-size:16px;">' + starBtn(c.affiliate_email) +
         '<button type="button" class="fi-name-btn" data-fi-dash="' + c.id + '" title="Abrir o dashboard completo deste influencer">' + esc(a.name || a.email) + "</button></div>" +
         '<div class="e">' + esc(a.email) + " · contrato " + period + "</div>" +
-        '<div class="e">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(target) + " vendas · por mês: " +
+        '<div class="e">Fixo ' + fmtBRL(c.fixed_fee) + "/mês · comissão " + Number(c.commission_pct) + "% · bônus " + fmtBRL(c.bonus_amount) + " ao bater " + fmtInt(target) + " vendas · por ciclo (renova todo dia " + new Date(c.start_date + "T12:00:00").getDate() + "): " +
           c.stories_per_month + " stories, " + c.reels_per_month + " reels, " + c.youtube_per_month + " vídeo(s) no YouTube</div></div>" +
         '<div class="fi-actions">' + socialsHtml(a) + ' <button class="btn btn-primary" data-fi-dash="' + c.id + '">Abrir dashboard</button> <button class="btn" data-fi-edit="' + c.id + '">Editar contrato</button></div></div>' +
       '<div class="fi-grid">' +
@@ -2365,7 +2375,7 @@
           '<div><span>Fixo + bônus</span><b class="num">' + fmtBRL(tot.fixed + tot.bonus) + "</b></div>" +
           '<div><span title="Líquido do produtor (já sem taxa e comissão) − fixo − bônus">Resultado para a empresa</span><b class="num ' + (result >= 0 ? "good" : "bad") + '">' + fmtBRL(result) + "</b></div>" +
         "</div></div>" +
-      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Mês</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% pago</th><th>Fixo</th><th>Bônus</th><th>Custo total</th>' +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l" title="Cada ciclo de entrega dura 1 mês a partir da data de assinatura do contrato">Ciclo</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% pago</th><th>Fixo</th><th>Bônus</th><th>Custo total</th>' +
         '<th>Stories</th><th>Reels</th><th>YouTube</th><th>Conteúdo</th></tr></thead><tbody>' +
         (rows || '<tr><td colspan="12" class="empty">O contrato ainda não começou.</td></tr>') + "</tbody></table></div>" +
       (c.notes ? '<p class="muted" style="font-size:12.5px;margin:8px 0 0;">' + esc(c.notes) + "</p>" : "") +

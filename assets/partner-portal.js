@@ -758,16 +758,25 @@
   }
   function isShort(v) { return v.is_short != null ? v.is_short : (v.duration_s != null && v.duration_s <= 180); }
 
+  // Ciclo k do contrato: começa no mesmo dia da assinatura, k meses depois (dia 31 vira o último dia de meses curtos).
+  function cycleStart(start, k) {
+    var y = start.getFullYear(), m = start.getMonth() + k, last = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(start.getDate(), last));
+  }
+  function ddmm(d) { return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); }
+
+  // Ciclos de entrega: 1 mês a partir da data de assinatura (ex.: 18/10 a 17/11), gravados pelo ano/mês em que começam.
   function contractMonths() {
     var c = S.contract.contract, sales = S.contract.sales || [], del = {};
     (S.contract.deliverables || []).forEach(function (d) { del[d.year + "-" + d.month] = d; });
     var start = new Date(c.start_date + "T00:00:00"), end = c.end_date ? new Date(c.end_date + "T23:59:59") : null, now = new Date();
     var last = end && end < now ? end : now, months = [], cum = 0, bonusMonth = null;
     var vids = S.yt ? S.yt.videos || [] : [];
-    for (var d = new Date(start.getFullYear(), start.getMonth(), 1); d <= last; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-      var a = d, b = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    for (var k = 0, d = start; d <= last; k++, d = cycleStart(start, k)) {
+      var a = d, b = cycleStart(start, k + 1);
       var ms = sales.filter(function (s) { var t = new Date(s.at); return t >= a && t < b; });
-      var row = { year: d.getFullYear(), month: d.getMonth() + 1, n: ms.length, amount: sum(ms, function (s) { return s.amount; }), commission: sum(ms, function (s) { return s.commission; }) };
+      var row = { year: d.getFullYear(), month: d.getMonth() + 1, cycle: k + 1,
+        label: ddmm(a) + " a " + ddmm(end && end < b ? end : new Date(b.getFullYear(), b.getMonth(), b.getDate() - 1)), n: ms.length, amount: sum(ms, function (s) { return s.amount; }), commission: sum(ms, function (s) { return s.commission; }) };
       var before = cum; cum += row.n; row.cum = cum;
       row.bonus = 0;
       if (!bonusMonth && before < c.bonus_sales_target && cum >= c.bonus_sales_target) { bonusMonth = row; row.bonus = Number(c.bonus_amount) || 0; }
@@ -793,19 +802,19 @@
     el.innerHTML = '<div class="pp-head"><h2>Seu contrato com a Flow</h2><span class="pp-st ' + (ended || !c.active ? "" : "ok") + '">' + (ended ? "encerrado" : c.active ? "vigente" : "pausado") + "</span></div>" +
       '<p class="pp-terms">De <b>' + dt(c.start_date + "T12:00:00") + "</b> " + (c.end_date ? "a <b>" + dt(c.end_date + "T12:00:00") + "</b>" : "<b>sem data de fim</b>") +
         " · fixo de <b>" + brl(c.fixed_fee) + "</b> por mês · comissão de <b>" + Number(c.commission_pct) + "%</b> · bônus de <b>" + brl(c.bonus_amount) + "</b> ao chegar a <b>" + int(c.bonus_sales_target) + " vendas</b>" +
-        " · entregas por mês: <b>" + c.stories_per_month + " stories</b>, <b>" + c.reels_per_month + " reels</b> e <b>" + c.youtube_per_month + " vídeo(s) no YouTube</b>.</p>" +
+        " · entregas a cada ciclo de 1 mês (renova todo dia " + new Date(c.start_date + "T12:00:00").getDate() + "): <b>" + c.stories_per_month + " stories</b>, <b>" + c.reels_per_month + " reels</b> e <b>" + c.youtube_per_month + " vídeo(s) no YouTube</b>.</p>" +
       '<div class="pp-kpis pp-kpis-sm">' +
         '<div class="pp-kpi static"><small>Vendas Flow no contrato</small><b class="num">' + int(tot.n) + "</b><span>" + brl(tot.amount) + " em vendas</span></div>" +
-        '<div class="pp-kpi static accent"><small>Total do contrato</small><b class="num">' + brl(tot.commission + tot.fixed + tot.bonus) + "</b><span>comissão + fixo + bônus (com o mês atual)</span></div>" +
+        '<div class="pp-kpi static accent"><small>Total do contrato</small><b class="num">' + brl(tot.commission + tot.fixed + tot.bonus) + "</b><span>comissão + fixo + bônus (com o ciclo atual)</span></div>" +
         '<div class="pp-kpi static"><small>Comissão</small><b class="num">' + brl(tot.commission) + "</b><span>vendas das ferramentas Flow</span></div>" +
-        '<div class="pp-kpi static"><small>Fixo + bônus</small><b class="num">' + brl(tot.fixed + tot.bonus) + "</b><span>" + m.length + " mês(es) de contrato</span></div>" +
+        '<div class="pp-kpi static"><small>Fixo + bônus</small><b class="num">' + brl(tot.fixed + tot.bonus) + "</b><span>" + m.length + " ciclo(s) de contrato</span></div>" +
       "</div>" +
       '<div class="pp-bonus"><div class="pp-bonus-t"><b>Meta do bônus</b><span class="num">' + int(info.total) + " / " + int(c.bonus_sales_target) + " vendas</span></div>" +
         '<div class="pp-bar-track"><i style="width:' + (prog * 100).toFixed(1) + '%"></i></div>' +
-        '<span class="muted">' + (info.bonusMonth ? "🎉 Meta batida em " + MONTHS_LONG[info.bonusMonth.month - 1] + "/" + info.bonusMonth.year + ": bônus de " + brl(c.bonus_amount) + "." : "Faltam " + int(Math.max(0, c.bonus_sales_target - info.total)) + " vendas para o bônus de " + brl(c.bonus_amount) + ".") + "</span></div>" +
-      '<div class="table-scroll"><table class="pp-table"><thead><tr><th class="l">Mês</th><th>Vendas Flow</th><th>Comissão</th><th>Fixo</th><th>Bônus</th><th>Total</th><th>Stories</th><th>Reels</th><th>YouTube</th></tr></thead><tbody>' +
+        '<span class="muted">' + (info.bonusMonth ? "🎉 Meta batida no " + info.bonusMonth.cycle + "º ciclo (" + info.bonusMonth.label + "): bônus de " + brl(c.bonus_amount) + "." : "Faltam " + int(Math.max(0, c.bonus_sales_target - info.total)) + " vendas para o bônus de " + brl(c.bonus_amount) + ".") + "</span></div>" +
+      '<div class="table-scroll"><table class="pp-table"><thead><tr><th class="l">Ciclo</th><th>Vendas Flow</th><th>Comissão</th><th>Fixo</th><th>Bônus</th><th>Total</th><th>Stories</th><th>Reels</th><th>YouTube</th></tr></thead><tbody>' +
         m.slice().reverse().map(function (r) {
-          return "<tr" + (r.current ? ' class="pp-cur"' : "") + '><td class="l">' + MONTHS[r.month - 1] + "/" + String(r.year).slice(2) + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
+          return "<tr" + (r.current ? ' class="pp-cur"' : "") + '><td class="l"><span class="muted">' + r.cycle + "º</span> " + r.label + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
             '<td class="num">' + int(r.n) + '</td><td class="num">' + brl(r.commission) + '</td><td class="num">' + brl(r.fixed) + '</td><td class="num">' + (r.bonus ? brl(r.bonus) : "—") + '</td><td class="num"><b>' + brl(r.total) + "</b></td>" +
             '<td class="num">' + chk(r.stories, c.stories_per_month, r.current) + '</td><td class="num">' + chk(r.reels, c.reels_per_month, r.current) + '</td><td class="num">' + chk(r.youtube, c.youtube_per_month, r.current) + "</td></tr>";
         }).join("") + "</tbody></table></div>" +
