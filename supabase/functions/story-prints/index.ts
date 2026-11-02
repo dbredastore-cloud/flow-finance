@@ -7,6 +7,8 @@
 //
 //   POST { action: "pending", limit?: n }   header x-story-ticket  → { stories: [{ id, day, urls: [...], affiliate }] }
 //   Cada story tem de 1 a 3 prints (a tela de métricas do Instagram pode não caber num só): leia todos juntos.
+//   POST { action: "import_image", id, b64 }   header x-story-ticket  → guarda a miniatura de um story importado de
+//   relatório (source = 'import') na pasta do afiliado e liga ao story. JPEG em base64, até 2 MB.
 //
 // Sem JWT no gateway (verify_jwt = false): a função confere o passe aqui dentro. Não devolve e-mail nem dado de cliente.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -27,6 +29,19 @@ Deno.serve(async (req) => {
   if (ok !== true) return json({ ok: false, error: "passe inválido ou vencido" }, 401);
 
   const body = await req.json().catch(() => ({}));
+  if (body.action === "import_image") {
+    const { data: path } = await sb.rpc("story_import_path", { p_id: String(body.id ?? "") });
+    if (!path) return json({ ok: false, error: "story importado não encontrado" }, 404);
+    const b64 = String(body.b64 ?? "").replace(/^data:image\/[a-z]+;base64,/, "");
+    if (!b64 || b64.length > 2_800_000) return json({ ok: false, error: "imagem ausente ou grande demais" }, 400);
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return json({ ok: false, error: "envie um JPEG" }, 400);
+    const { error: up } = await sb.storage.from("story-prints").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+    if (up) return json({ ok: false, error: up.message }, 500);
+    const { error: e2 } = await sb.rpc("story_import_image", { p_id: String(body.id), p_path: path });
+    if (e2) return json({ ok: false, error: e2.message }, 500);
+    return json({ ok: true, path });
+  }
   if (body.action !== "pending") return json({ ok: false, error: "ação desconhecida" }, 400);
   const limit = Math.min(Math.max(Number(body.limit) || 30, 1), 60);
 

@@ -298,7 +298,10 @@
     ["eng_rate", "Mais engajamento", function (x) { return pctTxt(x.eng_rate) + " de interação (" + int(x.interactions) + ")"; }],
     ["replies", "Mais respostas", function (x) { return int(x.replies) + " respostas"; }],
     ["shares", "Mais compartilhamentos", function (x) { return int(x.shares) + " compartilhamentos"; }],
-    ["exit_rate", "Menos saídas", function (x) { return pctTxt(x.exit_rate) + " saíram"; }]];
+    ["exit_rate", "Menos saídas", function (x) { return pctTxt(x.exit_rate) + " saíram"; }],
+    ["link_taps", "Mais cliques no link", function (x) { return int(x.link_taps) + " cliques (CTR " + pctTxt(x.ctr) + ")"; }],
+    ["ctr", "Melhor CTR do link", function (x) { return pctTxt(x.ctr) + " (" + int(x.link_taps) + " cliques de " + short(x.reach) + " alcançados)"; }],
+    ["mention_taps", "Mais toques em @useaflow", function (x) { return int(x.mention_taps) + " toques"; }]];
   function pctTxt(v) { return v == null ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
   function topicOf(x) { return x.topic || (x.topic_guess ? x.topic_guess + " (sugestão)" : "assunto não informado"); }
   function cmpOf(id) { return ((C.compare && C.compare.stories) || []).filter(function (x) { return x.id === id; })[0] || null; }
@@ -321,18 +324,21 @@
       return '<div class="pc-best"><small>' + m[1] + "</small><b>" + esc(topicOf(x)) + "</b><span>" + m[2](x) + " · " + dmy(x.day) + "</span></div>";
     }).join("");
     var star = function (x, k, txt) { return '<td class="' + (x.rank[k] === 1 ? "pc-top" : "") + '">' + txt + (x.rank[k] === 1 ? " ★" : "") + "</td>"; };
-    var a = c.averages || {};
+    var a = c.averages || {}, lk = !!c.has_link;
+    var dec1 = function (v) { return v == null ? "—" : String(v).replace(".", ","); };
     return '<div class="pc-cmp"><h3 class="pp-h3">Comparação dos seus últimos ' + list.length + " stories</h3>" +
-      '<p class="muted pp-hint">Veja qual assunto rendeu mais e repita o formato. Engajamento = interações ÷ visualizações; saídas = quem saiu ÷ visualizações (quanto menor, melhor). Números ainda não confirmados entram como foram lidos do print.</p>' +
+      '<p class="muted pp-hint">Veja qual assunto rendeu mais e repita o formato. Engajamento = interações ÷ visualizações; saídas = quem saiu ÷ visualizações (quanto menor, melhor); CTR = cliques no link ÷ alcance. Números ainda não confirmados entram como foram lidos do print.</p>' +
       '<div class="pc-bests">' + cards + "</div>" +
-      '<div class="table-scroll"><table class="pp-table pc-cmp-t"><thead><tr><th class="l">Dia</th><th class="l">Assunto</th><th>Visualizações</th><th>Interações</th><th>Engajamento</th><th>Respostas</th><th>Compart.</th><th>Curtidas</th><th>Saídas</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table class="pp-table pc-cmp-t"><thead><tr><th class="l">Dia</th><th class="l">Assunto</th><th>Visualizações</th><th>Interações</th><th>Engajamento</th><th>Respostas</th><th>Compart.</th><th>Curtidas</th><th>Saídas</th>' + (lk ? "<th>Alcance</th><th>Cliques link</th><th>CTR</th><th>@useaflow</th>" : "") + "</tr></thead><tbody>" +
         list.map(function (x) {
           return '<tr><td class="l">' + dmy(x.day) + '</td><td class="l">' + esc(topicOf(x)) + (x.tools.length ? ' <span class="muted">· ' + esc(x.tools.join(", ")) + "</span>" : "") + "</td>" +
             star(x, "views", short(x.views)) + star(x, "interactions", int(x.interactions)) + star(x, "eng_rate", pctTxt(x.eng_rate)) +
-            star(x, "replies", int(x.replies)) + star(x, "shares", int(x.shares)) + star(x, "likes", int(x.likes)) + star(x, "exit_rate", pctTxt(x.exit_rate)) + "</tr>";
+            star(x, "replies", int(x.replies)) + star(x, "shares", int(x.shares)) + star(x, "likes", int(x.likes)) + star(x, "exit_rate", pctTxt(x.exit_rate)) +
+            (lk ? star(x, "reach", short(x.reach)) + star(x, "link_taps", int(x.link_taps)) + star(x, "ctr", pctTxt(x.ctr)) + star(x, "mention_taps", int(x.mention_taps)) : "") + "</tr>";
         }).join("") +
         '<tr class="pc-avg"><td class="l" colspan="2">Média</td><td>' + short(a.views) + "</td><td>" + int(a.interactions) + "</td><td>" + pctTxt(a.eng_rate) + "</td><td>" +
-          (a.replies == null ? "—" : String(a.replies).replace(".", ",")) + "</td><td>" + (a.shares == null ? "—" : String(a.shares).replace(".", ",")) + "</td><td></td><td>" + pctTxt(a.exit_rate) + "</td></tr>" +
+          (a.replies == null ? "—" : String(a.replies).replace(".", ",")) + "</td><td>" + (a.shares == null ? "—" : String(a.shares).replace(".", ",")) + "</td><td></td><td>" + pctTxt(a.exit_rate) + "</td>" +
+          (lk ? "<td>" + short(a.reach) + "</td><td>" + dec1(a.link_taps) + "</td><td>" + pctTxt(a.ctr) + "</td><td>" + dec1(a.mention_taps) + "</td>" : "") + "</tr>" +
       "</tbody></table></div></div>";
   }
   async function saveTopic(input) {
@@ -366,12 +372,14 @@
       var nums = print
         ? '<div class="pc-nums">' + METRICS.map(function (x) { return num(x[0], x[2], s[x[1]], a[x[0]]); }).join("") +
             '<label class="pc-num"><span>Dia</span><input type="date" name="sday" value="' + esc(s.day) + '" max="' + today() + '"' + (C.preview ? " disabled" : "") + "></label></div>"
-        : '<div class="pc-meta">' + short(s.views) + " visualizações · alcance " + short(s.reach) + " · " + int(s.replies) + " respostas · " + int(s.shares) + " compartilhamentos</div>";
+        : '<div class="pc-meta">' + short(s.views) + " visualizações · alcance " + short(s.reach) + " · " + int(s.total_interactions != null ? s.total_interactions : s.interactions) + " interações · " +
+            int(s.replies) + " respostas · " + int(s.shares) + " compartilhamentos · " + int(s.exits) + " saíram" +
+            (s.link_taps != null ? " · <b>" + int(s.link_taps) + " cliques no link</b>" : "") + (s.mention_taps != null ? " · " + int(s.mention_taps) + " toques em @useaflow" : "") + "</div>";
       var note = s.status === "reading" ? "Os prints ainda vão ser lidos (em até 1 dia). Se preferir, digite os números e confirme agora."
         : s.status === "review" ? "Confira os números lidos do print, corrija o que estiver errado e confirme." + (a.note ? " Observação da leitura: " + esc(a.note) : "") : "";
       return '<div class="pc-item pc-story' + (s.tools.length ? " on" : "") + '" data-kind="ig_story" data-item="' + esc(s.id) + '" data-story="' + esc(s.id) + '">' +
         '<div class="pc-body"><div class="pc-title">Story de ' + dmy(s.day) + " " + '<span class="pp-st mini ' + st[0] + '">' + st[1] + "</span>" +
-          (print ? ' <span class="muted">· enviado por print</span>' : ' <span class="muted">· lido do Instagram conectado</span>') + "</div>" +
+          (print ? ' <span class="muted">· enviado por print</span>' : s.source === "import" ? ' <span class="muted">· importado do relatório de insights do Instagram</span>' : ' <span class="muted">· lido do Instagram conectado</span>') + "</div>" +
           (note ? '<p class="muted pp-hint">' + note + "</p>" : "") +
           '<label class="pc-topic"><span>Assunto</span><input type="text" maxlength="200" data-topic="' + esc(s.id) + '" value="' + esc(s.topic || "") + '" placeholder="' +
             esc(a.topic_guess ? "Sugestão: " + a.topic_guess : "Sobre o que foi este story?") + '"' + (C.preview ? " disabled" : "") + "></label>" +
@@ -381,7 +389,8 @@
           (print ? '<div class="pc-acts">' + (np ? '<button type="button" class="btn btn-ghost" data-act="print" data-label="' + plabel + '">' + plabel + "</button>" : "") +
             (!C.preview && edit && np < MAX_PRINTS ? '<label class="btn btn-ghost pc-add">Anexar mais print<input type="file" accept="image/*" multiple data-act-file="add" hidden></label>' : "") +
             (C.preview ? "" : (edit ? '<button type="button" class="btn btn-primary" data-act="confirm">Confirmar números</button>' : '<button type="button" class="btn btn-ghost" data-act="confirm">Salvar correção</button>') +
-              '<button type="button" class="btn btn-ghost pc-del" data-act="delete">Apagar</button>') + "</div>" : "") +
+              '<button type="button" class="btn btn-ghost pc-del" data-act="delete">Apagar</button>') + "</div>"
+            : np ? '<div class="pc-acts"><button type="button" class="btn btn-ghost" data-act="print" data-label="Ver imagem do story">Ver imagem do story</button></div>' : "") +
           '<div class="pc-print" hidden></div>' +
         "</div></div>";
     }).join("");

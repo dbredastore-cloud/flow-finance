@@ -316,7 +316,7 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
-<link rel="stylesheet" href="../assets/influencer-dash.css?v=20261103d">
+<link rel="stylesheet" href="../assets/influencer-dash.css?v=20261103e">
 <link rel="stylesheet" href="../assets/yt-favorites.css">
 <link rel="stylesheet" href="../assets/ai-insights.css">
 <link rel="stylesheet" href="../assets/instagram-hub.css">
@@ -331,7 +331,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
 <script src="../assets/market-radar.js"></script>
-<script src="../assets/influencer-dash.js?v=20261103d"></script>
+<script src="../assets/influencer-dash.js?v=20261103e"></script>
 <script src="../assets/yt-favorites.js"></script>
 <script src="../assets/ai-insights.js"></script>
 <script src="../assets/instagram-perf.js"></script>
@@ -2244,7 +2244,7 @@
   async function loadFiStories(active) {
     var emails = active.map(function (c) { return c.affiliate_email; });
     var since = active.map(function (c) { return c.start_date; }).sort()[0];
-    var r = await sb.from("instagram_stories").select("id, affiliate_email, source, status, story_date, posted_at, image_path, image_paths, views, total_interactions, profile_activity, likes, replies, shares, taps_forward, exits, taps_back, swipes_forward, reach, ai_read, confirmed_at, topic, ai_insight")
+    var r = await sb.from("instagram_stories").select("id, affiliate_email, source, status, story_date, posted_at, image_path, image_paths, views, total_interactions, profile_activity, likes, replies, shares, taps_forward, exits, taps_back, swipes_forward, reach, link_taps, mention_taps, ai_read, confirmed_at, topic, ai_insight")
       .in("affiliate_email", emails).or("source.eq.print,posted_at.gte." + new Date(since + "T00:00:00").toISOString())
       .order("posted_at", { ascending: false }).limit(1000);
     state.fi.stories = {};
@@ -2261,7 +2261,8 @@
   }
 
   var FI_METRICS = [["views", "Visualizações"], ["total_interactions", "Interações"], ["profile_activity", "Atividade do perfil"], ["likes", "Curtidas"], ["replies", "Respostas"],
-    ["shares", "Compartilhamentos"], ["taps_forward", "Avanço"], ["exits", "Saiu"], ["taps_back", "Voltar"], ["swipes_forward", "Próximo story"]];
+    ["shares", "Compartilhamentos"], ["taps_forward", "Avanço"], ["exits", "Saiu"], ["taps_back", "Voltar"], ["swipes_forward", "Próximo story"],
+    ["reach", "Alcance"], ["link_taps", "Cliques no link"], ["mention_taps", "Toques @useaflow"]];
   var FI_ST = { reading: ["wait", "aguardando leitura"], review: ["wait", "influencer conferindo"], confirmed: ["ok", "confirmado"] };
   function storyDay(x) { return x.story_date || new Date(Date.parse(x.posted_at) - 3 * 3600000).toISOString().slice(0, 10); }
 
@@ -2300,7 +2301,7 @@
       };
       var paths = x.image_paths && x.image_paths.length ? x.image_paths : x.image_path ? [x.image_path] : [];
       return "<tr>" +
-        '<td class="l">' + new Date(storyDay(x) + "T12:00:00").toLocaleDateString("pt-BR") + '<div class="muted" style="font-size:11px;">' + (x.source === "print" ? "print" : "API") + "</div></td>" +
+        '<td class="l">' + new Date(storyDay(x) + "T12:00:00").toLocaleDateString("pt-BR") + '<div class="muted" style="font-size:11px;">' + (x.source === "print" ? "print" : x.source === "import" ? "relatório" : "API") + "</div></td>" +
         '<td><span class="status ' + st[0] + '">' + st[1] + "</span></td>" +
         '<td class="l">' + (x.tools.length ? esc(x.tools.join(", ")) : '<span class="muted">sem ferramenta</span>') + "</td>" +
         '<td class="l fi-topic">' + (x.topic ? esc(x.topic) : ai.topic_guess ? '<span class="muted">' + esc(ai.topic_guess) + " (sugestão)</span>" : '<span class="muted">—</span>') + "</td>" +

@@ -176,8 +176,8 @@ window.InfluencerDash = (function () {
     if (my.email) {
       var rp = await Promise.all([
         A.sb.from("content_tool_tags").select("kind, content_id, tagged_at, tools(name, sort_order)").eq("affiliate_email", my.email).order("tagged_at", { ascending: false }).limit(500),
-        A.sb.from("instagram_stories").select("id, source, status, story_date, posted_at, first_seen_at, confirmed_at, image_path, image_paths, topic, views, total_interactions, replies, shares, ai_read, ai_insight")
-          .eq("affiliate_email", my.email).eq("source", "print").order("first_seen_at", { ascending: false }).limit(200)
+        A.sb.from("instagram_stories").select("id, source, status, story_date, posted_at, first_seen_at, confirmed_at, image_path, image_paths, topic, views, reach, total_interactions, replies, shares, link_taps, mention_taps, ai_read, ai_insight")
+          .eq("affiliate_email", my.email).in("source", ["print", "import"]).order("first_seen_at", { ascending: false }).limit(200)
       ]);
       if (S !== my) return;
       my.portal = { tags: rp[0].error ? [] : (rp[0].data || []), stories: rp[1].error ? [] : (rp[1].data || []) };
@@ -383,10 +383,15 @@ window.InfluencerDash = (function () {
       var tags = by["ig_story|" + x.id], n = (x.image_paths && x.image_paths.length) || (x.image_path ? 1 : 0), st = ST[x.status] || ST.confirmed;
       var day = x.story_date || String(x.posted_at || "").slice(0, 10), ai = x.ai_read || {};
       var views = x.views != null ? x.views : ai.views;
-      ev.push({ at: Date.parse(x.first_seen_at), icon: "▣", title: "Enviou o story de " + new Date(day + "T12:00:00").toLocaleDateString("pt-BR") + " (" + n + (n === 1 ? " print" : " prints") + ")",
+      var imp = x.source === "import";
+      ev.push({ at: Date.parse(imp ? x.posted_at : x.first_seen_at), icon: "▣",
+        title: imp ? "Story de " + new Date(x.posted_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) + " (importado do relatório de insights)"
+                   : "Enviou o story de " + new Date(day + "T12:00:00").toLocaleDateString("pt-BR") + " (" + n + (n === 1 ? " print" : " prints") + ")",
         what: x.topic ? "Assunto: " + x.topic : ai.topic_guess ? "Assunto (sugestão da leitura): " + ai.topic_guess : "Assunto não informado",
         sub: '<span class="status ' + st[0] + '">' + st[1] + "</span>" + (views != null ? " · " + fmtN(views) + " visualizações" + (x.status === "confirmed" ? "" : " (lido do print)") : "") +
-          (x.confirmed_at ? " · confirmado em " + new Date(x.confirmed_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""),
+          (x.reach != null ? " · alcance " + fmtN(x.reach) : "") + (x.link_taps != null ? " · <b>" + fmtInt(x.link_taps) + " cliques no link</b>" : "") +
+          (x.mention_taps ? " · " + fmtInt(x.mention_taps) + " toques em @useaflow" : "") +
+          (!imp && x.confirmed_at ? " · confirmado em " + new Date(x.confirmed_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""),
         chips: tags ? tags.names : [], insight: x.ai_insight });
     });
     ev.sort(function (a, b) { return b.at - a.at; });
@@ -396,7 +401,8 @@ window.InfluencerDash = (function () {
     var pend = stories.filter(function (x) { return x.status !== "confirmed"; }).length;
     var last = ev[0];
     var kpis = '<div class="mr-fkpis">' +
-      kf("Stories enviados", fmtInt(stories.length), pend ? pend + " sem confirmar" : stories.length ? "todos confirmados" : "nenhum ainda") +
+      kf("Stories com números", fmtInt(stories.length), (pend ? pend + " sem confirmar" : stories.length ? "todos confirmados" : "nenhum ainda") +
+        (stories.some(function (x) { return x.link_taps != null; }) ? " · " + fmtInt(sum(stories, function (x) { return x.link_taps; })) + " cliques no link" : "")) +
       kf("Vídeos marcados", fmtInt(nYt), nSh ? "+ " + nSh + " Short(s) extra" : "vídeos longos com ferramenta Flow") +
       kf("Reels marcados", fmtInt(nReels), nFeed ? "+ " + nFeed + " post(s) de feed extra" : "reels com ferramenta Flow") +
       kf("Última ação no Portal", last ? new Date(last.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—", last ? ago((Date.now() - last.at) / DAY) : "ainda não usou a aba Conteúdo") +
