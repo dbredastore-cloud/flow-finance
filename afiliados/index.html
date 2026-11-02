@@ -273,6 +273,10 @@
   .fi-stories { margin-top: 12px; }
   .fi-st-toggle { background: none; border: 0; padding: 4px 0; color: var(--text); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
   .fi-prints { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fi-best { color: var(--good); font-weight: 700; }
+  .fi-topic { white-space: normal !important; min-width: 180px; max-width: 280px; }
+  .fi-insight { margin: 0 0 10px; padding: 8px 10px; border-left: 3px solid var(--accent); font-size: 13px; line-height: 1.5; white-space: normal; max-width: 900px; }
+  .fi-insight b { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-right: 6px; }
   .fi-prints img { max-width: 240px; max-height: 440px; border-radius: 8px; border: 1px solid var(--border); display: block; }
   .fi-tools .kpi-mini-label { margin-bottom: 6px; }
   .fi-table tr.fi-current td { background: rgba(var(--accent-rgb),.06); }
@@ -2240,7 +2244,7 @@
   async function loadFiStories(active) {
     var emails = active.map(function (c) { return c.affiliate_email; });
     var since = active.map(function (c) { return c.start_date; }).sort()[0];
-    var r = await sb.from("instagram_stories").select("id, affiliate_email, source, status, story_date, posted_at, image_path, image_paths, views, total_interactions, profile_activity, likes, replies, shares, taps_forward, exits, taps_back, swipes_forward, reach, ai_read, confirmed_at")
+    var r = await sb.from("instagram_stories").select("id, affiliate_email, source, status, story_date, posted_at, image_path, image_paths, views, total_interactions, profile_activity, likes, replies, shares, taps_forward, exits, taps_back, swipes_forward, reach, ai_read, confirmed_at, topic, ai_insight")
       .in("affiliate_email", emails).or("source.eq.print,posted_at.gte." + new Date(since + "T00:00:00").toISOString())
       .order("posted_at", { ascending: false }).limit(1000);
     state.fi.stories = {};
@@ -2270,28 +2274,46 @@
       (pend ? " · " + pend + " sem confirmar" : "") + ")</span></button>";
     if (!open) return '<div class="fi-stories">' + head + "</div>";
     if (!list.length) return '<div class="fi-stories">' + head + '<p class="muted" style="font-size:12.5px;">Nenhum story enviado ainda.</p></div>';
+    // Número efetivo (confirmado ou, antes disso, o lido do print) e o melhor de cada métrica entre os últimos 12 com números.
+    var aiKey = function (k) { return k === "total_interactions" ? "interactions" : k; };
+    var eff = function (x, k) { var v = x[k]; if (v == null && x.status !== "confirmed" && x.ai_read) v = x.ai_read[aiKey(k)]; return v == null ? null : Number(v); };
+    var withNums = list.filter(function (x) { return eff(x, "views") > 0; }).slice(0, 12), best = {};
+    if (withNums.length > 1) {
+      FI_METRICS.forEach(function (m) {
+        var lowBetter = m[0] === "exits";
+        var val = function (x) { var v = eff(x, m[0]); return v == null ? null : lowBetter ? v / eff(x, "views") : v; };
+        var vals = withNums.map(val).filter(function (v) { return v != null; });
+        if (vals.length) best[m[0]] = lowBetter ? Math.min.apply(null, vals) : Math.max.apply(null, vals);
+      });
+    }
+    var isBest = function (x, k) {
+      if (!(k in best) || withNums.indexOf(x) < 0) return false;
+      var v = eff(x, k); if (v == null) return false;
+      return (k === "exits" ? v / eff(x, "views") : v) === best[k];
+    };
     var rows = list.map(function (x) {
       var st = FI_ST[x.status] || FI_ST.confirmed, ai = x.ai_read || {}, confirmed = x.status === "confirmed";
-      var aiKey = function (k) { return k === "total_interactions" ? "interactions" : k; };
       var cell = function (k) {
-        var v = x[k], g = ai[aiKey(k)];
-        if (confirmed || v != null) return '<td class="num">' + (v == null ? "—" : fmtInt(v)) + "</td>";
-        return '<td class="num" title="Lido do print, ainda não confirmado pelo influencer">' + (g == null ? "—" : '<span class="muted">' + fmtInt(g) + "*</span>") + "</td>";
+        var v = x[k], g = ai[aiKey(k)], b = isBest(x, k) ? ' <span class="fi-best" title="' + (k === "exits" ? "Menor taxa de saída" : "Maior valor") + ' entre os últimos stories">★</span>' : "";
+        if (confirmed || v != null) return '<td class="num">' + (v == null ? "—" : fmtInt(v)) + b + "</td>";
+        return '<td class="num" title="Lido do print, ainda não confirmado pelo influencer">' + (g == null ? "—" : '<span class="muted">' + fmtInt(g) + "*</span>") + b + "</td>";
       };
       var paths = x.image_paths && x.image_paths.length ? x.image_paths : x.image_path ? [x.image_path] : [];
       return "<tr>" +
         '<td class="l">' + new Date(storyDay(x) + "T12:00:00").toLocaleDateString("pt-BR") + '<div class="muted" style="font-size:11px;">' + (x.source === "print" ? "print" : "API") + "</div></td>" +
         '<td><span class="status ' + st[0] + '">' + st[1] + "</span></td>" +
         '<td class="l">' + (x.tools.length ? esc(x.tools.join(", ")) : '<span class="muted">sem ferramenta</span>') + "</td>" +
+        '<td class="l fi-topic">' + (x.topic ? esc(x.topic) : ai.topic_guess ? '<span class="muted">' + esc(ai.topic_guess) + " (sugestão)</span>" : '<span class="muted">—</span>') + "</td>" +
         FI_METRICS.map(function (m) { return cell(m[0]); }).join("") +
-        "<td>" + (paths.length ? '<button type="button" class="btn" data-fi-prints="' + esc(x.id) + '">' + (paths.length > 1 ? paths.length + " prints" : "Print") + "</button>" : "—") + "</td></tr>" +
-        (paths.length ? '<tr class="fi-prints-row" data-fi-prints-row="' + esc(x.id) + '" hidden><td colspan="' + (FI_METRICS.length + 4) + '"><div class="fi-prints"></div>' +
+        "<td>" + (paths.length || x.ai_insight ? '<button type="button" class="btn" data-fi-prints="' + esc(x.id) + '">' + (paths.length > 1 ? paths.length + " prints" : paths.length ? "Print" : "Análise") + (x.ai_insight && paths.length ? " e análise" : "") + "</button>" : "—") + "</td></tr>" +
+        (paths.length || x.ai_insight ? '<tr class="fi-prints-row" data-fi-prints-row="' + esc(x.id) + '" hidden><td colspan="' + (FI_METRICS.length + 5) + '">' +
+          (x.ai_insight ? '<div class="fi-insight"><b>Análise</b> ' + esc(x.ai_insight) + "</div>" : "") + '<div class="fi-prints"></div>' +
           (ai.note ? '<p class="muted" style="font-size:12px;margin:6px 0 0;">Leitura do print: ' + esc(ai.note) + "</p>" : "") + "</td></tr>" : "");
     }).join("");
     return '<div class="fi-stories">' + head +
-      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Dia</th><th>Situação</th><th class="l">Ferramentas</th>' +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Dia</th><th>Situação</th><th class="l">Ferramentas</th><th class="l">Assunto</th>' +
         FI_METRICS.map(function (m) { return "<th>" + m[1] + "</th>"; }).join("") + "<th>Prints</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
-      '<p class="muted" style="font-size:12px;margin:6px 0 0;">* lido do print, aguardando o influencer conferir e confirmar no Portal.</p></div>';
+      '<p class="muted" style="font-size:12px;margin:6px 0 0;">* lido do print, aguardando o influencer conferir e confirmar no Portal. ★ melhor dos últimos ' + withNums.length + ' stories com números (em Saiu, a menor taxa de saída).</p></div>';
   }
   async function fiShowPrints(id) {
     var row = document.querySelector('[data-fi-prints-row="' + CSS.escape(id) + '"]');
@@ -2299,7 +2321,7 @@
     if (!row.hidden) { row.hidden = true; return; }
     var x = null;
     Object.keys(state.fi.stories).forEach(function (k) { state.fi.stories[k].forEach(function (y) { if (y.id === id) x = y; }); });
-    var paths = x.image_paths && x.image_paths.length ? x.image_paths : [x.image_path];
+    var paths = (x.image_paths && x.image_paths.length ? x.image_paths : [x.image_path]).filter(Boolean);
     try {
       var urls = await Promise.all(paths.map(async function (pth) {
         if (state.fi.urls[pth]) return state.fi.urls[pth];

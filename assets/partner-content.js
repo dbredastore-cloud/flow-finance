@@ -27,7 +27,8 @@
 
   /* ---------------- dados ---------------- */
   async function load() {
-    C.data = await C.rpc("portal_content");
+    var r = await Promise.all([C.rpc("portal_content"), C.rpc("portal_story_compare").catch(function () { return null; })]);
+    C.data = r[0]; C.compare = r[1];
     var cyc = (C.data && C.data.cycles) || [];
     if (!C.cycle || !cyc.some(function (x) { return x.cycle_start === C.cycle; })) {
       var cur = cyc.filter(function (x) { return x.is_current; })[0] || cyc[0];
@@ -127,7 +128,8 @@
     btn.disabled = true; btn.textContent = "Enviando…"; msg.className = "pc-msg"; msg.textContent = "";
     try {
       var paths = await uploadPrints(files, day);
-      var r = await C.sb.rpc("portal_story_create", { p_day: day, p_paths: paths, p_tools: tools });
+      var topic = (form.querySelector("[name=topic]").value || "").trim();
+      var r = await C.sb.rpc("portal_story_create", { p_day: day, p_paths: paths, p_tools: tools, p_topic: topic || null });
       if (r.error) { await C.sb.storage.from("story-prints").remove(paths); throw r.error; }
       C.toast("Story enviado! A leitura dos prints sai em até 1 dia; depois é só conferir os números aqui.");
       form.reset();
@@ -291,6 +293,57 @@
   }
 
   var ST = { reading: ["wait", "aguardando leitura do print"], review: ["wait", "confira os números"], confirmed: ["ok", "confirmado"] };
+  /* ---------------- comparação dos últimos stories (portal_story_compare) ---------------- */
+  var CMP = [["views", "Mais visualizações", function (x) { return short(x.views) + " visualizações"; }],
+    ["eng_rate", "Mais engajamento", function (x) { return pctTxt(x.eng_rate) + " de interação (" + int(x.interactions) + ")"; }],
+    ["replies", "Mais respostas", function (x) { return int(x.replies) + " respostas"; }],
+    ["shares", "Mais compartilhamentos", function (x) { return int(x.shares) + " compartilhamentos"; }],
+    ["exit_rate", "Menos saídas", function (x) { return pctTxt(x.exit_rate) + " saíram"; }]];
+  function pctTxt(v) { return v == null ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
+  function topicOf(x) { return x.topic || (x.topic_guess ? x.topic_guess + " (sugestão)" : "assunto não informado"); }
+  function cmpOf(id) { return ((C.compare && C.compare.stories) || []).filter(function (x) { return x.id === id; })[0] || null; }
+  // Medalhas do story: em que métricas ficou em 1º entre os últimos stories.
+  function rankBadges(id) {
+    var x = cmpOf(id), n = C.compare ? C.compare.n : 0;
+    if (!x || n < 2) return "";
+    var tops = CMP.filter(function (m) { return x.rank[m[0]] === 1; }).map(function (m) { return m[1].toLowerCase(); });
+    return '<p class="pc-rank">' + (tops.length ? "🏆 Melhor dos seus últimos " + n + " stories em: <b>" + tops.join(", ") + "</b>" :
+      "Entre os seus últimos " + n + ": " + x.rank.views + "º em visualizações, " + x.rank.eng_rate + "º em engajamento, " + x.rank.replies + "º em respostas") + "</p>";
+  }
+  function compareHtml() {
+    var c = C.compare, list = (c && c.stories) || [];
+    if (!list.length) return "";
+    if (list.length < 2) return '<div class="pc-cmp"><h3 class="pp-h3">Comparação dos seus stories</h3><p class="muted pp-hint">Assim que você tiver dois stories com números, aparece aqui qual foi melhor em visualizações, engajamento, respostas e compartilhamentos.</p></div>';
+    var best = function (k) { return list.filter(function (x) { return x.rank[k] === 1; })[0]; };
+    var cards = CMP.map(function (m) {
+      var x = best(m[0]);
+      if (!x) return "";
+      return '<div class="pc-best"><small>' + m[1] + "</small><b>" + esc(topicOf(x)) + "</b><span>" + m[2](x) + " · " + dmy(x.day) + "</span></div>";
+    }).join("");
+    var star = function (x, k, txt) { return '<td class="' + (x.rank[k] === 1 ? "pc-top" : "") + '">' + txt + (x.rank[k] === 1 ? " ★" : "") + "</td>"; };
+    var a = c.averages || {};
+    return '<div class="pc-cmp"><h3 class="pp-h3">Comparação dos seus últimos ' + list.length + " stories</h3>" +
+      '<p class="muted pp-hint">Veja qual assunto rendeu mais e repita o formato. Engajamento = interações ÷ visualizações; saídas = quem saiu ÷ visualizações (quanto menor, melhor). Números ainda não confirmados entram como foram lidos do print.</p>' +
+      '<div class="pc-bests">' + cards + "</div>" +
+      '<div class="table-scroll"><table class="pp-table pc-cmp-t"><thead><tr><th class="l">Dia</th><th class="l">Assunto</th><th>Visualizações</th><th>Interações</th><th>Engajamento</th><th>Respostas</th><th>Compart.</th><th>Curtidas</th><th>Saídas</th></tr></thead><tbody>' +
+        list.map(function (x) {
+          return '<tr><td class="l">' + dmy(x.day) + '</td><td class="l">' + esc(topicOf(x)) + (x.tools.length ? ' <span class="muted">· ' + esc(x.tools.join(", ")) + "</span>" : "") + "</td>" +
+            star(x, "views", short(x.views)) + star(x, "interactions", int(x.interactions)) + star(x, "eng_rate", pctTxt(x.eng_rate)) +
+            star(x, "replies", int(x.replies)) + star(x, "shares", int(x.shares)) + star(x, "likes", int(x.likes)) + star(x, "exit_rate", pctTxt(x.exit_rate)) + "</tr>";
+        }).join("") +
+        '<tr class="pc-avg"><td class="l" colspan="2">Média</td><td>' + short(a.views) + "</td><td>" + int(a.interactions) + "</td><td>" + pctTxt(a.eng_rate) + "</td><td>" +
+          (a.replies == null ? "—" : String(a.replies).replace(".", ",")) + "</td><td>" + (a.shares == null ? "—" : String(a.shares).replace(".", ",")) + "</td><td></td><td>" + pctTxt(a.exit_rate) + "</td></tr>" +
+      "</tbody></table></div></div>";
+  }
+  async function saveTopic(input) {
+    var r = await C.sb.rpc("portal_story_set_topic", { p_id: input.getAttribute("data-topic"), p_topic: input.value });
+    if (r.error) { C.toast(r.error.message, true); return; }
+    var s = storyOf(input.getAttribute("data-topic")); if (s) s.topic = r.data.topic;
+    C.compare = await C.rpc("portal_story_compare").catch(function () { return C.compare; });
+    C.toast("Assunto salvo.");
+    render();
+  }
+
   function renderStories() {
     var form = C.preview ? "" :
       '<form class="pc-form" id="pc-story-form">' +
@@ -298,6 +351,7 @@
         '<p class="muted pp-hint">Espere as 24 horas do story, abra o histórico de stories no Instagram, toque no story e em "Atividade" e tire print das métricas. Se não couber numa tela, role para baixo e tire mais prints: até 3 por story (Visão geral, interações e navegação).</p>' +
         '<div class="pc-form-row"><label class="field"><span>Dia em que o story foi postado</span><input type="date" name="day" max="' + today() + '" required></label>' +
           '<label class="field"><span>Prints das métricas (até 3)</span><input type="file" name="print" accept="image/*" multiple required></label></div>' +
+        '<label class="field"><span>Sobre o que foi o story</span><input type="text" name="topic" maxlength="200" placeholder="Ex.: enquete sobre qual ferramenta usar; bastidor da campanha; resultado de vendas com FlowTracking"></label>' +
         '<div class="field"><span class="pc-lbl">Ferramentas que aparecem no story</span>' + toolBoxes(C.data.tools, [], false) + "</div>" +
         '<button type="submit" class="btn btn-primary">Enviar story</button><div class="pc-msg"></div>' +
       "</form>";
@@ -318,7 +372,11 @@
       return '<div class="pc-item pc-story' + (s.tools.length ? " on" : "") + '" data-kind="ig_story" data-item="' + esc(s.id) + '" data-story="' + esc(s.id) + '">' +
         '<div class="pc-body"><div class="pc-title">Story de ' + dmy(s.day) + " " + '<span class="pp-st mini ' + st[0] + '">' + st[1] + "</span>" +
           (print ? ' <span class="muted">· enviado por print</span>' : ' <span class="muted">· lido do Instagram conectado</span>') + "</div>" +
-          (note ? '<p class="muted pp-hint">' + note + "</p>" : "") + nums +
+          (note ? '<p class="muted pp-hint">' + note + "</p>" : "") +
+          '<label class="pc-topic"><span>Assunto</span><input type="text" maxlength="200" data-topic="' + esc(s.id) + '" value="' + esc(s.topic || "") + '" placeholder="' +
+            esc(a.topic_guess ? "Sugestão: " + a.topic_guess : "Sobre o que foi este story?") + '"' + (C.preview ? " disabled" : "") + "></label>" +
+          rankBadges(s.id) + nums +
+          (s.ai_insight ? '<div class="pc-insight"><b>Análise</b><p>' + esc(s.ai_insight) + "</p></div>" : "") +
           toolBoxes(C.data.tools, s.tools, C.preview) +
           (print ? '<div class="pc-acts">' + (np ? '<button type="button" class="btn btn-ghost" data-act="print" data-label="' + plabel + '">' + plabel + "</button>" : "") +
             (!C.preview && edit && np < MAX_PRINTS ? '<label class="btn btn-ghost pc-add">Anexar mais print<input type="file" accept="image/*" multiple data-act-file="add" hidden></label>' : "") +
@@ -327,7 +385,7 @@
           '<div class="pc-print" hidden></div>' +
         "</div></div>";
     }).join("");
-    return form + '<h3 class="pp-h3">Seus stories</h3>' + (rows ? '<div class="pc-list">' + rows + "</div>" : '<p class="empty">Nenhum story neste período.</p>') +
+    return form + compareHtml() + '<h3 class="pp-h3">Seus stories</h3>' + (rows ? '<div class="pc-list">' + rows + "</div>" : '<p class="empty">Nenhum story neste período.</p>') +
       '<p class="muted pp-hint">O story conta na meta assim que é enviado com uma ferramenta marcada. As visualizações entram nos relatórios depois que você confirma os números.</p>';
   }
 
@@ -363,6 +421,7 @@
     root.addEventListener("change", function (e) {
       if (e.target.id === "pc-cycle") { C.cycle = e.target.value; render(); return; }
       if (e.target.matches("input[data-act-file=add]")) { addPrints(e.target); return; }
+      if (e.target.matches("input[data-topic]")) { saveTopic(e.target); return; }
       var t = e.target.closest("input[data-tool]");
       if (t && !t.closest("#pc-story-form")) onToggle(t);
     });
