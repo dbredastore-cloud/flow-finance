@@ -91,3 +91,48 @@
 /* ---------- Filtros das demandas ---------- */
 .dh-tools { margin: 14px 0 12px; }
 .dh-empty p { color: var(--text-muted); }
+
+/* ---------- Mês escolhido (vale para a tela toda) ---------- */
+.dh-months { display: flex; flex-wrap: wrap; gap: 8px; }
+#dh-month-body { display: grid; gap: 18px; }
+
+/* ---------- Um card por ferramenta ---------- */
+.dh-tcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
+.dh-tcard { display: grid; gap: 6px; padding: 14px 16px; text-align: left; font: inherit; color: var(--text); cursor: pointer; border-radius: 12px; background: var(--calm-card, transparent); border: 1px solid var(--calm-line, var(--border)); border-top: 3px solid var(--c); transition: border-color .15s, background .15s; }
+.dh-tcard:hover { background: color-mix(in oklab, var(--c) 6%, transparent); }
+.dh-tcard.on { border-color: var(--c); background: color-mix(in oklab, var(--c) 10%, transparent); }
+.dh-tcard-n { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.dh-tcard-v { font-size: 24px; font-weight: 600; line-height: 1.15; }
+.dh-tcard-bar { display: block; height: 6px; border-radius: 999px; background: var(--track-bg); overflow: hidden; }
+.dh-tcard-bar i { display: block; height: 100%; border-radius: 999px; background: var(--c); }
+.dh-tcard-s { font-size: 12px; color: var(--text-muted); }
+
+/* ---------- O que foi desenvolvido: cards do Trello por ferramenta ---------- */
+.dh-group + .dh-group { margin-top: 22px; }
+.dh-group-h { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--calm-line, var(--border)); font-size: 14px; }
+.dh-group-h .dh-dot { margin: 0; }
+.dh-group-h .muted { font-size: 12.5px; color: var(--text-muted); }
+.dh-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.dh-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--calm-card, transparent); border: 1px solid var(--calm-line, var(--border)); border-left: 3px solid var(--c); min-width: 0; }
+.dh-card h4 { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.4; color: var(--text); }
+.dh-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; }
+.dh-card-sprint { color: var(--text-muted); font-weight: 600; margin-right: 2px; }
+.dh-stage, .dh-type { padding: 1px 8px; border-radius: 999px; font-weight: 600; color: var(--text-dim); background: rgba(127, 127, 127, 0.12); }
+.dh-stage.s-producao { color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.dh-stage.s-teste_cliente { color: var(--warning); background: color-mix(in oklab, var(--warning) 14%, transparent); }
+.dh-card-dem { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+.dh-card-sum, .dh-card-ben { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+.dh-card-ben b { color: var(--text); font-weight: 600; }
+.dh-card-foot { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--calm-line, var(--border)); font-size: 13px; }
+.dh-card-foot a { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.dh-card-foot .muted { color: var(--text-muted); }
+@media (max-width: 520px) { .dh-cards { grid-template-columns: 1fr; } }
+#dh-q { min-width: 200px; }
+
+/* ---------- Filtros e aviso (sem depender do CSS de outras telas) ---------- */
+.dh-tools, .dh-months { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dh-tools input[type=search] { padding: 7px 10px; border-radius: var(--radius-sm); background: var(--field-bg); border: 1px solid var(--border-strong); color: var(--text); font-size: 13px; }
+#hours-view .pay-chip { padding: 5px 14px; border-radius: 999px; font-family: inherit; font-size: 12.5px; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); cursor: pointer; }
+#hours-view .pay-chip:hover { border-color: var(--accent); color: var(--text); }
+#hours-view .pay-chip.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 700; }
+.dh-warn { padding: 14px 16px; border: 1px dashed var(--warning); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.6; color: var(--text-dim); background: rgba(var(--warning-rgb), 0.07); }

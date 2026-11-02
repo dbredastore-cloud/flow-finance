@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="../assets/alerts.css">
 <link rel="stylesheet" href="../assets/fin-analysis.css?v=20261030">
 <link rel="stylesheet" href="../assets/ai-insights.css">
+<link rel="stylesheet" href="../assets/dev-hours.css?v=20261102">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -28,6 +29,7 @@
 <script src="../assets/alerts.js"></script>
 <script src="../assets/fin-analysis.js?v=20261030"></script>
 <script src="../assets/ai-insights.js"></script>
+<script src="../assets/dev-hours.js?v=20261102"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js"></script>
@@ -100,6 +102,7 @@
       <button class="fnav-item" id="alerts-btn" type="button" data-menu="fin.avisos"><i data-ic="bell"></i><span>Avisos</span></button>
       <div class="fnav-group">Ferramentas</div>
       <div class="fnav-tools" id="tool-list" data-menu="fin.financeiro"></div>
+      <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento gastas em cada ferramenta">Horas de dev.</span></button>
       <div class="fnav-group">Análises</div>
       <button class="fnav-item" id="health-btn" type="button" data-menu="fin.health"><i data-ic="pulse"></i><span>Flow Health</span></button>
       <button class="fnav-item" id="clients-btn" type="button" data-menu="fin.clients"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
@@ -159,6 +162,8 @@
     <div id="clients-view" hidden></div>
 
     <div id="alerts-view" hidden></div>
+
+    <div id="hours-view" hidden></div>
 
     <div id="health-view" hidden>
       <div class="health-filter" id="health-filter"></div>
@@ -1004,7 +1009,7 @@
 
   /* ---------------- Rendering ---------------- */
   // Insights da IA da tela aberta (menu_insights). Home e Avisos já têm a própria análise.
-  var INSIGHT_KEY = { health: "fin.health", clients: "fin.clients" };
+  var INSIGHT_KEY = { health: "fin.health", clients: "fin.clients", hours: "fin.hours" };
   function insightKey() {
     if (state.view === "tool") { var t = state.tools.find(function (x) { return x.id === state.activeToolId; }); return t ? "tool:" + t.slug : null; }
     return INSIGHT_KEY[state.view] || null;
@@ -1016,6 +1021,7 @@
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
     document.getElementById("alerts-btn").classList.toggle("active", state.view === "alerts");
+    document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
     state.tools.forEach(function (t) {
       var b = document.createElement("button");
@@ -2016,13 +2022,16 @@
     document.getElementById("clients-view").hidden = v !== "clients";
     document.getElementById("alerts-view").hidden = v !== "alerts";
     if (v !== "alerts") FlowAlerts.hide();
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "alerts";
+    if (v !== "hours") DevHours.hide();
+    // Horas de dev. tem o próprio filtro de mês (os meses do contrato de horas).
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "alerts" || v === "hours";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
     else if (v === "alerts") document.getElementById("tool-title").textContent = "Avisos";
+    else if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
     renderSidebar();
   }
   CustomerHealth.init({
@@ -2034,9 +2043,17 @@
     setView("clients");
     await CustomerHealth.show();
   }
-  // Horas de dev. e Cards Trello ficam no painel Biancode (../biancode/); @useaflow, Pautas e Radar
+  // Horas de dev.: logo abaixo das ferramentas. Horas gastas em cada ferramenta por mês e o que foi desenvolvido
+  // (planilha "Controle de horas Flow" + cards do Trello). Ver assets/dev-hours.js.
+  DevHours.init({ root: document.getElementById("hours-view"), sb: sb, toast: toast });
+  document.getElementById("hours-btn").addEventListener("click", function () { openHours(); });
+  async function openHours() {
+    setView("hours");
+    await DevHours.show();
+  }
+  // Cards Trello fica no painel Biancode (../biancode/); @useaflow, Pautas e Radar
   // Instagram, nos Afiliados (../afiliados/). Quem tinha uma dessas telas guardada vai direto para lá.
-  var MOVED = { hours: "../biancode/", trello: "../biancode/", instagram: "../afiliados/#instagram", radar: "../afiliados/#radar", useaflow: "../afiliados/#useaflow", ideas: "../afiliados/#useaflow" };
+  var MOVED = { trello: "../biancode/", instagram: "../afiliados/#instagram", radar: "../afiliados/#radar", useaflow: "../afiliados/#useaflow", ideas: "../afiliados/#useaflow" };
   // Avisos: alertas das regras do banco e o resumo diário da IA (também no Telegram).
   FlowAlerts.init({ root: document.getElementById("alerts-view"), sb: sb, toast: toast });
   document.getElementById("alerts-btn").addEventListener("click", function () { openAlerts(); });
@@ -2659,17 +2676,18 @@
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
     if (canFin) alertsReady.then(function () { renderAlerts(); renderTable(); });
     // Tela inicial: a última aberta, se a pessoa ainda pode ver; senão a primeira liberada.
-    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", alerts: "fin.avisos" };
+    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", alerts: "fin.avisos", hours: "fin.hours" };
     function canView(v) { return !!VIEW_MENU[v] && VIEW_MENU[v].split(",").some(function (k) { return FlowAccess.can(k); }); }
     var view = safeGet("flow_fin_view");
     if (MOVED[view]) { safeSet("flow_fin_view", "home"); location.replace(MOVED[view]); return; }
     if (view !== null && !canView(view)) view = null;
-    if (view === null && !canFin) view = ["alerts", "health", "clients"].filter(canView)[0];
+    if (view === null && !canFin) view = ["alerts", "health", "clients", "hours"].filter(canView)[0];
     renderPeriodBar();
     if (!canFin) {
       if (view === "health") openHealth();
       else if (view === "clients") openClients();
       else if (view === "alerts") openAlerts();
+      else if (view === "hours") openHours();
       return;
     }
     if (view === "home" || view === null) {
@@ -2684,6 +2702,7 @@
     if (view === "health") openHealth();
     else if (view === "clients") openClients();
     else if (view === "alerts") openAlerts();
+    else if (view === "hours") openHours();
     prefetchOtherTools();
   }
 
@@ -2696,6 +2715,7 @@
   window.addEventListener("flow-theme-change", function () {
     if (state.view === "health") { if (state.health) renderHealth(); }
     else if (state.view === "clients") CustomerHealth.redraw();
+    else if (state.view === "hours") DevHours.redraw();
     else if (state.view === "home") { if (state.home) renderHome(); }
   });
 

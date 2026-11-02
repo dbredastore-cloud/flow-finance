@@ -15,14 +15,12 @@
 <link rel="stylesheet" href="../assets/flow-theme.css">
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
-<link rel="stylesheet" href="../assets/dev-hours.css">
 <link rel="stylesheet" href="../assets/trello-cards.css">
 <link rel="stylesheet" href="../assets/ai-insights.css">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
-<script src="../assets/dev-hours.js"></script>
 <script src="../assets/trello-cards.js"></script>
 <script src="../assets/ai-insights.js"></script>
 <link rel="prefetch" href="../financeiro/">
@@ -66,7 +64,6 @@
     <div class="brand fnav-brand"><span class="mark"></span><div class="fnav-brand-t"><b>Flow</b><small>Biancode</small></div></div>
     <nav class="fnav-menu" aria-label="Menu">
       <div class="fnav-group">Biancode</div>
-      <button class="fnav-item" id="hours-btn" type="button" data-menu="fin.hours"><i data-ic="clock"></i><span title="Horas de desenvolvimento">Horas de dev.</span></button>
       <button class="fnav-item" id="trello-btn" type="button" data-menu="fin.trello"><i data-ic="grid"></i><span>Cards Trello</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="../financeiro/" data-page="financeiro"><i data-ic="wallet"></i><span>Financeiro</span></a>
@@ -85,7 +82,6 @@
       <h2 id="tool-title">—</h2>
     </div>
     <div id="ai-insights" class="aii" hidden aria-label="Insights da IA"></div>
-    <div id="hours-view" hidden></div>
     <div id="trello-view" hidden></div>
   </main>
 </div>
@@ -94,7 +90,7 @@
 
 <script>
 /* Painel Biancode: o que a Biancode (parceira de desenvolvimento) entrega e cobra em horas.
-   Telas: Horas de dev. (DevHours, menu fin.hours) e Cards Trello (TrelloCards, menu fin.trello).
+   Tela: Cards Trello (TrelloCards, menu fin.trello). Horas de dev. passou para o Financeiro, abaixo de Ferramentas.
    As chaves de menu continuam fin.* porque são as mesmas do banco (permissões e regras de leitura). */
 (function () {
   "use strict";
@@ -102,7 +98,6 @@
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   var VIEWS = {
-    hours: { menu: "fin.hours", title: "Horas de desenvolvimento", btn: "hours-btn", root: "hours-view" },
     trello: { menu: "fin.trello", title: "Cards Trello", btn: "trello-btn", root: "trello-view" }
   };
   var state = { view: null };
@@ -153,7 +148,6 @@
   sb.auth.onAuthStateChange(function (ev) { if (ev === "SIGNED_OUT") showOnly("login-screen"); });
 
   /* ---------------- telas ---------------- */
-  DevHours.init({ root: $("hours-view"), sb: sb, toast: toast });
   TrelloCards.init({ root: $("trello-view"), sb: sb, toast: toast });
   AiInsights.init({ root: $("ai-insights"), sb: sb });
 
@@ -168,13 +162,9 @@
     });
     $("tool-title").textContent = VIEWS[v].title;
     AiInsights.show(VIEWS[v].menu); // Insights da IA da tela (menu_insights)
-    if (v === "hours") await DevHours.show();
-    else await TrelloCards.show();
+    await TrelloCards.show();
   }
-  $("hours-btn").addEventListener("click", function () { setView("hours"); });
   $("trello-btn").addEventListener("click", function () { setView("trello"); });
-  // Troca de modo claro/escuro: o gráfico das horas lê as cores ao desenhar.
-  window.addEventListener("flow-theme-change", function () { if (state.view === "hours") DevHours.redraw(); });
 
   async function boot() {
     showStatus("Carregando…", "Verificando sua sessão.", false);
@@ -190,7 +180,7 @@
     if (!FlowAccess.canPage("biancode")) { location.replace(FlowAccess.firstHref() || "../financeiro/"); return; }
     FlowAccess.apply();
     showOnly("app");
-    await setView(safeGet("flow_bc_view") || "hours");
+    await setView(safeGet("flow_bc_view") || "trello");
   }
   boot();
 })();
