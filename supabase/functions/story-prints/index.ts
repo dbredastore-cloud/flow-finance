@@ -5,7 +5,8 @@
 // 15 min), chama esta função com ele e recebe links assinados (10 min) das imagens pendentes. Ela lê cada print e
 // grava os números com public.story_print_read; o influencer confere e confirma no portal.
 //
-//   POST { action: "pending", limit?: n }   header x-story-ticket  → { stories: [{ id, day, url, affiliate }] }
+//   POST { action: "pending", limit?: n }   header x-story-ticket  → { stories: [{ id, day, urls: [...], affiliate }] }
+//   Cada story tem de 1 a 3 prints (a tela de métricas do Instagram pode não caber num só): leia todos juntos.
 //
 // Sem JWT no gateway (verify_jwt = false): a função confere o passe aqui dentro. Não devolve e-mail nem dado de cliente.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -30,7 +31,7 @@ Deno.serve(async (req) => {
   const limit = Math.min(Math.max(Number(body.limit) || 30, 1), 60);
 
   const { data: rows, error } = await sb.from("instagram_stories")
-    .select("id, story_date, image_path, affiliate_email")
+    .select("id, story_date, image_path, image_paths, affiliate_email")
     .eq("source", "print").eq("status", "reading").not("image_path", "is", null)
     .order("first_seen_at").limit(limit);
   if (error) return json({ ok: false, error: error.message }, 500);
@@ -45,8 +46,13 @@ Deno.serve(async (req) => {
 
   const stories = [];
   for (const r of rows ?? []) {
-    const { data: signed } = await sb.storage.from("story-prints").createSignedUrl(r.image_path, 600);
-    stories.push({ id: r.id, day: r.story_date, affiliate: names[r.affiliate_email] ?? "influencer", url: signed?.signedUrl ?? null });
+    const paths: string[] = r.image_paths?.length ? r.image_paths : [r.image_path];
+    const urls = [];
+    for (const p of paths) {
+      const { data: signed } = await sb.storage.from("story-prints").createSignedUrl(p, 600);
+      if (signed?.signedUrl) urls.push(signed.signedUrl);
+    }
+    stories.push({ id: r.id, day: r.story_date, affiliate: names[r.affiliate_email] ?? "influencer", urls });
   }
   return json({ ok: true, stories });
 });

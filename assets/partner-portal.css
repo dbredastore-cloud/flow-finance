@@ -294,6 +294,9 @@ a.pc-title:hover { text-decoration: underline; }
 .pc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .pc-acts .btn { width: auto; }
 .pc-del { margin-left: auto; color: var(--critical); }
+.pc-add { cursor: pointer; }
+.pc-print { display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-print figure { margin: 0; display: grid; gap: 4px; justify-items: start; }
 .pc-print img { max-width: 260px; max-height: 460px; border-radius: 8px; border: 1px solid var(--border); display: block; }
 @media (max-width: 560px) {
   .pc-item { flex-direction: column; }

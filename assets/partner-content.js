@@ -86,33 +86,80 @@
       img.src = url;
     });
   }
+  var MAX_PRINTS = 3;
+  // Métricas do story na ordem da tela do Instagram: [chave no formulário/leitura, coluna em portal_content, rótulo].
+  var METRICS = [["views", "views", "Visualizações"], ["interactions", "interactions", "Interações"], ["profile_activity", "profile_activity", "Atividade do perfil"],
+    ["likes", "likes", "Curtidas"], ["replies", "replies", "Respostas"], ["shares", "shares", "Compartilhamentos"],
+    ["taps_forward", "taps_forward", "Avanço"], ["exits", "exits", "Saiu"], ["taps_back", "taps_back", "Voltar"], ["swipes_forward", "swipes_forward", "Próximo story"]];
+  function storyOf(id) { return (C.data.stories || []).filter(function (s) { return s.id === id; })[0] || null; }
+  function pathsOf(s) { return s.image_paths && s.image_paths.length ? s.image_paths : s.image_path ? [s.image_path] : []; }
+  // Sobe os prints para a pasta do afiliado (reduzidos) e devolve os caminhos no bucket.
+  async function uploadPrints(files, day) {
+    var f = await C.sb.rpc("portal_story_folder");
+    if (f.error || !f.data) throw new Error("Seu login não está ligado a um afiliado.");
+    var paths = [];
+    try {
+      for (var i = 0; i < files.length; i++) {
+        var blob = await shrink(files[i]);
+        var ext = blob.type === "image/jpeg" ? "jpg" : (files[i].name.split(".").pop() || "img").toLowerCase().replace(/[^a-z0-9]/g, "");
+        var path = f.data + "/" + day + "-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + i) + "." + ext;
+        var up = await C.sb.storage.from("story-prints").upload(path, blob, { contentType: blob.type || files[i].type, upsert: false });
+        if (up.error) throw up.error;
+        paths.push(path);
+      }
+    } catch (e) {
+      if (paths.length) await C.sb.storage.from("story-prints").remove(paths);
+      throw e;
+    }
+    return paths;
+  }
   async function submitStory(form) {
-    var day = form.querySelector("[name=day]").value, file = form.querySelector("[name=print]").files[0];
+    var day = form.querySelector("[name=day]").value, files = Array.prototype.slice.call(form.querySelector("[name=print]").files || []);
     var tools = Array.prototype.slice.call(form.querySelectorAll("input[data-tool]:checked")).map(function (x) { return x.getAttribute("data-tool"); });
     var msg = form.querySelector(".pc-msg");
     var fail = function (t) { msg.className = "pc-msg msg error"; msg.textContent = t; };
     if (!day) return fail("Informe o dia em que o story foi postado.");
     if (day > today()) return fail("O dia do story não pode ser no futuro.");
-    if (!file) return fail("Anexe o print das métricas do story.");
+    if (!files.length) return fail("Anexe o print das métricas do story.");
+    if (files.length > MAX_PRINTS) return fail("Anexe no máximo " + MAX_PRINTS + " prints por story.");
     if (!tools.length) return fail("Marque pelo menos uma ferramenta que aparece no story.");
     var btn = form.querySelector("button[type=submit]");
     btn.disabled = true; btn.textContent = "Enviando…"; msg.className = "pc-msg"; msg.textContent = "";
     try {
-      var f = await C.sb.rpc("portal_story_folder");
-      if (f.error || !f.data) throw new Error("Seu login não está ligado a um afiliado.");
-      var blob = await shrink(file);
-      var ext = blob.type === "image/jpeg" ? "jpg" : (file.name.split(".").pop() || "img").toLowerCase().replace(/[^a-z0-9]/g, "");
-      var path = f.data + "/" + day + "-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)) + "." + ext;
-      var up = await C.sb.storage.from("story-prints").upload(path, blob, { contentType: blob.type || file.type, upsert: false });
-      if (up.error) throw up.error;
-      var r = await C.sb.rpc("portal_story_create", { p_day: day, p_path: path, p_tools: tools });
-      if (r.error) { await C.sb.storage.from("story-prints").remove([path]); throw r.error; }
-      C.toast("Story enviado! A leitura do print sai em até 1 dia; depois é só conferir os números aqui.");
+      var paths = await uploadPrints(files, day);
+      var r = await C.sb.rpc("portal_story_create", { p_day: day, p_paths: paths, p_tools: tools });
+      if (r.error) { await C.sb.storage.from("story-prints").remove(paths); throw r.error; }
+      C.toast("Story enviado! A leitura dos prints sai em até 1 dia; depois é só conferir os números aqui.");
       form.reset();
       await load();
     } catch (e) {
       fail(e.message || String(e));
     } finally { btn.disabled = false; btn.textContent = "Enviar story"; }
+  }
+  // Junta prints a um story ainda não confirmado (até 3 no total); ele volta para a fila de leitura.
+  async function addPrints(input) {
+    var box = input.closest("[data-story]"), s = storyOf(box.getAttribute("data-story"));
+    var files = Array.prototype.slice.call(input.files || []);
+    input.value = "";
+    if (!s || !files.length) return;
+    var room = MAX_PRINTS - pathsOf(s).length;
+    if (files.length > room) { C.toast("Este story aceita só mais " + room + " print" + (room === 1 ? "" : "s") + ".", true); return; }
+    box.classList.add("pc-saving");
+    try {
+      var paths = await uploadPrints(files, s.day);
+      var r = await C.sb.rpc("portal_story_add_prints", { p_id: s.id, p_paths: paths });
+      if (r.error) { await C.sb.storage.from("story-prints").remove(paths); throw r.error; }
+      C.toast("Print anexado. O story volta para a leitura (em até 1 dia).");
+      await load();
+    } catch (e) { C.toast(e.message || String(e), true); box.classList.remove("pc-saving"); }
+  }
+  async function removePrint(box, path) {
+    if (!window.confirm("Tirar este print do story?")) return;
+    var r = await C.sb.rpc("portal_story_remove_print", { p_id: box.getAttribute("data-story"), p_path: path });
+    if (r.error) { C.toast(r.error.message, true); return; }
+    await C.sb.storage.from("story-prints").remove([path]);
+    C.toast("Print retirado.");
+    await load();
   }
   async function confirmStory(box) {
     var id = box.getAttribute("data-story"), val = function (n) { var v = box.querySelector("[name=" + n + "]").value.trim(); return v === "" ? null : Math.max(0, parseInt(v.replace(/\D/g, ""), 10) || 0); };
@@ -120,31 +167,45 @@
     var btn = box.querySelector("[data-act=confirm]");
     btn.disabled = true;
     try {
-      var r = await C.sb.rpc("portal_story_confirm", { p_id: id, p_day: day, p_reach: val("reach"), p_views: val("views"), p_replies: val("replies"), p_shares: val("shares"), p_link_taps: val("link_taps") });
+      var m = {};
+      METRICS.forEach(function (x) { m[x[0]] = val(x[0]); });
+      var r = await C.sb.rpc("portal_story_confirm", { p_id: id, p_day: day, p_m: m });
       if (r.error) throw r.error;
       C.toast("Números confirmados.");
       await load();
     } catch (e) { C.toast(e.message || String(e), true); btn.disabled = false; }
   }
   async function deleteStory(id) {
-    if (!window.confirm("Apagar este story? O print e as marcações saem do sistema.")) return;
+    if (!window.confirm("Apagar este story? Os prints e as marcações saem do sistema.")) return;
     var r = await C.sb.rpc("portal_story_delete", { p_id: id });
     if (r.error) { C.toast(r.error.message, true); return; }
-    if (r.data && r.data.image_path) await C.sb.storage.from("story-prints").remove([r.data.image_path]);
+    var paths = ((r.data && (r.data.image_paths || [r.data.image_path])) || []).filter(Boolean);
+    if (paths.length) await C.sb.storage.from("story-prints").remove(paths);
     C.toast("Story apagado.");
     await load();
   }
-  async function showPrint(btn, path) {
-    var holder = btn.closest("[data-story]").querySelector(".pc-print");
-    if (!holder.hidden) { holder.hidden = true; btn.textContent = "Ver print"; return; }
+  async function signed(path) {
     if (!C.urls[path]) {
       var s = await C.sb.storage.from("story-prints").createSignedUrl(path, 600);
-      if (s.error) { C.toast(s.error.message, true); return; }
+      if (s.error) throw s.error;
       C.urls[path] = s.data.signedUrl;
       setTimeout(function () { delete C.urls[path]; }, 540000);
     }
-    holder.innerHTML = '<a href="' + esc(C.urls[path]) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(C.urls[path]) + '" alt="Print das métricas do story"></a>';
-    holder.hidden = false; btn.textContent = "Esconder print";
+    return C.urls[path];
+  }
+  async function showPrints(btn) {
+    var box = btn.closest("[data-story]"), holder = box.querySelector(".pc-print"), s = storyOf(box.getAttribute("data-story"));
+    var label = btn.getAttribute("data-label");
+    if (!holder.hidden) { holder.hidden = true; btn.textContent = label; return; }
+    try {
+      var paths = pathsOf(s), urls = await Promise.all(paths.map(signed));
+      var canRemove = !C.preview && s.status !== "confirmed" && paths.length > 1;
+      holder.innerHTML = urls.map(function (u, i) {
+        return '<figure><a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(u) + '" alt="Print ' + (i + 1) + ' das métricas do story"></a>' +
+          (canRemove ? '<button type="button" class="pp-link" data-act="unprint" data-path="' + esc(paths[i]) + '">Tirar este print</button>' : "") + "</figure>";
+      }).join("");
+      holder.hidden = false; btn.textContent = "Esconder prints";
+    } catch (e) { C.toast(e.message || String(e), true); }
   }
 
   /* ---------------- telas ---------------- */
@@ -173,13 +234,13 @@
         (c.is_current ? " · " + (left > 0 ? "faltam " + left + (left === 1 ? " dia" : " dias") : "último dia") : c.closed ? " · fechado" : "") + "</span></div>" +
       '<div class="pc-goals">' + bar("Stories", c.stories, k.stories_per_month) + bar("Reels", c.reels, k.reels_per_month) + bar("YouTube", c.youtube, k.youtube_per_month) + "</div>" +
       '<p class="muted pp-hint">Extras (fora da meta): ' + int(c.feed_extra) + " post(s) de feed/carrossel e " + int(c.shorts_extra) + " Short(s)." +
-        (c.story_reach ? " Alcance dos stories confirmados: <b>" + short(c.story_reach) + "</b>." : "") +
+        (c.story_views ? " Visualizações dos stories confirmados: <b>" + short(c.story_views) + "</b>." : "") +
         (c.stories_adj || c.reels_adj || c.youtube_adj ? " Inclui ajuste da equipe Flow." : "") + "</p>" +
-      '<div class="table-scroll"><table class="pp-table pc-bytool"><thead><tr><th class="l">Ferramenta</th><th>Stories</th><th>Reels</th><th>YouTube</th><th>Feed/carrossel</th><th>Shorts</th><th>Alcance stories</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table class="pp-table pc-bytool"><thead><tr><th class="l">Ferramenta</th><th>Stories</th><th>Reels</th><th>YouTube</th><th>Feed/carrossel</th><th>Shorts</th><th>Views stories</th></tr></thead><tbody>' +
         tools.map(function (t) {
           var x = bt[t.slug] || {};
           return '<tr><td class="l">' + esc(t.name) + "</td><td>" + int(x.stories || 0) + "</td><td>" + int(x.reels || 0) + "</td><td>" + int(x.youtube || 0) +
-            "</td><td>" + int(x.feed || 0) + "</td><td>" + int(x.shorts || 0) + "</td><td>" + short(x.story_reach || 0) + "</td></tr>";
+            "</td><td>" + int(x.feed || 0) + "</td><td>" + int(x.shorts || 0) + "</td><td>" + short(x.story_views || 0) + "</td></tr>";
         }).join("") + "</tbody></table></div>" +
       '<p class="muted pp-hint">Um conteúdo com duas ferramentas conta 1 vez na meta e aparece nas duas linhas.</p>';
   }
@@ -234,9 +295,9 @@
     var form = C.preview ? "" :
       '<form class="pc-form" id="pc-story-form">' +
         "<h3 class=\"pp-h3\">Enviar story</h3>" +
-        '<p class="muted pp-hint">Espere as 24 horas do story, abra o histórico de stories no Instagram, toque no story e em "Atividade" e tire um print das métricas. Um print por story.</p>' +
+        '<p class="muted pp-hint">Espere as 24 horas do story, abra o histórico de stories no Instagram, toque no story e em "Atividade" e tire print das métricas. Se não couber numa tela, role para baixo e tire mais prints: até 3 por story (Visão geral, interações e navegação).</p>' +
         '<div class="pc-form-row"><label class="field"><span>Dia em que o story foi postado</span><input type="date" name="day" max="' + today() + '" required></label>' +
-          '<label class="field"><span>Print das métricas</span><input type="file" name="print" accept="image/*" required></label></div>' +
+          '<label class="field"><span>Prints das métricas (até 3)</span><input type="file" name="print" accept="image/*" multiple required></label></div>' +
         '<div class="field"><span class="pc-lbl">Ferramentas que aparecem no story</span>' + toolBoxes(C.data.tools, [], false) + "</div>" +
         '<button type="submit" class="btn btn-primary">Enviar story</button><div class="pc-msg"></div>' +
       "</form>";
@@ -247,26 +308,27 @@
     };
     var rows = list.map(function (s) {
       var st = ST[s.status] || ST.confirmed, a = s.ai_read || {}, print = s.source === "print", edit = print && s.status !== "confirmed";
+      var np = pathsOf(s).length, plabel = np > 1 ? "Ver " + np + " prints" : "Ver print";
       var nums = print
-        ? '<div class="pc-nums">' + num("reach", "Alcance", s.reach, a.reach) + num("views", "Visualizações", s.views, a.views) + num("replies", "Respostas", s.replies, a.replies) +
-            num("shares", "Compartilhamentos", s.shares, a.shares) + num("link_taps", "Toques no link", s.link_taps, a.link_taps) +
+        ? '<div class="pc-nums">' + METRICS.map(function (x) { return num(x[0], x[2], s[x[1]], a[x[0]]); }).join("") +
             '<label class="pc-num"><span>Dia</span><input type="date" name="sday" value="' + esc(s.day) + '" max="' + today() + '"' + (C.preview ? " disabled" : "") + "></label></div>"
-        : '<div class="pc-meta">Alcance ' + short(s.reach) + " · " + short(s.views) + " visualizações · " + int(s.replies) + " respostas · " + int(s.shares) + " compartilhamentos</div>";
-      var note = s.status === "reading" ? "O print ainda vai ser lido (em até 1 dia). Se preferir, digite os números e confirme agora."
+        : '<div class="pc-meta">' + short(s.views) + " visualizações · alcance " + short(s.reach) + " · " + int(s.replies) + " respostas · " + int(s.shares) + " compartilhamentos</div>";
+      var note = s.status === "reading" ? "Os prints ainda vão ser lidos (em até 1 dia). Se preferir, digite os números e confirme agora."
         : s.status === "review" ? "Confira os números lidos do print, corrija o que estiver errado e confirme." + (a.note ? " Observação da leitura: " + esc(a.note) : "") : "";
       return '<div class="pc-item pc-story' + (s.tools.length ? " on" : "") + '" data-kind="ig_story" data-item="' + esc(s.id) + '" data-story="' + esc(s.id) + '">' +
         '<div class="pc-body"><div class="pc-title">Story de ' + dmy(s.day) + " " + '<span class="pp-st mini ' + st[0] + '">' + st[1] + "</span>" +
           (print ? ' <span class="muted">· enviado por print</span>' : ' <span class="muted">· lido do Instagram conectado</span>') + "</div>" +
           (note ? '<p class="muted pp-hint">' + note + "</p>" : "") + nums +
           toolBoxes(C.data.tools, s.tools, C.preview) +
-          (print ? '<div class="pc-acts">' + (s.image_path ? '<button type="button" class="btn btn-ghost" data-act="print" data-path="' + esc(s.image_path) + '">Ver print</button>' : "") +
+          (print ? '<div class="pc-acts">' + (np ? '<button type="button" class="btn btn-ghost" data-act="print" data-label="' + plabel + '">' + plabel + "</button>" : "") +
+            (!C.preview && edit && np < MAX_PRINTS ? '<label class="btn btn-ghost pc-add">Anexar mais print<input type="file" accept="image/*" multiple data-act-file="add" hidden></label>' : "") +
             (C.preview ? "" : (edit ? '<button type="button" class="btn btn-primary" data-act="confirm">Confirmar números</button>' : '<button type="button" class="btn btn-ghost" data-act="confirm">Salvar correção</button>') +
               '<button type="button" class="btn btn-ghost pc-del" data-act="delete">Apagar</button>') + "</div>" : "") +
           '<div class="pc-print" hidden></div>' +
         "</div></div>";
     }).join("");
     return form + '<h3 class="pp-h3">Seus stories</h3>' + (rows ? '<div class="pc-list">' + rows + "</div>" : '<p class="empty">Nenhum story neste período.</p>') +
-      '<p class="muted pp-hint">O story conta na meta assim que é enviado com uma ferramenta marcada. O alcance entra nos relatórios depois que você confirma os números.</p>';
+      '<p class="muted pp-hint">O story conta na meta assim que é enviado com uma ferramenta marcada. As visualizações entram nos relatórios depois que você confirma os números.</p>';
   }
 
   function render() {
@@ -300,6 +362,7 @@
     var root = C.root;
     root.addEventListener("change", function (e) {
       if (e.target.id === "pc-cycle") { C.cycle = e.target.value; render(); return; }
+      if (e.target.matches("input[data-act-file=add]")) { addPrints(e.target); return; }
       var t = e.target.closest("input[data-tool]");
       if (t && !t.closest("#pc-story-form")) onToggle(t);
     });
@@ -311,7 +374,8 @@
       var a = e.target.closest("[data-act]");
       if (!a) return;
       var box = a.closest("[data-story]"), act = a.getAttribute("data-act");
-      if (act === "print") showPrint(a, a.getAttribute("data-path"));
+      if (act === "print") showPrints(a);
+      else if (act === "unprint") removePrint(box, a.getAttribute("data-path"));
       else if (act === "confirm") confirmStory(box);
       else if (act === "delete") deleteStory(box.getAttribute("data-story"));
     });

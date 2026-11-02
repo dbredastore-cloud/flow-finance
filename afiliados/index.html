@@ -270,6 +270,10 @@
   .fi-in { width: 48px; padding: 3px 5px; background: var(--field-bg); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font: inherit; font-size: 12.5px; text-align: center; }
   .fi-table td { white-space: nowrap; }
   .fi-tools { margin-top: 12px; }
+  .fi-stories { margin-top: 12px; }
+  .fi-st-toggle { background: none; border: 0; padding: 4px 0; color: var(--text); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .fi-prints { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fi-prints img { max-width: 240px; max-height: 440px; border-radius: 8px; border: 1px solid var(--border); display: block; }
   .fi-tools .kpi-mini-label { margin-bottom: 6px; }
   .fi-table tr.fi-current td { background: rgba(var(--accent-rgb),.06); }
   .pct-tag.warn { background: rgba(var(--warning-rgb),.15); color: var(--warning); }
@@ -2195,7 +2199,7 @@
   /* ---------------- Influencers Flow (contratados) ---------------- */
   // Contratos em influencer_contracts; entregas do mês em influencer_deliverables; vendas das
   // ferramentas Flow no período de cada contrato buscadas à parte (não dependem do filtro do topo).
-  state.fi = { contracts: [], deliv: {}, sales: [], cycles: {} };
+  state.fi = { contracts: [], deliv: {}, sales: [], cycles: {}, stories: {}, storyOpen: {}, urls: {} };
 
   function flowProductIds() { return state.products.filter(function (p) { return p.tool_id; }).map(function (p) { return p.id; }); }
   function contractOf(email) { return state.fi.contracts.find(function (c) { return c.affiliate_email === email; }); }
@@ -2221,6 +2225,7 @@
     (res[2].data || []).forEach(function (x) { state.fi.cycles[x.contract_id + "|" + x.cycle_start] = x; });
     var active = state.fi.contracts.filter(function (c) { return c.active; });
     if (!active.length) { state.fi.sales = []; return; }
+    await loadFiStories(active);
     var since = active.map(function (c) { return c.start_date; }).sort()[0];
     state.fi.sales = await fetchAll(function () {
       return sb.from("affiliate_sales").select("id, affiliate_email, product_id, product_name, status, amount, net_amount, commission, sale_created_at")
@@ -2229,6 +2234,86 @@
         .gte("sale_created_at", new Date(since + "T00:00:00").toISOString())
         .order("sale_created_at");
     });
+  }
+
+  // Stories dos influencers ativos (enviados por print e lidos da API dentro do contrato), com as ferramentas marcadas.
+  async function loadFiStories(active) {
+    var emails = active.map(function (c) { return c.affiliate_email; });
+    var since = active.map(function (c) { return c.start_date; }).sort()[0];
+    var r = await sb.from("instagram_stories").select("id, affiliate_email, source, status, story_date, posted_at, image_path, image_paths, views, total_interactions, profile_activity, likes, replies, shares, taps_forward, exits, taps_back, swipes_forward, reach, ai_read, confirmed_at")
+      .in("affiliate_email", emails).or("source.eq.print,posted_at.gte." + new Date(since + "T00:00:00").toISOString())
+      .order("posted_at", { ascending: false }).limit(1000);
+    state.fi.stories = {};
+    if (r.error) { console.warn("Stories:", r.error.message); return; }
+    var ids = (r.data || []).map(function (x) { return x.id; }), tags = {};
+    if (ids.length) {
+      var t = await sb.from("content_tool_tags").select("content_id, tools(name, sort_order)").eq("kind", "ig_story").in("content_id", ids);
+      (t.data || []).forEach(function (g) { (tags[g.content_id] = tags[g.content_id] || []).push(g.tools); });
+    }
+    (r.data || []).forEach(function (x) {
+      x.tools = (tags[x.id] || []).sort(function (a, b) { return a.sort_order - b.sort_order; }).map(function (y) { return y.name; });
+      (state.fi.stories[x.affiliate_email] = state.fi.stories[x.affiliate_email] || []).push(x);
+    });
+  }
+
+  var FI_METRICS = [["views", "Visualizações"], ["total_interactions", "Interações"], ["profile_activity", "Atividade do perfil"], ["likes", "Curtidas"], ["replies", "Respostas"],
+    ["shares", "Compartilhamentos"], ["taps_forward", "Avanço"], ["exits", "Saiu"], ["taps_back", "Voltar"], ["swipes_forward", "Próximo story"]];
+  var FI_ST = { reading: ["wait", "aguardando leitura"], review: ["wait", "influencer conferindo"], confirmed: ["ok", "confirmado"] };
+  function storyDay(x) { return x.story_date || new Date(Date.parse(x.posted_at) - 3 * 3600000).toISOString().slice(0, 10); }
+
+  // Stories do influencer: prints anexados e os 10 números (confirmados pelo influencer ou, antes disso, os lidos do print).
+  function fiStoriesHtml(c) {
+    var list = (state.fi.stories[c.affiliate_email] || []).slice().sort(function (a, b) { return storyDay(a) < storyDay(b) ? 1 : -1; });
+    var open = !!state.fi.storyOpen[c.id];
+    var pend = list.filter(function (x) { return x.status !== "confirmed"; }).length;
+    var head = '<button type="button" class="fi-st-toggle" data-fi-stories="' + c.id + '">' + (open ? "▾" : "▸") + " Stories do influencer <span class=\"muted\">(" + list.length +
+      (pend ? " · " + pend + " sem confirmar" : "") + ")</span></button>";
+    if (!open) return '<div class="fi-stories">' + head + "</div>";
+    if (!list.length) return '<div class="fi-stories">' + head + '<p class="muted" style="font-size:12.5px;">Nenhum story enviado ainda.</p></div>';
+    var rows = list.map(function (x) {
+      var st = FI_ST[x.status] || FI_ST.confirmed, ai = x.ai_read || {}, confirmed = x.status === "confirmed";
+      var aiKey = function (k) { return k === "total_interactions" ? "interactions" : k; };
+      var cell = function (k) {
+        var v = x[k], g = ai[aiKey(k)];
+        if (confirmed || v != null) return '<td class="num">' + (v == null ? "—" : fmtInt(v)) + "</td>";
+        return '<td class="num" title="Lido do print, ainda não confirmado pelo influencer">' + (g == null ? "—" : '<span class="muted">' + fmtInt(g) + "*</span>") + "</td>";
+      };
+      var paths = x.image_paths && x.image_paths.length ? x.image_paths : x.image_path ? [x.image_path] : [];
+      return "<tr>" +
+        '<td class="l">' + new Date(storyDay(x) + "T12:00:00").toLocaleDateString("pt-BR") + '<div class="muted" style="font-size:11px;">' + (x.source === "print" ? "print" : "API") + "</div></td>" +
+        '<td><span class="status ' + st[0] + '">' + st[1] + "</span></td>" +
+        '<td class="l">' + (x.tools.length ? esc(x.tools.join(", ")) : '<span class="muted">sem ferramenta</span>') + "</td>" +
+        FI_METRICS.map(function (m) { return cell(m[0]); }).join("") +
+        "<td>" + (paths.length ? '<button type="button" class="btn" data-fi-prints="' + esc(x.id) + '">' + (paths.length > 1 ? paths.length + " prints" : "Print") + "</button>" : "—") + "</td></tr>" +
+        (paths.length ? '<tr class="fi-prints-row" data-fi-prints-row="' + esc(x.id) + '" hidden><td colspan="' + (FI_METRICS.length + 4) + '"><div class="fi-prints"></div>' +
+          (ai.note ? '<p class="muted" style="font-size:12px;margin:6px 0 0;">Leitura do print: ' + esc(ai.note) + "</p>" : "") + "</td></tr>" : "");
+    }).join("");
+    return '<div class="fi-stories">' + head +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Dia</th><th>Situação</th><th class="l">Ferramentas</th>' +
+        FI_METRICS.map(function (m) { return "<th>" + m[1] + "</th>"; }).join("") + "<th>Prints</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      '<p class="muted" style="font-size:12px;margin:6px 0 0;">* lido do print, aguardando o influencer conferir e confirmar no Portal.</p></div>';
+  }
+  async function fiShowPrints(id) {
+    var row = document.querySelector('[data-fi-prints-row="' + CSS.escape(id) + '"]');
+    if (!row) return;
+    if (!row.hidden) { row.hidden = true; return; }
+    var x = null;
+    Object.keys(state.fi.stories).forEach(function (k) { state.fi.stories[k].forEach(function (y) { if (y.id === id) x = y; }); });
+    var paths = x.image_paths && x.image_paths.length ? x.image_paths : [x.image_path];
+    try {
+      var urls = await Promise.all(paths.map(async function (pth) {
+        if (state.fi.urls[pth]) return state.fi.urls[pth];
+        var r = await sb.storage.from("story-prints").createSignedUrl(pth, 600);
+        if (r.error) throw r.error;
+        state.fi.urls[pth] = r.data.signedUrl;
+        setTimeout(function () { delete state.fi.urls[pth]; }, 540000);
+        return r.data.signedUrl;
+      }));
+      row.querySelector(".fi-prints").innerHTML = urls.map(function (u, i) {
+        return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(u) + '" alt="Print ' + (i + 1) + ' do story"></a>';
+      }).join("");
+      row.hidden = false;
+    } catch (e) { toast("Não foi possível abrir os prints: " + (e.message || e), true); }
   }
 
   // Ciclo k do contrato: começa no mesmo dia da assinatura, k meses depois (dia 31 vira o último dia de meses curtos).
@@ -2310,14 +2395,14 @@
       .map(function (x) { var n = Math.max(0, x[1] - (cur[x[0]] || 0)); return n ? n + " " + x[2] : null; }).filter(Boolean);
     var days = Math.max(0, Math.round((new Date(cur.cy.cycle_end + "T23:59:59") - new Date()) / 86400000));
     return '<div class="fi-tools"><div class="kpi-mini-label">Ciclo atual por ferramenta · ' + (falta.length ? "falta <b>" + falta.join(", ") + "</b> em " + days + (days === 1 ? " dia" : " dias") : "<b>metas do ciclo entregues ✓</b>") + "</div>" +
-      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Ferramenta</th><th>Stories</th><th>Reels</th><th>YouTube</th><th>Feed/carrossel (extra)</th><th>Shorts (extra)</th><th>Alcance stories</th></tr></thead><tbody>' +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Ferramenta</th><th>Stories</th><th>Reels</th><th>YouTube</th><th>Feed/carrossel (extra)</th><th>Shorts (extra)</th><th>Views stories</th></tr></thead><tbody>' +
       tools.map(function (t) {
         var x = bt[t[0]] || {};
         return '<tr><td class="l">' + t[1] + '</td><td class="num">' + fmtInt(x.stories || 0) + '</td><td class="num">' + fmtInt(x.reels || 0) + '</td><td class="num">' + fmtInt(x.youtube || 0) +
-          '</td><td class="num">' + fmtInt(x.feed || 0) + '</td><td class="num">' + fmtInt(x.shorts || 0) + '</td><td class="num">' + fmtInt(x.story_reach || 0) + "</td></tr>";
+          '</td><td class="num">' + fmtInt(x.feed || 0) + '</td><td class="num">' + fmtInt(x.shorts || 0) + '</td><td class="num">' + fmtInt(x.story_views || 0) + "</td></tr>";
       }).join("") +
       '<tr><td class="l"><b>Total no ciclo</b> <span class="muted">(conteúdo com 2 ferramentas conta 1; inclui o ajuste)</span></td><td class="num"><b>' + fmtInt(cur.stories) + '</b></td><td class="num"><b>' + fmtInt(cur.reels) + '</b></td><td class="num"><b>' + fmtInt(cur.youtube) +
-        '</b></td><td class="num">' + fmtInt(cur.cy.feed_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.shorts_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.story_reach || 0) + "</td></tr>" +
+        '</b></td><td class="num">' + fmtInt(cur.cy.feed_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.shorts_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.story_views || 0) + "</td></tr>" +
       "</tbody></table></div></div>";
   }
 
@@ -2412,6 +2497,7 @@
         (rows || '<tr><td colspan="12" class="empty">O contrato ainda não começou.</td></tr>') + "</tbody></table></div>" +
       '<p class="muted" style="font-size:12px;margin:6px 0 0;">Entregas = o que o influencer marcou no Portal (aba Conteúdo, com pelo menos uma ferramenta Flow) + o ajuste manual (+/−) da equipe. Feed, carrossel e Shorts são extras, fora da meta.</p>' +
       fiToolsHtml(c, info) +
+      fiStoriesHtml(c) +
       (c.notes ? '<p class="muted" style="font-size:12.5px;margin:8px 0 0;">' + esc(c.notes) + "</p>" : "") +
       "</section>";
   }
@@ -2488,6 +2574,10 @@
     renderFlowInf();
   });
   $("fi-list").addEventListener("click", function (e) {
+    var st = e.target.closest("[data-fi-stories]");
+    if (st) { state.fi.storyOpen[st.dataset.fiStories] = !state.fi.storyOpen[st.dataset.fiStories]; renderFlowInf(); return; }
+    var pr = e.target.closest("[data-fi-prints]");
+    if (pr) { fiShowPrints(pr.dataset.fiPrints); return; }
     var d = e.target.closest("[data-fi-dash]");
     if (d) { InfluencerDash.open(d.dataset.fiDash); return; }
     var b = e.target.closest("[data-fi-edit]");
