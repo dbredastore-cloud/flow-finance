@@ -172,6 +172,16 @@ window.InfluencerDash = (function () {
       if (S !== my) return;
       my.ig = ri[0].data ? { account: ri[0].data, media: ri[1].data || [], snaps: ri[2].data || [] } : null;
     }
+    // Entregas no Portal: ferramentas que o influencer marcou e stories que ele enviou (content_tool_tags, instagram_stories).
+    if (my.email) {
+      var rp = await Promise.all([
+        A.sb.from("content_tool_tags").select("kind, content_id, tagged_at, tools(name, sort_order)").eq("affiliate_email", my.email).order("tagged_at", { ascending: false }).limit(500),
+        A.sb.from("instagram_stories").select("id, source, status, story_date, posted_at, first_seen_at, confirmed_at, image_path, image_paths, topic, views, total_interactions, replies, shares, ai_read, ai_insight")
+          .eq("affiliate_email", my.email).eq("source", "print").order("first_seen_at", { ascending: false }).limit(200)
+      ]);
+      if (S !== my) return;
+      my.portal = { tags: rp[0].error ? [] : (rp[0].data || []), stories: rp[1].error ? [] : (rp[1].data || []) };
+    }
     if (ch && ch.channel_id) {
       var r = await Promise.all([
         A.sb.from("youtube_videos").select("video_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short, description, tags")
@@ -240,6 +250,8 @@ window.InfluencerDash = (function () {
       kf("Meta do bônus", fmtInt(info.total) + " / " + fmtInt(c.bonus_sales_target), info.bonusMonth ? "🎉 meta batida" : "faltam " + fmtInt(Math.max(0, c.bonus_sales_target - info.total)) + " vendas") +
       "</div></section>";
 
+    if (S.portal) body += portalSection(m);
+
     if (!ch) {
       body += '<section class="mr-fsec"><div class="mr-fnote">Este influencer não tem o link do canal do YouTube na ficha. Cadastre no menu <b>Afiliados</b> (clique no nome) e depois clique em <b>Atualizar YouTube</b> para trazer vídeos, views e métricas.</div></section>';
       if (!S.ctx.hideInsta) body += instaSection(m);
@@ -306,7 +318,7 @@ window.InfluencerDash = (function () {
           '<td class="num"><span class="status ' + (r.okStories ? "ok" : r.current ? "wait" : "bad") + '">' + r.stories + "/" + c.stories_per_month + '</span></td>' +
           '<td class="num"><span class="status ' + (r.okReels ? "ok" : r.current ? "wait" : "bad") + '">' + r.reels + "/" + c.reels_per_month + '</span>' + igMonthHint(r) + '</td>' +
           '<td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.cost) + "</td></tr>";
-      }).join("") + '</tbody></table></div><p class="mr-hint">Stories e reels são lançados à mão na tela dos contratos (o Instagram ainda não é lido automaticamente). Vídeos e Shorts vêm do YouTube.</p></section>';
+      }).join("") + '</tbody></table></div><p class="mr-hint">Stories e reels: o que o influencer marcou no Portal (aba Conteúdo) + o ajuste manual da tela dos contratos. As colunas de vídeos vêm do YouTube (todos os vídeos do ciclo, marcados ou não).</p></section>';
 
     /* menções à Flow */
     body += flowSection(m, vf);
@@ -324,6 +336,82 @@ window.InfluencerDash = (function () {
     drawMonths(m); if (!noC) drawSales(); drawDow(m);
     renderDaily();
     renderTools(); renderTable();
+  }
+
+  /* ---------------- entregas no Portal ----------------
+     O que o influencer fez no Portal do Afiliado (aba Conteúdo): ferramentas Flow marcadas em vídeos, reels, posts e
+     stories, e stories enviados por print (com a situação: aguardando leitura, conferindo, confirmado). */
+  var KIND_LBL = { youtube: "vídeo do YouTube", ig_media: "post do Instagram", ig_story: "story" };
+  function tagsByItem() {
+    var by = {};
+    ((S.portal && S.portal.tags) || []).forEach(function (t) {
+      var k = t.kind + "|" + t.content_id, x = by[k] || (by[k] = { kind: t.kind, id: t.content_id, tools: [], at: 0 });
+      if (t.tools) x.tools.push(t.tools);
+      x.at = Math.max(x.at, Date.parse(t.tagged_at) || 0);
+    });
+    Object.keys(by).forEach(function (k) { by[k].tools.sort(function (a, b) { return a.sort_order - b.sort_order; }); by[k].names = by[k].tools.map(function (t) { return t.name; }); });
+    return by;
+  }
+  function chipsOf(names) { return names.map(function (n) { return '<span class="mr-tool mini flow">✓ ' + esc(n) + "</span>"; }).join(" "); }
+  function portalSection(m) {
+    var by = tagsByItem(), stories = S.portal.stories || [];
+    var vids = {}; (S.videos || []).forEach(function (v) { vids[v.video_id] = v; });
+    var media = {}; ((S.ig && S.ig.media) || []).forEach(function (p) { media[p.id] = p; });
+    var storyById = {}; stories.forEach(function (x) { storyById[x.id] = x; });
+    var ev = [];
+    Object.keys(by).forEach(function (k) {
+      var x = by[k];
+      if (x.kind === "ig_story" && storyById[x.id]) return;   // os stories enviados entram abaixo, com as marcações
+      var what, url = null, sub = "";
+      if (x.kind === "youtube") {
+        var v = vids[x.id];
+        what = v ? (v.is_short ? "Short: " : "Vídeo: ") + v.title : "vídeo do YouTube";
+        url = "https://www.youtube.com/" + (v && v.is_short ? "shorts/" : "watch?v=") + encodeURIComponent(x.id);
+        sub = v ? "publicado em " + fmtDate(Date.parse(v.published_at)) + " · " + fmtN(v.views) + " views" + (v.is_short ? " · extra (fora da meta)" : " · conta na meta") : "";
+      } else if (x.kind === "ig_media") {
+        var p = media[x.id], k2 = p ? igKind(p) : null;
+        what = (p ? igKindLabel(k2) + ": " : "Post do Instagram: ") + (p ? String(p.caption || "(sem legenda)").replace(/\s+/g, " ").slice(0, 140) : "");
+        url = p && p.permalink;
+        sub = p ? "publicado em " + fmtDate(Date.parse(p.posted_at)) + (k2 === "REELS" ? " · conta na meta" : " · extra (fora da meta)") : "";
+      } else {
+        what = "Story lido do Instagram conectado";
+      }
+      ev.push({ at: x.at, icon: x.kind === "youtube" ? "▶" : "◎", title: "Marcou " + x.names.join(" + ") + " em " + KIND_LBL[x.kind], what: what, url: url, sub: sub, chips: x.names });
+    });
+    var ST = { reading: ["wait", "aguardando leitura do print"], review: ["wait", "conferindo os números"], confirmed: ["ok", "números confirmados"] };
+    stories.forEach(function (x) {
+      var tags = by["ig_story|" + x.id], n = (x.image_paths && x.image_paths.length) || (x.image_path ? 1 : 0), st = ST[x.status] || ST.confirmed;
+      var day = x.story_date || String(x.posted_at || "").slice(0, 10), ai = x.ai_read || {};
+      var views = x.views != null ? x.views : ai.views;
+      ev.push({ at: Date.parse(x.first_seen_at), icon: "▣", title: "Enviou o story de " + new Date(day + "T12:00:00").toLocaleDateString("pt-BR") + " (" + n + (n === 1 ? " print" : " prints") + ")",
+        what: x.topic ? "Assunto: " + x.topic : ai.topic_guess ? "Assunto (sugestão da leitura): " + ai.topic_guess : "Assunto não informado",
+        sub: '<span class="status ' + st[0] + '">' + st[1] + "</span>" + (views != null ? " · " + fmtN(views) + " visualizações" + (x.status === "confirmed" ? "" : " (lido do print)") : "") +
+          (x.confirmed_at ? " · confirmado em " + new Date(x.confirmed_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""),
+        chips: tags ? tags.names : [], insight: x.ai_insight });
+    });
+    ev.sort(function (a, b) { return b.at - a.at; });
+    var nTag = function (kind, test) { return Object.keys(by).filter(function (k) { var x = by[k]; return x.kind === kind && (!test || test(x)); }).length; };
+    var nYt = nTag("youtube", function (x) { var v = vids[x.id]; return !v || !v.is_short; }), nSh = nTag("youtube", function (x) { var v = vids[x.id]; return v && v.is_short; });
+    var nReels = nTag("ig_media", function (x) { var p = media[x.id]; return !p || igKind(p) === "REELS"; }), nFeed = nTag("ig_media", function (x) { var p = media[x.id]; return p && igKind(p) !== "REELS"; });
+    var pend = stories.filter(function (x) { return x.status !== "confirmed"; }).length;
+    var last = ev[0];
+    var kpis = '<div class="mr-fkpis">' +
+      kf("Stories enviados", fmtInt(stories.length), pend ? pend + " sem confirmar" : stories.length ? "todos confirmados" : "nenhum ainda") +
+      kf("Vídeos marcados", fmtInt(nYt), nSh ? "+ " + nSh + " Short(s) extra" : "vídeos longos com ferramenta Flow") +
+      kf("Reels marcados", fmtInt(nReels), nFeed ? "+ " + nFeed + " post(s) de feed extra" : "reels com ferramenta Flow") +
+      kf("Última ação no Portal", last ? new Date(last.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—", last ? ago((Date.now() - last.at) / DAY) : "ainda não usou a aba Conteúdo") +
+      "</div>";
+    var list = ev.length ? '<div class="fd-pact">' + ev.slice(0, 60).map(function (e) {
+      return '<div class="fd-pact-i"><span class="fd-pact-ic">' + e.icon + '</span><div class="fd-pact-b">' +
+        '<div class="fd-pact-t"><b>' + esc(e.title) + '</b><span class="muted">' + new Date(e.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) + "</span></div>" +
+        '<div class="fd-pact-w">' + (e.url ? '<a href="' + esc(e.url) + '" target="_blank" rel="noopener noreferrer">' + esc(e.what) + "</a>" : esc(e.what)) + "</div>" +
+        (e.chips.length ? '<div class="fd-pact-c">' + chipsOf(e.chips) + "</div>" : "") +
+        (e.sub ? '<div class="fd-pact-s">' + e.sub + "</div>" : "") +
+        (e.insight ? '<div class="fd-pact-in"><b>Análise</b> ' + esc(e.insight) + "</div>" : "") +
+        "</div></div>";
+    }).join("") + "</div>" : '<div class="mr-fnote">O influencer ainda não marcou nenhum conteúdo nem enviou stories na aba <b>Conteúdo</b> do Portal do Afiliado.</div>';
+    return '<section class="mr-fsec fd-portal"><h3>Entregas no Portal <small class="muted">o que o influencer marcou e enviou na aba Conteúdo</small></h3>' + kpis + list +
+      '<p class="mr-hint">A data é a da última marcação de cada conteúdo (se ele desmarca e marca de novo, vale a mais recente). Conteúdo apagado pelo influencer sai da lista. Os prints e os 10 números de cada story estão em <b>Stories do influencer</b>, no cartão do contrato.</p></section>';
   }
 
   // Sem contrato: os meses do vídeo mais antigo até hoje (no máximo os últimos 24).
@@ -443,12 +531,22 @@ window.InfluencerDash = (function () {
       kf("Citam a Flow", fmtInt(flowPosts.length) + " de " + fmtInt(win.all.length), flowPosts.length ? "legenda com FlowPages, FlowTracking ou FlowSpy" : "nenhuma menção " + period, "Posts " + period + " com o nome de uma ferramenta Flow na legenda.") +
       kf("Posts no perfil", fmtInt(acc.media_count), acc.fetched_at ? "lido em " + new Date(acc.fetched_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "") +
       "</div>";
-    var grid = recent.length ? '<div class="fd-ig-grid">' + recent.map(function (p) {
-      var k = igKind(p), fx = flowRe.test(p.caption || "");
-      return '<a class="fd-ig-post" href="' + esc(p.permalink || "#") + '" target="_blank" rel="noopener noreferrer" title="' + esc(String(p.caption || "").slice(0, 300)) + '">' +
-        '<span class="fd-ig-thumb">' + (p.thumbnail_url ? '<img src="' + esc(p.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") + '<span class="fd-ig-kind ' + k.toLowerCase() + '">' + igKindLabel(k) + "</span>" + (fx ? '<span class="fd-ig-flow">Flow</span>' : "") + "</span>" +
-        '<span class="fd-ig-meta"><b>' + fmtDate(Date.parse(p.posted_at)) + "</b><span>♥ " + fmtN(p.like_count) + " · 💬 " + fmtN(p.comments_count) + (p.view_count != null ? " · ▶ " + fmtN(p.view_count) : "") + "</span></span>" +
-        '<span class="fd-ig-cap">' + esc(String(p.caption || "").slice(0, 90)) + "</span></a>";
+    var marked = tagsByItem();
+    var grid = recent.length ? '<div class="fd-igp-grid">' + recent.map(function (p) {
+      var k = igKind(p), fx = flowRe.test(p.caption || ""), cap = String(p.caption || "").trim(), tg = marked["ig_media|" + p.id];
+      var long = cap.length > 260 || (cap.match(/\n/g) || []).length > 5;
+      return '<article class="fd-igp">' +
+        '<a class="fd-igp-thumb" href="' + esc(p.permalink || "#") + '" target="_blank" rel="noopener noreferrer" title="Abrir no Instagram">' +
+          (p.thumbnail_url ? '<img src="' + esc(p.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : "") +
+          '<span class="fd-ig-kind ' + k.toLowerCase() + '">' + igKindLabel(k) + "</span></a>" +
+        '<div class="fd-igp-body">' +
+          '<div class="fd-igp-meta"><b>' + fmtDate(Date.parse(p.posted_at)) + "</b><span>♥ " + fmtN(p.like_count) + " · 💬 " + fmtN(p.comments_count) + (p.view_count != null ? " · ▶ " + fmtN(p.view_count) : "") + "</span></div>" +
+          ((tg && tg.names.length) || fx ? '<div class="fd-igp-flags">' + (tg && tg.names.length ? '<span class="fd-igp-tag" title="Marcado pelo influencer no Portal">Marcado: ' + esc(tg.names.join(", ")) + "</span>" : "") +
+            (fx ? '<span class="fd-igp-tag cap" title="O nome de uma ferramenta Flow aparece na legenda">Cita a Flow na legenda</span>' : "") + "</div>" : "") +
+          (cap ? '<p class="fd-igp-cap' + (long ? " clip" : "") + '">' + hlFlow(cap) + "</p>" + (long ? '<button type="button" class="fd-igp-more" data-fd-cap>Ler legenda completa</button>' : "")
+               : '<p class="fd-igp-cap muted">(sem legenda)</p>') +
+          '<a class="fd-igp-open" href="' + esc(p.permalink || "#") + '" target="_blank" rel="noopener noreferrer">Abrir no Instagram ↗</a>' +
+        "</div></article>";
     }).join("") + "</div>" : '<div class="mr-fnote">Nenhum post encontrado no perfil.</div>';
     var phase2 = acc.source === "oauth" ? "" : '<p class="mr-hint" style="margin:12px 0 0">Dados públicos do perfil (curtidas, comentários e visualizações). <b>Stories, alcance, salvamentos e compartilhamentos</b> entram quando o influencer conectar o Instagram dele pelo Portal do Afiliado.</p>';
     return head + kpis + '<h4 class="mr-sub-h" style="margin-top:14px">Posts recentes</h4>' + grid + phase2 + "</section>";
@@ -894,6 +992,12 @@ window.InfluencerDash = (function () {
     var box = $("fd-full"), tip = $("fd-tip");
     box.addEventListener("click", function (e) {
       if (e.target.closest("#fd-back")) return close();
+      var capBtn = e.target.closest("[data-fd-cap]");
+      if (capBtn) {
+        var capEl = capBtn.previousElementSibling, open = capEl.classList.toggle("clip");
+        capBtn.textContent = open ? "Ler legenda completa" : "Recolher legenda";
+        return;
+      }
       var act = e.target.closest("[data-fd]");
       if (act) {
         var k = act.dataset.fd;
