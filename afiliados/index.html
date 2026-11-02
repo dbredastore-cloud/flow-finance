@@ -269,6 +269,8 @@
   .fi-tot .good { color: var(--good); } .fi-tot .bad { color: var(--critical); }
   .fi-in { width: 48px; padding: 3px 5px; background: var(--field-bg); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); font: inherit; font-size: 12.5px; text-align: center; }
   .fi-table td { white-space: nowrap; }
+  .fi-tools { margin-top: 12px; }
+  .fi-tools .kpi-mini-label { margin-bottom: 6px; }
   .fi-table tr.fi-current td { background: rgba(var(--accent-rgb),.06); }
   .pct-tag.warn { background: rgba(var(--warning-rgb),.15); color: var(--warning); }
   @media (max-width: 800px) { .fi-grid { grid-template-columns: 1fr; } }
@@ -2193,7 +2195,7 @@
   /* ---------------- Influencers Flow (contratados) ---------------- */
   // Contratos em influencer_contracts; entregas do mês em influencer_deliverables; vendas das
   // ferramentas Flow no período de cada contrato buscadas à parte (não dependem do filtro do topo).
-  state.fi = { contracts: [], deliv: {}, sales: [] };
+  state.fi = { contracts: [], deliv: {}, sales: [], cycles: {} };
 
   function flowProductIds() { return state.products.filter(function (p) { return p.tool_id; }).map(function (p) { return p.id; }); }
   function contractOf(email) { return state.fi.contracts.find(function (c) { return c.affiliate_email === email; }); }
@@ -2207,12 +2209,16 @@
   async function loadFlowInf() {
     var res = await Promise.all([
       sb.from("influencer_contracts").select("*").order("start_date"),
-      sb.from("influencer_deliverables").select("*")
+      sb.from("influencer_deliverables").select("*"),
+      // Entregas por ciclo: conteúdo que o influencer marcou no Portal (aba Conteúdo) + o ajuste manual daqui.
+      sb.from("influencer_content_cycles").select("*")
     ]);
     if (res[0].error) throw res[0].error;
     state.fi.contracts = res[0].data || [];
     state.fi.deliv = {};
     (res[1].data || []).forEach(function (d) { state.fi.deliv[d.contract_id + "|" + d.year + "|" + d.month] = d; });
+    state.fi.cycles = {};
+    (res[2].data || []).forEach(function (x) { state.fi.cycles[x.contract_id + "|" + x.cycle_start] = x; });
     var active = state.fi.contracts.filter(function (c) { return c.active; });
     if (!active.length) { state.fi.sales = []; return; }
     var since = active.map(function (c) { return c.start_date; }).sort()[0];
@@ -2267,17 +2273,12 @@
       row.fixed = Number(c.fixed_fee) || 0;
       row.cost = row.fixed + row.commission + row.bonus;
       row.current = mEnd > now;
-      // Entregas: stories/reels à mão; YouTube = ajuste manual ou vídeos com "Flow" no título.
-      var del = state.fi.deliv[c.id + "|" + row.year + "|" + row.month] || {};
-      var ytVideos = channel ? channel.videos.filter(function (v) {
-        var t = new Date(v.published_at);
-        return t >= mStart && t < mEnd && /flow/i.test(v.title || "") && !isShort(v);
-      }) : [];
-      row.ytDetected = ytVideos;
-      row.stories = del.stories_done || 0;
-      row.reels = del.reels_done || 0;
-      row.youtube = del.youtube_done != null ? del.youtube_done : ytVideos.length;
-      row.youtubeManual = del.youtube_done != null;
+      // Entregas: o que o influencer marcou no Portal (com pelo menos uma ferramenta) + o ajuste manual da equipe.
+      var cy = state.fi.cycles[c.id + "|" + ymdLocal(mStart)] || {};
+      row.cy = cy;
+      row.stories = cy.stories || 0;
+      row.reels = cy.reels || 0;
+      row.youtube = cy.youtube || 0;
       row.okStories = row.stories >= c.stories_per_month;
       row.okReels = row.reels >= c.reels_per_month;
       row.okYoutube = row.youtube >= c.youtube_per_month;
@@ -2285,6 +2286,36 @@
       months.push(row);
     }
     return { months: months, total: cum, bonusMonth: bonusMonth, channel: channel };
+  }
+
+  function ymdLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+
+  // Célula de entrega: marcado pelo influencer + ajuste (editável) = total, contra a meta.
+  function delCell(r, key, f, need, ok) {
+    var cy = r.cy || {}, tagged = cy[f + "_tagged"] || 0, adj = cy[f + "_adj"] || 0;
+    return '<td title="Marcado pelo influencer no Portal: ' + tagged + (adj ? " · ajuste da equipe: " + (adj > 0 ? "+" : "") + adj : "") + '">' +
+      '<span class="num">' + tagged + '</span> <span class="muted">+</span> <input type="number" class="fi-in" data-del="' + key + '" data-f="' + f + '_adj" value="' + adj + '" title="Ajuste manual (+/−)"> ' +
+      check(ok, r[f], need, r.current) + "</td>";
+  }
+
+  // Ciclo atual por ferramenta e o que falta entregar.
+  function fiToolsHtml(c, info) {
+    var cur = info.months.find(function (r) { return r.current; });
+    if (!cur || !cur.cy || !cur.cy.cycle_end) return "";
+    var bt = cur.cy.by_tool || {}, tools = [["flowpages", "FlowPages"], ["flowtracking", "FlowTracking"], ["flowspy", "FlowSpy"]];
+    var falta = [["stories", c.stories_per_month, "stories"], ["reels", c.reels_per_month, "reels"], ["youtube", c.youtube_per_month, "vídeo(s) no YouTube"]]
+      .map(function (x) { var n = Math.max(0, x[1] - (cur[x[0]] || 0)); return n ? n + " " + x[2] : null; }).filter(Boolean);
+    var days = Math.max(0, Math.round((new Date(cur.cy.cycle_end + "T23:59:59") - new Date()) / 86400000));
+    return '<div class="fi-tools"><div class="kpi-mini-label">Ciclo atual por ferramenta · ' + (falta.length ? "falta <b>" + falta.join(", ") + "</b> em " + days + (days === 1 ? " dia" : " dias") : "<b>metas do ciclo entregues ✓</b>") + "</div>" +
+      '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l">Ferramenta</th><th>Stories</th><th>Reels</th><th>YouTube</th><th>Feed/carrossel (extra)</th><th>Shorts (extra)</th><th>Alcance stories</th></tr></thead><tbody>' +
+      tools.map(function (t) {
+        var x = bt[t[0]] || {};
+        return '<tr><td class="l">' + t[1] + '</td><td class="num">' + fmtInt(x.stories || 0) + '</td><td class="num">' + fmtInt(x.reels || 0) + '</td><td class="num">' + fmtInt(x.youtube || 0) +
+          '</td><td class="num">' + fmtInt(x.feed || 0) + '</td><td class="num">' + fmtInt(x.shorts || 0) + '</td><td class="num">' + fmtInt(x.story_reach || 0) + "</td></tr>";
+      }).join("") +
+      '<tr><td class="l"><b>Total no ciclo</b> <span class="muted">(conteúdo com 2 ferramentas conta 1; inclui o ajuste)</span></td><td class="num"><b>' + fmtInt(cur.stories) + '</b></td><td class="num"><b>' + fmtInt(cur.reels) + '</b></td><td class="num"><b>' + fmtInt(cur.youtube) +
+        '</b></td><td class="num">' + fmtInt(cur.cy.feed_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.shorts_extra || 0) + '</td><td class="num">' + fmtInt(cur.cy.story_reach || 0) + "</td></tr>" +
+      "</tbody></table></div></div>";
   }
 
   function mainPct(pcts) {
@@ -2345,16 +2376,14 @@
           esc(Object.keys(r.pcts).map(function (x) { return x + "% em " + r.pcts[x] + " venda(s)"; }).join(", ") +
             (Math.abs(mp - Number(c.commission_pct)) > 0.5 ? " — contrato prevê " + Number(c.commission_pct) + "%" : "")) + '">' + mp + "%</span>";
       var key = c.id + "|" + r.year + "|" + r.month;
-      var ytTitle = r.ytDetected.length ? "Detectados no canal: " + r.ytDetected.map(function (v) { return v.title; }).join(" · ") : (info.channel ? "Nenhum vídeo com 'Flow' no título neste ciclo" : "Canal do YouTube não cadastrado na ficha");
       return '<tr class="' + (r.current ? "fi-current" : "") + '">' +
         '<td class="l"><span class="muted">' + r.cycle + "º</span> " + r.label + (r.current ? ' <span class="muted">(em andamento)</span>' : "") + "</td>" +
         '<td class="num">' + fmtInt(r.count) + '</td><td class="num">' + fmtBRL(r.amount) + '</td><td class="num">' + fmtBRL(r.commission) + "</td>" +
         "<td>" + pctCell + "</td>" +
         '<td class="num">' + fmtBRL(r.fixed) + '</td><td class="num">' + (r.bonus ? '<span class="pct-tag">' + fmtBRL(r.bonus) + "</span>" : "—") + '</td><td class="num">' + fmtBRL(r.cost) + "</td>" +
-        '<td><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="stories_done" value="' + r.stories + '"> ' + check(r.okStories, r.stories, c.stories_per_month, r.current) + "</td>" +
-        '<td><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="reels_done" value="' + r.reels + '"> ' + check(r.okReels, r.reels, c.reels_per_month, r.current) + "</td>" +
-        '<td title="' + esc(ytTitle) + '"><input type="number" min="0" class="fi-in" data-del="' + key + '" data-f="youtube_done" value="' + r.youtube + '"> ' + check(r.okYoutube, r.youtube, c.youtube_per_month, r.current) +
-          (r.youtubeManual ? ' <span class="muted" title="Valor ajustado à mão">✎</span>' : r.ytDetected.length ? ' <span class="muted">auto</span>' : "") + "</td>" +
+        delCell(r, key, "stories", c.stories_per_month, r.okStories) +
+        delCell(r, key, "reels", c.reels_per_month, r.okReels) +
+        delCell(r, key, "youtube", c.youtube_per_month, r.okYoutube) +
         "<td>" + (r.allOk ? '<span class="status ok">entregue</span>' : r.current ? '<span class="status wait">em andamento</span>' : '<span class="status bad">pendente</span>') + "</td></tr>";
     }).join("");
     return '<section class="panel fi-card">' +
@@ -2376,8 +2405,10 @@
           '<div><span title="Líquido do produtor (já sem taxa e comissão) − fixo − bônus">Resultado para a empresa</span><b class="num ' + (result >= 0 ? "good" : "bad") + '">' + fmtBRL(result) + "</b></div>" +
         "</div></div>" +
       '<div class="table-scroll"><table class="fi-table"><thead><tr><th class="l" title="Cada ciclo de entrega dura 1 mês a partir da data de assinatura do contrato">Ciclo</th><th>Vendas</th><th>Faturamento</th><th>Comissão</th><th>% pago</th><th>Fixo</th><th>Bônus</th><th>Custo total</th>' +
-        '<th>Stories</th><th>Reels</th><th>YouTube</th><th>Conteúdo</th></tr></thead><tbody>' +
+        '<th title="Marcado pelo influencer no Portal + ajuste manual">Stories</th><th title="Marcado pelo influencer no Portal + ajuste manual">Reels</th><th title="Vídeos longos marcados pelo influencer no Portal + ajuste manual">YouTube</th><th>Conteúdo</th></tr></thead><tbody>' +
         (rows || '<tr><td colspan="12" class="empty">O contrato ainda não começou.</td></tr>') + "</tbody></table></div>" +
+      '<p class="muted" style="font-size:12px;margin:6px 0 0;">Entregas = o que o influencer marcou no Portal (aba Conteúdo, com pelo menos uma ferramenta Flow) + o ajuste manual (+/−) da equipe. Feed, carrossel e Shorts são extras, fora da meta.</p>' +
+      fiToolsHtml(c, info) +
       (c.notes ? '<p class="muted" style="font-size:12.5px;margin:8px 0 0;">' + esc(c.notes) + "</p>" : "") +
       "</section>";
   }
@@ -2436,19 +2467,19 @@
     if (state.view === "flowinf") renderFlowInf();
   }
 
-  // Entregas do mês (stories, reels, YouTube): salva ao alterar o número.
+  // Ajuste manual das entregas do ciclo (+/−, soma ao que o influencer marcou): salva ao alterar o número.
   $("fi-list").addEventListener("change", async function (e) {
     var inp = e.target.closest("[data-del]");
     if (!inp) return;
     var parts = inp.dataset.del.split("|"), key = inp.dataset.del;
-    var cur = state.fi.deliv[key] || { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]), stories_done: 0, reels_done: 0, youtube_done: null };
-    var row = { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]), stories_done: cur.stories_done || 0, reels_done: cur.reels_done || 0, youtube_done: cur.youtube_done, updated_at: new Date().toISOString() };
-    var v = inp.value === "" ? null : Math.max(0, parseInt(inp.value, 10) || 0);
-    row[inp.dataset.f] = inp.dataset.f === "youtube_done" ? v : (v || 0);
+    var cur = state.fi.deliv[key] || {};
+    var row = { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]),
+      stories_adj: cur.stories_adj || 0, reels_adj: cur.reels_adj || 0, youtube_adj: cur.youtube_adj || 0, updated_at: new Date().toISOString() };
+    row[inp.dataset.f] = parseInt(inp.value, 10) || 0;
     var res = await sb.from("influencer_deliverables").upsert(row, { onConflict: "contract_id,year,month" });
     if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
-    state.fi.deliv[key] = row;
-    toast("Entrega salva.");
+    try { await loadFlowInf(); } catch (err) {}
+    toast("Ajuste salvo.");
     renderFlowInf();
   });
   $("fi-list").addEventListener("click", function (e) {

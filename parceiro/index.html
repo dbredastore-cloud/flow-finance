@@ -25,6 +25,7 @@
 <script src="../assets/influencer-dash.js"></script>
 <script src="../assets/instagram-hub.js"></script>
 <script src="../assets/partner-analysis.js"></script>
+<script src="../assets/partner-content.js"></script>
 </head>
 <body>
 
@@ -76,6 +77,7 @@
   <nav class="pp-nav" aria-label="Menu do portal">
     <button type="button" class="pp-nav-i on" data-tab="results" aria-current="page">Resultados</button>
     <button type="button" class="pp-nav-i" data-tab="pautas">Pautas Instagram <span class="pp-nav-n" id="pautas-n" hidden></span></button>
+    <button type="button" class="pp-nav-i" data-tab="content" id="nav-content" hidden>Conteúdo <span class="pp-nav-n" id="content-n" hidden></span></button>
   </nav>
 
   <main class="pp-main" id="tab-results">
@@ -121,6 +123,8 @@
   </main>
 
   <main class="pp-main" id="tab-pautas" hidden><div id="ig-view"></div></main>
+
+  <main class="pp-main" id="tab-content" hidden><div id="content-view" class="pc-root"></div></main>
 </div>
 <div id="toast" role="status"></div>
 <script src="../assets/partner-portal.js"></script>

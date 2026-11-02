@@ -199,11 +199,25 @@
     });
     $("tab-results").hidden = tab !== "results";
     $("tab-pautas").hidden = tab !== "pautas";
+    $("tab-content").hidden = tab !== "content";
     if (tab === "pautas") { pautasInit(); window.InstagramHub.show().then(loadPautasCount); }
     else { window.InstagramHub && pautasReady && window.InstagramHub.hide(); loadPautasCount(); }
+    if (tab === "content") window.PartnerContent.show({ sb: sb, rpc: rpc, toast: toast, root: $("content-view"), preview: !!(S.me && S.me.preview), onConnect: igConnect });
+    else if (tab === "results" && S.contract) refreshContent();
     window.scrollTo(0, 0);
   }
   document.querySelectorAll(".pp-nav-i").forEach(function (b) { b.addEventListener("click", function () { openTab(b.getAttribute("data-tab")); }); });
+
+  // Conteúdo (assets/partner-content.js): só para quem tem contrato de Influencer Flow.
+  function renderContentCount() {
+    var n = window.PartnerContent ? window.PartnerContent.pending(S.content) : null;
+    $("nav-content").hidden = !S.me || !S.me.has_contract;
+    $("content-n").hidden = !n; $("content-n").textContent = n || "";
+  }
+  // Ao voltar para Resultados, a tabela do contrato pega as marcações feitas na aba Conteúdo.
+  async function refreshContent() {
+    try { S.content = await rpc("portal_content"); renderContract(); renderContentCount(); } catch (e) { /* fica o que já estava */ }
+  }
 
   /* ---------------- período ---------------- */
   function range(p) {
@@ -610,10 +624,12 @@
       me.has_contract ? rpc("portal_contract").catch(function () { return null; }) : Promise.resolve(null),
       me.has_channel ? rpc("portal_youtube").catch(function () { return null; }) : Promise.resolve(null),
       // Sempre: mesmo sem perfil lido, o painel mostra o botão "Conectar Instagram".
-      rpc("portal_instagram").catch(function () { return null; })
+      rpc("portal_instagram").catch(function () { return null; }),
+      // Entregas marcadas por ciclo (aba Conteúdo): alimentam a tabela do contrato e a bolinha do menu.
+      me.has_contract ? rpc("portal_content").catch(function () { return null; }) : Promise.resolve(null)
     ]);
-    S.contract = r[0]; S.yt = r[1]; S.ig = r[2]; S.extrasLoaded = true;
-    renderContract(); renderChannel(); renderInstagram();
+    S.contract = r[0]; S.yt = r[1]; S.ig = r[2]; S.content = r[3]; S.extrasLoaded = true;
+    renderContract(); renderChannel(); renderInstagram(); renderContentCount();
   }
 
   /* ---------------- Instagram ----------------
@@ -767,11 +783,10 @@
 
   // Ciclos de entrega: 1 mês a partir da data de assinatura (ex.: 18/10 a 17/11), gravados pelo ano/mês em que começam.
   function contractMonths() {
-    var c = S.contract.contract, sales = S.contract.sales || [], del = {};
-    (S.contract.deliverables || []).forEach(function (d) { del[d.year + "-" + d.month] = d; });
+    var c = S.contract.contract, sales = S.contract.sales || [], cyc = {};
+    ((S.content && S.content.cycles) || []).forEach(function (x) { cyc[x.cycle_start] = x; });
     var start = new Date(c.start_date + "T00:00:00"), end = c.end_date ? new Date(c.end_date + "T23:59:59") : null, now = new Date();
     var last = end && end < now ? end : now, months = [], cum = 0, bonusMonth = null;
-    var vids = S.yt ? S.yt.videos || [] : [];
     for (var k = 0, d = start; d <= last; k++, d = cycleStart(start, k)) {
       var a = d, b = cycleStart(start, k + 1);
       var ms = sales.filter(function (s) { var t = new Date(s.at); return t >= a && t < b; });
@@ -783,9 +798,9 @@
       row.fixed = Number(c.fixed_fee) || 0;
       row.total = row.commission + row.fixed + row.bonus;
       row.current = b > now;
-      var dl = del[row.year + "-" + row.month] || {};
-      var yt = vids.filter(function (v) { var t = new Date(v.published_at); return t >= a && t < b && /flow/i.test(v.title || "") && !isShort(v); }).length;
-      row.stories = dl.stories || 0; row.reels = dl.reels || 0; row.youtube = dl.youtube != null ? dl.youtube : yt;
+      // Entregas: o que o afiliado marcou na aba Conteúdo (portal_content) + o ajuste da equipe.
+      var cy = cyc[ymd(a)] || {};
+      row.stories = cy.stories || 0; row.reels = cy.reels || 0; row.youtube = cy.youtube || 0;
       months.push(row);
     }
     return { months: months, total: cum, bonusMonth: bonusMonth };
@@ -818,7 +833,7 @@
             '<td class="num">' + int(r.n) + '</td><td class="num">' + brl(r.commission) + '</td><td class="num">' + brl(r.fixed) + '</td><td class="num">' + (r.bonus ? brl(r.bonus) : "—") + '</td><td class="num"><b>' + brl(r.total) + "</b></td>" +
             '<td class="num">' + chk(r.stories, c.stories_per_month, r.current) + '</td><td class="num">' + chk(r.reels, c.reels_per_month, r.current) + '</td><td class="num">' + chk(r.youtube, c.youtube_per_month, r.current) + "</td></tr>";
         }).join("") + "</tbody></table></div>" +
-      '<p class="muted pp-hint">Vendas e comissões das ferramentas Flow (FlowPages, FlowTracking, FlowSpy) dentro da vigência. Stories e reels são lançados pela equipe; vídeos do YouTube são contados no seu canal (vídeos com "Flow" no título).</p>';
+      '<p class="muted pp-hint">Vendas e comissões das ferramentas Flow (FlowPages, FlowTracking, FlowSpy) dentro da vigência. Stories, reels e vídeos contam quando você marca as ferramentas Flow na aba <b>Conteúdo</b> (Shorts, feed e carrossel são extras, fora da meta).</p>';
   }
 
   function renderChannel() {
