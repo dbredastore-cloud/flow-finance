@@ -2293,9 +2293,12 @@
   // Célula de entrega: marcado pelo influencer + ajuste (editável) = total, contra a meta.
   function delCell(r, key, f, need, ok) {
     var cy = r.cy || {}, tagged = cy[f + "_tagged"] || 0, adj = cy[f + "_adj"] || 0;
+    // Ajuste que veio do lançamento manual antigo: zera sozinho quando o influencer marca o 1º conteúdo do tipo no ciclo.
+    var legacy = adj && ((state.fi.deliv[key] || {}).legacy_adj || []).indexOf(f) >= 0;
     return '<td title="Marcado pelo influencer no Portal: ' + tagged + (adj ? " · ajuste da equipe: " + (adj > 0 ? "+" : "") + adj : "") + '">' +
       '<span class="num">' + tagged + '</span> <span class="muted">+</span> <input type="number" class="fi-in" data-del="' + key + '" data-f="' + f + '_adj" value="' + adj + '" title="Ajuste manual (+/−)"> ' +
-      check(ok, r[f], need, r.current) + "</td>";
+      check(ok, r[f], need, r.current) +
+      (legacy ? ' <span class="muted" title="Lançado à mão antes das marcações. Zera sozinho quando o influencer marcar o primeiro conteúdo deste tipo no ciclo; se você editar o número, ele passa a ser um ajuste fixo.">↺</span>' : "") + "</td>";
   }
 
   // Ciclo atual por ferramenta e o que falta entregar.
@@ -2476,6 +2479,8 @@
     var row = { contract_id: parts[0], year: Number(parts[1]), month: Number(parts[2]),
       stories_adj: cur.stories_adj || 0, reels_adj: cur.reels_adj || 0, youtube_adj: cur.youtube_adj || 0, updated_at: new Date().toISOString() };
     row[inp.dataset.f] = parseInt(inp.value, 10) || 0;
+    // Editado pela equipe: deixa de ser o ajuste antigo que zera sozinho.
+    row.legacy_adj = (cur.legacy_adj || []).filter(function (x) { return x + "_adj" !== inp.dataset.f; });
     var res = await sb.from("influencer_deliverables").upsert(row, { onConflict: "contract_id,year,month" });
     if (res.error) { toast("Erro ao salvar: " + res.error.message, true); return; }
     try { await loadFlowInf(); } catch (err) {}
