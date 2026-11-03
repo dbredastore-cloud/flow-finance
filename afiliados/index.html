@@ -323,6 +323,7 @@
 <link rel="stylesheet" href="../assets/instagram-perf.css">
 <link rel="stylesheet" href="../assets/ig-radar.css">
 <link rel="stylesheet" href="../assets/user-ideas.css">
+<link rel="stylesheet" href="../assets/affiliate-expand.css?v=20261103e">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -339,6 +340,7 @@
 <script src="../assets/ig-radar.js"></script>
 <script src="../assets/user-ideas.js"></script>
 <script src="../assets/useaflow.js"></script>
+<script src="../assets/affiliate-expand.js?v=20261103e"></script>
 </head>
 <body>
 
@@ -588,7 +590,8 @@
     selProducts: null,
     yt: { channels: [], sort: { key: "subscribers", dir: -1 }, open: null, lastRun: null, detailType: "all", widths: {} },
     userId: null,
-    openEmail: null
+    openEmail: null,
+    expanded: false
   };
 
   /* ---------------- Utils ---------------- */
@@ -1915,7 +1918,9 @@
       '<div class="drawer-head"><div><h3>' + starBtn(email) + esc(a.name || email) + '</h3><div class="meta">' +
         esc(email) + (doc ? " · " + esc(doc) : "") + (a.company_name && a.company_name !== a.name ? "<br>" + esc(a.company_name) : "") +
         '<span id="drawer-products">' + (products ? "<br>" + products : "") + "</span>" +
-      '</div></div><button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div>' +
+      '</div></div><div class="fi-actions"><button class="btn btn-sm ax-toggle" id="drawer-expand-btn" type="button" title="Mostra as vendas de cada mês por ferramenta, a análise do último mês e a mensagem pronta para o influencer">' + (state.expanded ? "⤡ Recolher" : "⤢ Expandir") + '</button>' +
+      '<button class="btn btn-ghost" id="drawer-close" aria-label="Fechar">✕</button></div></div>' +
+      '<div id="drawer-expand"' + (state.expanded ? "" : " hidden") + '></div>' +
       '<div class="mini-kpis">' +
         kpi("Vendas", fmtInt(st.count)) + kpi("Faturamento", fmtBRL(st.amount)) + kpi("Comissão", fmtBRL(st.commission)) +
       "</div>" +
@@ -1948,8 +1953,20 @@
         }).join("") : '<tr><td colspan="8" class="empty">Sem vendas no período.</td></tr>') +
       "</tbody></table></div>";
     $("drawer").hidden = false;
+    $("drawer").classList.toggle("wide", !!state.expanded);
     $("scrim").hidden = false;
     $("drawer-close").addEventListener("click", closeDrawer);
+    // Expandir: histórico mensal por ferramenta, análise e mensagem (assets/affiliate-expand.js).
+    // Fica expandido ao abrir o próximo afiliado, até clicar em Recolher.
+    var mountExpand = function () { window.AffiliateExpand.mount($("drawer-expand"), { sb: sb, email: email, name: a.name || st.name }); };
+    if (state.expanded) mountExpand();
+    $("drawer-expand-btn").addEventListener("click", function () {
+      state.expanded = !state.expanded;
+      this.textContent = state.expanded ? "⤡ Recolher" : "⤢ Expandir";
+      $("drawer").classList.toggle("wide", state.expanded);
+      $("drawer-expand").hidden = !state.expanded;
+      if (state.expanded) { mountExpand(); $("drawer").scrollTop = 0; }
+    });
     // Produtos em que é afiliado: não vêm na carga inicial, busca ao abrir a ficha.
     if (a.id && !a.products) {
       sb.from("affiliates").select("products").eq("id", a.id).maybeSingle().then(function (res) {
@@ -1963,7 +1980,7 @@
     var form = $("af-form");
     if (form) form.addEventListener("submit", function (e) { e.preventDefault(); saveContact(a); });
   }
-  function closeDrawer() { state.openEmail = null; $("drawer").hidden = true; $("scrim").hidden = true; }
+  function closeDrawer() { state.openEmail = null; $("drawer").hidden = true; $("drawer").classList.remove("wide"); $("scrim").hidden = true; }
   $("scrim").addEventListener("click", closeDrawer);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && state.openEmail) closeDrawer(); });
 
@@ -2648,7 +2665,7 @@
       '</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" type="submit">Salvar contrato</button>' +
       '<button class="btn" type="button" id="fc-remove">Remover dos Influencers Flow</button></div></form>' +
       '<p class="muted" style="font-size:12px;margin-top:12px;">As vendas contam da data de início até o fim (ou hoje). O bônus entra no mês em que o total de vendas no contrato chega à meta. A comissão é a que a Kiwify pagou; se o % pago for diferente do combinado, o mês fica marcado em amarelo.</p>';
-    $("drawer").hidden = false; $("scrim").hidden = false;
+    $("drawer").hidden = false; $("drawer").classList.remove("wide"); $("scrim").hidden = false;
     state.openEmail = null;
     $("drawer-close").addEventListener("click", closeDrawer);
     $("fc-remove").addEventListener("click", function () { closeDrawer(); toggleFav(c.affiliate_email); });
