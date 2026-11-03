@@ -1,6 +1,7 @@
 /* Saúde dos clientes (menu do Financeiro).
-   Dados vindos do banco: situação da assinatura por software (Kiwify) e, quando a Biancode enviar, uso dos softwares
-   (tabela usage_daily). Funções SQL: health_summary, health_customers, health_customer.
+   Dados vindos do banco: situação por software (assinatura na Kiwify ou combo vitalício na Kiwify, TMB ou Hotmart, view
+   customer_tools) e, quando a Biancode enviar, uso dos softwares (tabela usage_daily).
+   Funções SQL: health_summary, health_customers, health_customer.
    Uso: CustomerHealth.init({ root, sb, url, toast, userId }); CustomerHealth.show(); */
 (function () {
   "use strict";
@@ -10,11 +11,11 @@
     ["ativo", "Assinatura em dia", "Cobertura vigente e faltam mais de 30 dias para vencer.", "--accent"],
     ["vence_30", "Vence em 30 dias", "Cobertura vigente, mas vence em até 30 dias: hora de trabalhar a renovação.", "--warning"],
     ["carencia", "Em carência", "Venceu há até 15 dias e ainda pode renovar.", "--accent-2"],
-    ["cancelou", "Cancelou", "Venceu há mais de 15 dias sem nova compra (não conta teste/cortesia nem quem tem o combo vitalício).", "--critical"],
-    ["vitalicio", "Passou ao vitalício", "A assinatura venceu, mas tem o combo vitalício: segue com acesso.", "--accent-3"],
+    ["cancelou", "Cancelou", "Venceu há mais de 15 dias sem nova compra (não conta teste/cortesia; quem tem o combo vitalício está em Vitalício).", "--critical"],
+    ["vitalicio", "Vitalício", "Tem o combo vitalício (Kiwify, TMB ou Hotmart): acesso às três ferramentas, sem vencimento.", "--accent-3"],
     ["teste", "Teste ou cortesia", "Compra de teste ou cortesia (plano Teste ou menos de R$ 5): fora da conta de cancelamento.", "--text-muted"]
   ];
-  var ASS_EXTRA = [["renovou", "Renovaram (2+ pagamentos)"], ["multi", "Usam 2+ softwares"], ["reembolso", "Reembolsaram ou chargeback"]];
+  var ASS_EXTRA = [["migrou", "Migraram da assinatura para o vitalício"], ["renovou", "Renovaram (2+ pagamentos)"], ["multi", "Usam 2+ softwares"], ["reembolso", "Reembolsaram ou chargeback"]];
   var USO = [
     ["muito_engajado", "Muito engajados", "Acessam em vários dias da semana.", "--accent"],
     ["engajado", "Engajados", "Acessaram pelo menos uma vez nos últimos 7 dias.", "--chart-hi"],
@@ -109,7 +110,8 @@
 
   /* ---------------- agregação do software escolhido ---------------- */
   var NUM_KEYS = ["clientes", "ass_ativo", "ass_vence_30", "ass_carencia", "ass_cancelou", "ass_vitalicio", "ass_teste", "reembolsaram", "renovaram", "multi_produto", "com_uso", "hoje", "d7", "d30",
-    "inativos", "nunca", "seg_muito", "seg_engajado", "seg_moderado", "seg_baixo", "vencem_90", "vencem_90_sem_uso", "devolveram", "devolveram_sairam"];
+    "inativos", "nunca", "seg_muito", "seg_engajado", "seg_moderado", "seg_baixo", "vencem_90", "vencem_90_sem_uso", "devolveram", "devolveram_sairam",
+    "vit_migraram", "vit_novos", "vit_kiwify", "vit_tmb", "vit_hotmart", "com_assinatura"];
   function selStats() {
     var list = (S.sum && S.sum.softwares) || [];
     if (S.sw !== "all") return list.filter(function (s) { return s.software === S.sw; })[0] || null;
@@ -129,7 +131,7 @@
     root.innerHTML =
       '<section class="ch-hero">' +
         '<div class="ch-hero-main"><div class="ch-kicker">Saúde dos clientes</div><h3 class="ch-title">Engajamento por software</h3>' +
-          '<p class="ch-sub">Quem está usando o Flow Pages, o Flow Tracking e o Flow Spy, e quem está perto de sair. A parte de assinatura já vem da Kiwify; o uso dos softwares aparece assim que a Biancode enviar os acessos.</p>' +
+          '<p class="ch-sub">Quem está usando o Flow Pages, o Flow Tracking e o Flow Spy, e quem está perto de sair. Conta as assinaturas da Kiwify e quem tem o combo vitalício (Kiwify, TMB e Hotmart), que dá as três ferramentas. O uso dos softwares aparece assim que a Biancode enviar os acessos.</p>' +
           '<div class="ch-sources" id="ch-sources"></div></div>' +
         '<div class="ch-hero-acts"><button class="btn" id="ch-crit" type="button">Critérios</button><button class="btn" id="ch-import" type="button">Importar acessos (CSV)</button><button class="btn btn-primary" id="ch-integ" type="button">Integração (Biancode)</button></div>' +
       "</section>" +
@@ -166,9 +168,11 @@
     renderSources(); renderCards(); renderTabs(); renderDetail(); renderFilters();
   }
   function renderSources() {
-    var u = S.sum.uso, total = (S.sum.softwares || []).reduce(function (a, s) { return a + s.clientes; }, 0);
+    var u = S.sum.uso, list = S.sum.softwares || [], v = list[0] || {};
+    var ass = list.reduce(function (a, s) { return a + (s.com_assinatura || 0); }, 0);
     $("ch-sources").innerHTML =
-      '<span class="ch-src ok"><i></i>Assinaturas (Kiwify): ' + fmtInt(total) + " cadastros de cliente por software</span>" +
+      '<span class="ch-src ok"><i></i>Assinaturas (Kiwify): ' + fmtInt(ass) + " cadastros de cliente por software</span>" +
+      '<span class="ch-src ok"><i></i>Combo vitalício: ' + fmtInt(S.sum.pessoas_vitalicio) + " pessoas · Kiwify " + fmtInt(v.vit_kiwify) + " · TMB " + fmtInt(v.vit_tmb) + " · Hotmart " + fmtInt(v.vit_hotmart) + "</span>" +
       (u.eventos > 0
         ? '<span class="ch-src ok"><i></i>Uso dos softwares: ' + fmtInt(u.dias) + " dia(s) de histórico · último acesso registrado em " + esc(fmtDateTime(u.ultimo)) + "</span>"
         : '<span class="ch-src wait"><i></i>Uso dos softwares: aguardando os acessos da Biancode</span>');
@@ -176,11 +180,11 @@
   function renderCards() {
     var list = S.sum.softwares || [];
     $("ch-cards").innerHTML = list.map(function (s) {
-      var ok = s.ass_ativo + s.ass_vence_30, share = s.clientes ? ok / s.clientes * 100 : 0;
+      var ok = s.ass_ativo + s.ass_vence_30 + s.ass_vitalicio, share = s.clientes ? ok / s.clientes * 100 : 0;
       return '<button type="button" class="ch-card' + (S.sw === s.software ? " on" : "") + '" data-sw="' + esc(s.software) + '">' +
         '<div class="ch-card-ring">' + FlowHud.ring({ pct: share, color: tok("--accent"), size: 78, ticks: 36, label: s.tool }) + "</div>" +
-        '<div class="ch-card-t"><b>' + esc(s.tool) + "</b><strong class=\"num\">" + fmtInt(s.clientes) + '</strong><span>clientes · ' + pct(ok, s.clientes) + " com assinatura vigente</span>" +
-        '<small>' + fmtInt(s.ass_vence_30) + " vencem em 30 dias · " + fmtInt(s.ass_cancelou) + " cancelaram" +
+        '<div class="ch-card-t"><b>' + esc(s.tool) + "</b><strong class=\"num\">" + fmtInt(s.clientes) + '</strong><span>clientes · ' + pct(ok, s.clientes) + " com acesso vigente</span>" +
+        '<small>' + fmtInt(s.ass_vitalicio) + " vitalícios · " + fmtInt(s.ass_vence_30) + " vencem em 30 dias · " + fmtInt(s.ass_cancelou) + " cancelaram" +
         (s.com_uso > 0 ? " · " + fmtInt(s.d7) + " acessaram em 7 dias" : "") + "</small></div></button>";
     }).join("") || '<p class="muted">Nenhum cliente encontrado.</p>';
   }
@@ -212,17 +216,18 @@
     var name = s.software === "all" ? "todos os softwares" : s.tool;
     var assParts = ASS.map(function (a) { return { label: a[1], n: s["ass_" + a[0]], color: tok(a[3]), flt: "ass:" + a[0] }; });
 
-    var assSec = '<section class="panel ch-sec"><div class="panel-head"><h3>Assinatura · ' + esc(s.tool) + '</h3><span class="muted" style="font-size:12px">Dados da Kiwify. Clique para ver os clientes.</span></div>' +
+    var assSec = '<section class="panel ch-sec"><div class="panel-head"><h3>Assinatura · ' + esc(s.tool) + '</h3><span class="muted" style="font-size:12px">Assinaturas da Kiwify e combo vitalício da Kiwify, TMB e Hotmart. Clique para ver os clientes.</span></div>' +
       '<div class="ch-tiles">' +
-        tile("Clientes", fmtInt(s.clientes), "com pelo menos 1 pagamento", "") +
+        tile("Clientes", fmtInt(s.clientes), "com assinatura paga ou combo vitalício", "") +
         tile("Assinatura em dia", fmtInt(s.ass_ativo), pct(s.ass_ativo, s.clientes) + " da base", "ass:ativo", ASS[0][2]) +
         tile("Vencem em 30 dias", fmtInt(s.ass_vence_30), pct(s.ass_vence_30, s.clientes) + " da base", "ass:vence_30", ASS[1][2]) +
         tile("Em carência", fmtInt(s.ass_carencia), "venceram há até 15 dias", "ass:carencia", ASS[2][2]) +
-        tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base · fora: " + fmtInt(s.ass_vitalicio) + " vitalício, " + fmtInt(s.ass_teste) + " teste", "ass:cancelou", ASS[3][2]) +
+        tile("Vitalício", fmtInt(s.ass_vitalicio), fmtInt(s.vit_migraram) + " vieram da assinatura · " + fmtInt(s.vit_novos) + " entraram já no combo", "ass:vitalicio", ASS[4][2]) +
+        tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base · fora: " + fmtInt(s.ass_teste) + " teste", "ass:cancelou", ASS[3][2]) +
         tile("Renovaram", fmtInt(s.renovaram), "2 ou mais pagamentos", "ass:renovou", "Clientes com mais de um pagamento neste software.") +
-        tile("Usam 2+ softwares", fmtInt(s.multi_produto), pct(s.multi_produto, s.clientes) + " da base", "ass:multi", "Clientes que pagaram por mais de um software Flow.") +
+        tile("Usam 2+ softwares", fmtInt(s.multi_produto), pct(s.multi_produto, s.clientes) + " da base", "ass:multi", "Clientes com mais de um software Flow (o combo vitalício dá os três).") +
         tile("Reembolsaram", fmtInt(s.devolveram), fmtInt(s.devolveram_sairam) + " saíram · " + fmtInt(s.reembolsaram) + " seguem clientes", "ass:reembolso",
-          "E-mails com reembolso ou chargeback no software. Os que saíram não têm outra compra paga; a lista abaixo mostra só os que seguem clientes.") +
+          "E-mails com reembolso ou chargeback no software ou no combo vitalício. Os que saíram não têm outra compra paga; a lista abaixo mostra só os que seguem clientes.") +
       "</div>" + propBar(assParts, s.clientes) + "</section>";
 
     var usoSec;
@@ -269,11 +274,11 @@
       return '<div class="ch-mix-c"><small>' + label + '</small><b class="num">' + fmtInt(v) + '</b><span>' + pct(v, total) + " " + sub + '</span><div class="ch-mix-bar"><i style="width:' + w.toFixed(1) + '%"></i></div></div>';
     };
     var maxC = Math.max.apply(null, combos.map(function (c) { return c.n; }).concat([1]));
-    return '<section class="panel ch-sec ch-mix"><div class="panel-head"><h3>Quantos softwares cada cliente usa · assinaturas Kiwify</h3>' +
+    return '<section class="panel ch-sec ch-mix"><div class="panel-head"><h3>Quantos softwares cada cliente usa · assinaturas e combo vitalício</h3>' +
       '<div class="ch-mix-tg" role="group" aria-label="Base">' +
-        '<button type="button" class="pay-chip' + (act ? " on" : "") + '" data-mix="ativos">Assinatura em dia agora</button>' +
+        '<button type="button" class="pay-chip' + (act ? " on" : "") + '" data-mix="ativos">Com acesso agora</button>' +
         '<button type="button" class="pay-chip' + (!act ? " on" : "") + '" data-mix="historico">Já compraram (histórico)</button></div></div>' +
-      '<p class="ch-mix-sub">' + fmtInt(total) + (act ? " clientes com pelo menos uma assinatura em dia, contados uma vez cada (por e-mail), pelo número de softwares ativos ao mesmo tempo." : " clientes que já pagaram por algum software, contados uma vez cada (por e-mail), pelo número de softwares que já compraram.") + "</p>" +
+      '<p class="ch-mix-sub">' + fmtInt(total) + (act ? " clientes com pelo menos um software com acesso agora (assinatura em dia ou vitalício), contados uma vez cada (por e-mail), pelo número de softwares ativos ao mesmo tempo." : " clientes que já tiveram algum software (assinatura ou combo vitalício), contados uma vez cada (por e-mail), pelo número de softwares.") + "</p>" +
       '<div class="ch-mix-cards">' + card("1", "1 software", "dos clientes") + card("2", "2 softwares", "dos clientes") + card("3", "3 softwares", "dos clientes") + "</div>" +
       (combos.length ? '<div class="ch-mix-combos"><h4>Combinações</h4>' + combos.map(function (c) {
         return '<div class="ch-mix-row"><span>' + esc(c.combo.replace(/Flow(Pages|Tracking|Spy)/g, "Flow $1")) + '</span><span class="ch-mix-t"><i style="width:' + (c.n / maxC * 100).toFixed(1) + '%"></i></span><b class="num">' + fmtInt(c.n) + "</b></div>";
@@ -654,6 +659,7 @@
   var ORDER_MAP = { nome: "nome", pagamentos: "pagamentos", ultima_compra: "ultima_compra", dias_para_vencer: "dias_para_vencer", ultimo_acesso: "ultimo_acesso", acessos_7: "acessos_7", acessos_30: "acessos_30", dias_30: "dias_30", liquido_total: "liquido_total" };
   function venceTxt(r) {
     var d = r.dias_para_vencer;
+    if (r.ass_seg === "vitalicio") return "não vence";
     if (d == null) return "—";
     if (d >= 0) return "em " + Math.ceil(d) + " d";
     return "há " + Math.floor(-d) + " d";
@@ -669,7 +675,7 @@
       var a = assInfo(r.ass_seg), u = r.uso_seg ? usoInfo(r.uso_seg) : null;
       return '<tr class="ch-row" data-email="' + esc(r.email) + '"><td class="l"><div class="ch-who"><b>' + esc(r.nome || r.email) + "</b><span>" + esc(r.email) + (r.n_produtos > 1 ? ' · <em class="ch-multi">' + r.n_produtos + " softwares</em>" : "") + "</span></div></td>" +
         (S.sw === "all" ? '<td class="l">' + esc(SW[r.software] || r.tool) + "</td>" : "") +
-        '<td class="l">' + esc(r.plano) + '</td><td class="num">' + fmtInt(r.pagamentos) + '</td><td class="num">' + fmtDate(r.ultima_compra) + '</td><td class="num ' + (r.dias_para_vencer != null && r.dias_para_vencer < 0 ? "neg" : r.dias_para_vencer <= 30 ? "warn" : "") + '">' + venceTxt(r) + "</td>" +
+        '<td class="l"' + (r.migrou_vitalicio ? ' title="Assinava antes: ' + esc(r.plano_assinatura) + '"' : "") + ">" + esc(r.plano) + (r.migrou_vitalicio ? ' <span class="muted">· veio da assinatura</span>' : "") + '</td><td class="num">' + fmtInt(r.pagamentos) + '</td><td class="num">' + fmtDate(r.ultima_compra) + '</td><td class="num ' + (r.dias_para_vencer != null && r.dias_para_vencer < 0 ? "neg" : r.dias_para_vencer <= 30 ? "warn" : "") + '">' + venceTxt(r) + "</td>" +
         '<td class="l"><span class="ch-badge" style="--c:' + tok(a ? a[3] : "--text-muted") + '">' + esc(a ? a[1] : r.ass_seg) + "</span></td>" +
         '<td class="num">' + (r.tem_uso ? rel(r.dias_sem_acesso) : '<span class="muted">—</span>') + '</td><td class="num">' + (usage ? fmtInt(r.acessos_7) : "—") + '</td><td class="num">' + (usage ? fmtInt(r.acessos_30) : "—") + '</td><td class="num">' + (usage ? fmtInt(r.dias_30) : "—") + "</td>" +
         '<td class="l">' + (u ? '<span class="ch-badge" style="--c:' + tok(u[3]) + '">' + esc(u[1]) + "</span>" : '<span class="muted">' + (usage ? "—" : "sem dados de uso") + "</span>") + '</td><td class="num">' + fmtBRL(r.liquido_total) + "</td></tr>";
@@ -728,8 +734,11 @@
         '<div class="ch-dgrid">' +
           "<div><small>Plano</small><b>" + esc(s.plano) + "</b></div><div><small>Pagamentos</small><b class=\"num\">" + fmtInt(s.pagamentos) + "</b></div>" +
           "<div><small>Primeira compra</small><b class=\"num\">" + fmtDate(s.primeira_compra) + "</b></div><div><small>Última compra</small><b class=\"num\">" + fmtDate(s.ultima_compra) + "</b></div>" +
-          "<div><small>Cobertura até</small><b class=\"num\">" + fmtDate(s.cobre_ate) + "</b></div><div><small>Receita</small><b class=\"num\">" + fmtBRL(s.liquido_total) + "</b></div>" +
-        "</div>" + (s.reembolsou || s.chargeback ? '<p class="ch-warn">Teve ' + (s.chargeback ? "chargeback" : "reembolso") + " neste software.</p>" : "") +
+          (s.ass_seg === "vitalicio"
+            ? "<div><small>Vitalício desde</small><b class=\"num\">" + fmtDate(s.vitalicio_desde) + "</b></div><div><small>Combo comprado em</small><b>" + esc((s.vitalicio_plataformas || "").split(",").map(function (p) { return PLAT[p] || p; }).join(", ")) + "</b></div>"
+            : "<div><small>Cobertura até</small><b class=\"num\">" + fmtDate(s.cobre_ate) + "</b></div>") +
+          "<div><small>Receita da assinatura</small><b class=\"num\">" + fmtBRL(s.liquido_total) + "</b></div>" +
+        "</div>" + (s.ass_seg === "vitalicio" && s.plano_assinatura ? '<p class="muted" style="font-size:12.5px">Assinava antes (' + esc(s.plano_assinatura) + ", cobertura até " + fmtDate(s.assinatura_cobre_ate) + ")" + (s.migrou_vitalicio ? " e migrou para o combo vitalício." : ".") + "</p>" : "") + (s.reembolsou || s.chargeback ? '<p class="ch-warn">Teve ' + (s.chargeback ? "chargeback" : "reembolso") + " neste software.</p>" : "") +
         '<div class="ch-duse"><h5>Uso</h5>' + (s.tem_uso
           ? '<div class="ch-dgrid"><div><small>Último acesso</small><b class="num">' + esc(fmtDate(s.ultimo_acesso)) + " (" + rel(s.dias_sem_acesso) + ')</b></div><div><small>Acessos 7 dias</small><b class="num">' + fmtInt(s.acessos_7) + '</b></div><div><small>Acessos 30 dias</small><b class="num">' + fmtInt(s.acessos_30) + '</b></div><div><small>Dias ativos (30)</small><b class="num">' + fmtInt(s.dias_30) + "</b></div></div>" +
             (s.dias_sem_acesso > S.crit.inactive ? '<p class="ch-warn">Mais de ' + S.crit.inactive + " dias sem acessar.</p>" : "") +
