@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/customer-health.css?v=20261030e">
+<link rel="stylesheet" href="../assets/retention.css?v=20261104a">
 <link rel="stylesheet" href="../assets/alerts.css">
 <link rel="stylesheet" href="../assets/fin-analysis.css?v=20261030">
 <link rel="stylesheet" href="../assets/ai-insights.css">
@@ -25,6 +26,7 @@
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
 <script src="../assets/customer-health.js?v=20261103c"></script>
+<script src="../assets/retention.js?v=20261104a"></script>
 <script src="../assets/alert-refunds.js"></script>
 <script src="../assets/alerts.js"></script>
 <script src="../assets/fin-analysis.js?v=20261030"></script>
@@ -106,6 +108,7 @@
       <div class="fnav-group">Análises</div>
       <button class="fnav-item" id="health-btn" type="button" data-menu="fin.health"><i data-ic="pulse"></i><span>Flow Health</span></button>
       <button class="fnav-item" id="clients-btn" type="button" data-menu="fin.clients"><i data-ic="heart"></i><span>Saúde dos clientes</span></button>
+      <button class="fnav-item" id="retention-btn" type="button" data-menu-any="fin.health,fin.clients"><i data-ic="chart"></i><span>Retenção e Monetização</span></button>
       <div class="fnav-group">Painéis Flow</div>
       <a class="fnav-item" href="./" aria-current="page"><i data-ic="wallet"></i><span>Financeiro</span></a>
       <a class="fnav-item" href="../afiliados/" data-page="afiliados"><i data-ic="chart"></i><span>Afiliados</span></a>
@@ -160,6 +163,8 @@
     </section>
 
     <div id="clients-view" hidden></div>
+
+    <div id="retention-view" hidden></div>
 
     <div id="alerts-view" hidden></div>
 
@@ -1020,6 +1025,7 @@
     list.innerHTML = "";
     document.getElementById("health-btn").classList.toggle("active", state.view === "health");
     document.getElementById("clients-btn").classList.toggle("active", state.view === "clients");
+    document.getElementById("retention-btn").classList.toggle("active", state.view === "retention");
     document.getElementById("alerts-btn").classList.toggle("active", state.view === "alerts");
     document.getElementById("hours-btn").classList.toggle("active", state.view === "hours");
     document.getElementById("home-btn").classList.toggle("active", state.view === "home");
@@ -2020,16 +2026,19 @@
     document.getElementById("health-view").hidden = v !== "health";
     document.getElementById("tool-view").hidden = v !== "tool";
     document.getElementById("clients-view").hidden = v !== "clients";
+    document.getElementById("retention-view").hidden = v !== "retention";
+    if (v !== "retention") RetentionDash.hide();
     document.getElementById("alerts-view").hidden = v !== "alerts";
     if (v !== "alerts") FlowAlerts.hide();
     if (v !== "hours") DevHours.hide();
     // Horas de dev. tem o próprio filtro de mês (os meses do contrato de horas).
-    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "alerts" || v === "hours";
+    document.getElementById("period-bar").hidden = v === "health" || v === "clients" || v === "retention" || v === "alerts" || v === "hours";
     document.getElementById("year-switch").hidden = v !== "health";
     if (v !== "clients") CustomerHealth.hide();
     if (v === "health") document.getElementById("tool-title").textContent = "Flow Health";
     else if (v === "home") document.getElementById("tool-title").textContent = "Home";
     else if (v === "clients") document.getElementById("tool-title").textContent = "Saúde dos clientes";
+    else if (v === "retention") document.getElementById("tool-title").textContent = "Retenção e Monetização";
     else if (v === "alerts") document.getElementById("tool-title").textContent = "Avisos";
     else if (v === "hours") document.getElementById("tool-title").textContent = "Horas de desenvolvimento";
     renderSidebar();
@@ -2042,6 +2051,14 @@
   async function openClients() {
     setView("clients");
     await CustomerHealth.show();
+  }
+  // Retenção e Monetização: renovação, churn, base ativa, coortes, ferramentas por cliente e LTV/CAC.
+  // Lê o cache rm_* (pg_cron a cada 30 min) pela função rm_dashboard. Ver assets/retention.js.
+  RetentionDash.init({ root: document.getElementById("retention-view"), sb: sb, toast: toast });
+  document.getElementById("retention-btn").addEventListener("click", function () { openRetention(); });
+  async function openRetention() {
+    setView("retention");
+    await RetentionDash.show();
   }
   // Horas de dev.: logo abaixo das ferramentas. Horas gastas em cada ferramenta por mês e o que foi desenvolvido
   // (planilha "Controle de horas Flow" + cards do Trello). Ver assets/dev-hours.js.
@@ -2676,16 +2693,17 @@
     var initialTool = state.tools.find(function (t) { return t.id === savedTool; }) || state.tools[0];
     if (canFin) alertsReady.then(function () { renderAlerts(); renderTable(); });
     // Tela inicial: a última aberta, se a pessoa ainda pode ver; senão a primeira liberada.
-    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", alerts: "fin.avisos", hours: "fin.hours" };
+    var VIEW_MENU = { home: "fin.financeiro", tool: "fin.financeiro", health: "fin.health", clients: "fin.clients", retention: "fin.health,fin.clients", alerts: "fin.avisos", hours: "fin.hours" };
     function canView(v) { return !!VIEW_MENU[v] && VIEW_MENU[v].split(",").some(function (k) { return FlowAccess.can(k); }); }
     var view = safeGet("flow_fin_view");
     if (MOVED[view]) { safeSet("flow_fin_view", "home"); location.replace(MOVED[view]); return; }
     if (view !== null && !canView(view)) view = null;
-    if (view === null && !canFin) view = ["alerts", "health", "clients", "hours"].filter(canView)[0];
+    if (view === null && !canFin) view = ["alerts", "health", "clients", "retention", "hours"].filter(canView)[0];
     renderPeriodBar();
     if (!canFin) {
       if (view === "health") openHealth();
       else if (view === "clients") openClients();
+      else if (view === "retention") openRetention();
       else if (view === "alerts") openAlerts();
       else if (view === "hours") openHours();
       return;
@@ -2701,6 +2719,7 @@
     await selectTool(initialTool.id);
     if (view === "health") openHealth();
     else if (view === "clients") openClients();
+    else if (view === "retention") openRetention();
     else if (view === "alerts") openAlerts();
     else if (view === "hours") openHours();
     prefetchOtherTools();
@@ -2715,6 +2734,7 @@
   window.addEventListener("flow-theme-change", function () {
     if (state.view === "health") { if (state.health) renderHealth(); }
     else if (state.view === "clients") CustomerHealth.redraw();
+    else if (state.view === "retention") RetentionDash.redraw();
     else if (state.view === "hours") DevHours.redraw();
     else if (state.view === "home") { if (state.home) renderHome(); }
   });
