@@ -323,7 +323,7 @@
 <link rel="stylesheet" href="../assets/instagram-perf.css">
 <link rel="stylesheet" href="../assets/ig-radar.css">
 <link rel="stylesheet" href="../assets/user-ideas.css">
-<link rel="stylesheet" href="../assets/affiliate-expand.css?v=20261103e">
+<link rel="stylesheet" href="../assets/affiliate-expand.css?v=20261103f">
 <script src="../assets/flow-theme.js"></script>
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
@@ -340,7 +340,7 @@
 <script src="../assets/ig-radar.js"></script>
 <script src="../assets/user-ideas.js"></script>
 <script src="../assets/useaflow.js"></script>
-<script src="../assets/affiliate-expand.js?v=20261103e"></script>
+<script src="../assets/affiliate-expand.js?v=20261103f"></script>
 </head>
 <body>
 
@@ -1959,7 +1959,7 @@
     // Expandir: histórico mensal por ferramenta, análise e mensagem (assets/affiliate-expand.js).
     // Fica expandido ao abrir o próximo afiliado, até clicar em Recolher.
     var mountExpand = function () { window.AffiliateExpand.mount($("drawer-expand"), { sb: sb, email: email, name: a.name || st.name }); };
-    if (state.expanded) mountExpand();
+    if (state.expanded) mountExpand(); else window.AffiliateExpand.prefetch(sb, email);
     $("drawer-expand-btn").addEventListener("click", function () {
       state.expanded = !state.expanded;
       this.textContent = state.expanded ? "⤡ Recolher" : "⤢ Expandir";
@@ -2005,6 +2005,11 @@
     if (e.target.closest("[data-stop]")) return;
     var tr = e.target.closest("tr.clickable[data-email]");
     if (tr) openDrawer(tr.dataset.email);
+  });
+  // Já busca o histórico mensal ao passar o mouse na linha, para o Expandir abrir sem espera.
+  document.addEventListener("mouseover", function (e) {
+    var tr = e.target.closest && e.target.closest("tr.clickable[data-email]");
+    if (tr && window.AffiliateExpand && window.FlowAccess && ["af.base", "af.flowinf", "af.overview"].some(window.FlowAccess.can)) window.AffiliateExpand.prefetch(sb, tr.dataset.email);
   });
 
   /* ---------------- Navegação e filtros ---------------- */

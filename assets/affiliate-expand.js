@@ -264,16 +264,49 @@ window.AffiliateExpand = (function () {
   }
 
   // Monta a seção dentro de el. opts: { sb, email, name }
+  // Cache por e-mail (5 min): a ficha pede os dados assim que abre (prefetch), então o Expandir já
+  // encontra tudo pronto. Falha de rede ou do banco tenta de novo sozinha (3 tentativas) antes de mostrar o erro.
+  var CACHE = {}, TTL = 5 * 60 * 1000;
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function load(sb, email) {
+    var key = String(email || "").toLowerCase(), c = CACHE[key];
+    if (c && (c.pending || Date.now() - c.at < TTL)) return c.promise;
+    c = CACHE[key] = { pending: true, at: 0 };
+    c.promise = (async function () {
+      var last;
+      for (var i = 0; i < 3; i++) {
+        if (i) await wait(600 * i);
+        try {
+          var res = await sb.rpc("affiliate_tool_months", { p_email: email });
+          if (!res.error) { c.pending = false; c.at = Date.now(); return res.data || []; }
+          last = res.error;
+          if (/permiss/i.test(last.message || "")) break; // sem acesso: não adianta repetir
+        } catch (e) { last = e; }
+      }
+      delete CACHE[key];
+      throw last || new Error("falha ao carregar");
+    })();
+    return c.promise;
+  }
+  function prefetch(sb, email) { load(sb, email).catch(function () {}); }
+
   async function mount(el, opts) {
     S = { sb: opts.sb, email: opts.email, name: opts.name, el: el, months: [], sel: null };
-    var mine = S;
-    el.innerHTML = '<h4>Vendas por mês e ferramenta</h4><p class="muted ax-empty">Carregando o histórico…</p>';
-    var res = await opts.sb.rpc("affiliate_tool_months", { p_email: opts.email });
+    var mine = S, c = CACHE[String(opts.email || "").toLowerCase()];
+    if (!c || c.pending) el.innerHTML = '<h4>Vendas por mês e ferramenta</h4><p class="muted ax-empty">Carregando o histórico…</p>';
+    var rows;
+    try { rows = await load(opts.sb, opts.email); }
+    catch (e) {
+      if (S !== mine) return;
+      el.innerHTML = '<h4>Vendas por mês e ferramenta</h4><p class="ax-empty err">Não foi possível carregar: ' + esc(e.message || e) +
+        ' <button class="btn btn-sm" type="button" id="ax-retry">Tentar de novo</button></p>';
+      el.querySelector("#ax-retry").addEventListener("click", function () { mount(el, opts); });
+      return;
+    }
     if (S !== mine) return; // outra ficha foi aberta enquanto carregava
-    if (res.error) { el.innerHTML = '<h4>Vendas por mês e ferramenta</h4><p class="ax-empty err">Erro ao carregar: ' + esc(res.error.message) + "</p>"; return; }
-    S.months = buildMonths(res.data || []);
+    S.months = buildMonths(rows);
     render();
   }
 
-  return { mount: mount };
+  return { mount: mount, prefetch: prefetch };
 })();
