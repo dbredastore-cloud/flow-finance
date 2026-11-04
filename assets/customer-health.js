@@ -58,8 +58,11 @@
 
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
+  // Só o essencial do topo; alunos e acessos por plataforma vêm depois (loadSide), para as consultas
+  // pesadas não disputarem o banco com o resumo e estourarem o limite de 8 s.
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation"), loadStudents(S.stu.plat), loadToolAccess(S.ta.plat)]);
+    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation")]);
+    if (r[0].error) r[0] = await A.sb.rpc("health_summary", critParams()); // uma nova tentativa antes de mostrar o erro
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
@@ -96,12 +99,27 @@
     if (c.low >= c.inactive) c.low = Math.max(1, c.inactive - 1);
     return c;
   }
+  // Alunos e acessos não dependem dos critérios: carregam uma vez, um depois do outro, sem travar a tela.
+  // Mostra na hora a última leitura guardada no navegador e atualiza em seguida.
+  async function loadSide() {
+    var k = S.stu.plat, p = S.ta.plat;
+    if (S.side || S.sideDone) return; // uma vez por abertura da tela; as abas carregam ao trocar
+    S.side = true;
+    try {
+      if (!S.stu.data[k]) { var c = readCache(stuCacheKey(k)); if (c) { S.stu.data[k] = c; renderStudents(); } }
+      if (!S.ta.data[p]) { var t = readCache("ch_ta_cache:" + p); if (t) { S.ta.data[p] = t; renderToolAccess(); } }
+      await loadStudents(k); renderStudents();
+      await loadToolAccess(p); renderToolAccess();
+      S.sideDone = !S.stu.err[k];
+    } finally { S.side = false; }
+  }
   async function refreshAll() {
     S.loading = true;
     try {
       await loadSummary();
       renderTop();
       await loadList();
+      loadSide();
     } catch (e) {
       console.warn("Saúde dos clientes:", e);
       A.toast("Não foi possível carregar a saúde dos clientes: " + (e.message || e), true);
@@ -343,7 +361,8 @@
   try { var savedTa = safeGet("flow_ch_tool_access"); if (TA_PLAT.some(function (p) { return p[0] === savedTa; })) S.ta.plat = savedTa; } catch (e) {}
   async function loadToolAccess(plat) {
     var r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
-    S.ta.data[plat] = r.error ? null : r.data;
+    if (r.error) r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
+    if (!r.error) { S.ta.data[plat] = r.data; safeSet("ch_ta_cache:" + plat, JSON.stringify(r.data)); }
   }
   function taRow(label, n, total, tip, cls) {
     return '<div class="ch-ta-row' + (cls ? " " + cls : "") + '"' + (tip ? ' title="' + esc(tip) + '"' : "") + "><span>" + label + '</span><b class="num">' + fmtInt(n) + '</b><small class="num">' + pct(n, total) + "</small></div>";
@@ -426,7 +445,7 @@
     hotmart: { label: "Hotmart", rpc: "hotmart_summary", num: true }
   };
   var STU_KEY = "flow_ch_students";
-  S.stu = { plat: "todas", sel: { todas: null, kiwify: null, tmb: null, hotmart: null }, data: {}, open: false, q: "", seq: 0 };
+  S.stu = { plat: "todas", sel: { todas: null, kiwify: null, tmb: null, hotmart: null }, data: {}, err: {}, open: false, q: "", seq: 0 };
   try {
     var savedStu = JSON.parse(safeGet(STU_KEY) || "null");
     if (savedStu && STU[savedStu.plat]) S.stu.plat = savedStu.plat;
@@ -438,10 +457,22 @@
     if (!sel || !sel.length) return { p_products: null };
     return { p_products: STU[k].num ? sel.map(Number) : sel };
   }
+  // A última leitura de cada aba (e seleção de produtos) fica no navegador: aparece na hora e é trocada
+  // pela nova quando ela chega. Falha tenta mais uma vez; se ainda falhar, mantém o que já estava na tela.
+  function stuCacheKey(k) { return "ch_stu_cache:" + k + ":" + JSON.stringify(stuParams(k).p_products || null); }
+  function readCache(key) { try { return JSON.parse(safeGet(key)); } catch (e) { return null; } }
   async function loadStudents(only) {
     var keys = only ? [only] : Object.keys(STU);
-    var res = await Promise.all(keys.map(function (k) { return A.sb.rpc(STU[k].rpc, stuParams(k)); }));
-    keys.forEach(function (k, i) { S.stu.data[k] = res[i].error ? null : res[i].data; });
+    var res = await Promise.all(keys.map(async function (k) {
+      var r = await A.sb.rpc(STU[k].rpc, stuParams(k));
+      if (r.error) { await new Promise(function (ok) { setTimeout(ok, 800); }); r = await A.sb.rpc(STU[k].rpc, stuParams(k)); }
+      return r;
+    }));
+    keys.forEach(function (k, i) {
+      var r = res[i];
+      if (!r.error) { S.stu.data[k] = r.data; S.stu.err[k] = null; safeSet(stuCacheKey(k), JSON.stringify(r.data)); }
+      else { S.stu.err[k] = r.error.message; if (!S.stu.data[k]) S.stu.data[k] = null; }
+    });
   }
 
   // Valor em reais que cabe no card: a partir de R$ 100 mil vira "R$ 833,4 mil" / "R$ 7,10 mi"
@@ -559,6 +590,7 @@
       (d ? '<div class="ch-stu-bar">' + stuPicker(k, d) + (d.ultima_leitura ? '<span class="muted ch-stu-meta">' + esc((since || "") + "última leitura " + fmtDateTime(d.ultima_leitura)) + "</span>" : "") + "</div>" +
           '<div class="ch-tiles ch-stu-tiles">' + stuTiles(k, d).join("") + "</div>" + stuTable(k, d) +
           (note ? '<p class="muted ch-stu-note">' + esc(note) + "</p>" : "")
+        : S.stu.err[k] ? '<p class="muted" style="font-size:12.5px">Não foi possível carregar ' + STU[k].label + ": " + esc(S.stu.err[k]) + ' <button type="button" class="btn btn-sm" data-stu-retry>Tentar de novo</button></p>'
         : '<p class="muted" style="font-size:12.5px">Carregando ' + STU[k].label + "…</p>") +
       "</section>";
   }
@@ -588,6 +620,7 @@
       if (!S.stu.data[S.stu.plat]) studentsReload(); // cada aba carrega quando é aberta pela primeira vez
       return true;
     }
+    if (t.closest("[data-stu-retry]")) { S.stu.err[S.stu.plat] = null; renderStudents(); studentsReload(); return true; }
     if (t.closest("[data-stu-open]")) { S.stu.open = !S.stu.open; renderStudents(); return true; }
     var k = S.stu.plat, d = S.stu.data[k];
     if (t.closest("[data-stu-all]")) { S.stu.sel[k] = (d && d.produtos || []).map(function (p) { return p.id; }); studentsReload(); return true; }
