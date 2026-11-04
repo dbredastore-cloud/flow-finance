@@ -19,6 +19,8 @@
 --   J  Pages plano "Teste" R$ 0                                               → ignorado (teste grátis)
 --   K  as três ferramentas, anual, em N−2m                                    → cliente com 3 ferramentas
 --   L  Spy semestral em N−1m                                                  → cliente com 1 ferramenta
+--   M  Tracking anual vencido há 1 dia, sem renovar                           → em carência (3 dias): taxa parcial, não é churn
+--   O  Tracking anual vencido há 2 dias e renovado 1 dia depois do vencimento → renovado com a carência ainda aberta
 do $test$
 declare
   n timestamptz := now();
@@ -62,7 +64,10 @@ begin
     ('rmt-k1', p_fp, 'k@rm-teste.invalid', n - interval '2 months', 'paid', 'Plano Anual', 400),
     ('rmt-k2', p_ft, 'k@rm-teste.invalid', n - interval '2 months', 'paid', 'Plano Anual', 500),
     ('rmt-k3', p_fs, 'k@rm-teste.invalid', n - interval '2 months', 'paid', 'Plano Anual', 500),
-    ('rmt-l1', p_fs, 'l@rm-teste.invalid', n - interval '1 month', 'paid', 'Plano Semestral', 390);
+    ('rmt-l1', p_fs, 'l@rm-teste.invalid', n - interval '1 month', 'paid', 'Plano Semestral', 390),
+    ('rmt-m1', p_ft, 'm@rm-teste.invalid', n - interval '12 months' - interval '1 day', 'paid', 'Plano Anual', 500),
+    ('rmt-o1', p_ft, 'o@rm-teste.invalid', n - interval '12 months' - interval '2 days', 'paid', 'Plano Anual', 500),
+    ('rmt-o2', p_ft, 'o@rm-teste.invalid', n - interval '1 day', 'paid', 'Plano Anual', 500);
   insert into public.kiwify_sales_snapshot (id, product_id, year, month, status, net_amount, charge_amount, customer_name, customer_email, sale_created_at, plan_name)
   select id, prod, extract(year from ts)::int, extract(month from ts)::int, status, liquido, liquido, 'Teste RM', email, ts, plano from _fx;
 
@@ -102,21 +107,28 @@ begin
   select 'renovação anual ' || sc || ' ' || k, esp,
          coalesce(((select r from jsonb_array_elements(d1->'periodo'->sc->'renovacao') r where r->>'plano' = 'anual')->>k)::numeric, 0)
        - coalesce(((select r from jsonb_array_elements(d0->'periodo'->sc->'renovacao') r where r->>'plano' = 'anual')->>k)::numeric, 0)
-    from (values ('flowpages', 'devidas', 5), ('flowpages', 'renovadas', 1), ('flowtracking', 'devidas', 1), ('flowtracking', 'renovadas', 0),
-                 ('all', 'devidas', 6), ('all', 'renovadas', 1)) v(sc, k, esp);
+    from (values ('flowpages', 'devidas', 5), ('flowpages', 'renovadas', 1), ('flowpages', 'pendentes', 0),
+                 ('flowtracking', 'devidas', 3), ('flowtracking', 'renovadas', 1), ('flowtracking', 'pendentes', 1),
+                 ('flowtracking', 'fechadas', 1), ('flowtracking', 'renovadas_fechadas', 0),
+                 ('all', 'devidas', 8), ('all', 'renovadas', 2), ('all', 'pendentes', 1)) v(sc, k, esp);
+  -- carência aberta: a taxa parcial informa quando fica final (fim da carência de M, vencido há 5 dias)
+  insert into _chk values ('renovação parcial: fecha_em >= vencimento de M + 3 dias', 1,
+    case when ((select r from jsonb_array_elements(d1->'periodo'->'flowtracking'->'renovacao') r where r->>'plano' = 'anual')->>'fecha_em')::timestamptz
+              >= n - interval '1 day' + interval '3 days' - interval '1 second' then 1 else 0 end);
+  insert into _chk values ('M em carência não é churn', 0, (select count(*) from public.rm_spells where email = 'm@rm-teste.invalid' and encerrado));
   -- base ativa no fim do período (hoje)
   insert into _chk
   select 'base hoje ' || sc || ' ' || k, esp, (d1->'periodo'->sc->'base'->>k)::numeric - (d0->'periodo'->sc->'base'->>k)::numeric
-    from (values ('all', 'clientes', 6), ('all', 'assinaturas', 8), ('all', 'pagantes', 6),
-                 ('flowpages', 'clientes', 4), ('flowtracking', 'clientes', 2), ('flowspy', 'clientes', 2)) v(sc, k, esp);
-  -- histórico: base 6 meses atrás usa a situação daquela data (B, G e H estavam ativos e hoje saíram)
+    from (values ('all', 'clientes', 7), ('all', 'assinaturas', 9), ('all', 'pagantes', 7),
+                 ('flowpages', 'clientes', 4), ('flowtracking', 'clientes', 3), ('flowspy', 'clientes', 2)) v(sc, k, esp);
+  -- histórico: base 6 meses atrás usa a situação daquela data (B, G e H estavam ativos e hoje saíram; M e O também contam)
   insert into _chk
   select 'base há 6 meses ' || k, esp, (past1->'periodo'->'all'->'base'->>k)::numeric - (past0->'periodo'->'all'->'base'->>k)::numeric
-    from (values ('clientes', 6), ('assinaturas', 8)) v(k, esp);
+    from (values ('clientes', 8), ('assinaturas', 10)) v(k, esp);
   -- monetização: 1, 2 e 3 ferramentas e combinações
   insert into _chk
   select 'mix ' || k, esp, coalesce((d1->'periodo'->'all'->'mix'->'por_qtd'->>k)::numeric, 0) - coalesce((d0->'periodo'->'all'->'mix'->'por_qtd'->>k)::numeric, 0)
-    from (values ('1', 5), ('2', 0), ('3', 1)) v(k, esp);
+    from (values ('1', 6), ('2', 0), ('3', 1)) v(k, esp);
   insert into _chk values ('mix combo três ferramentas', 1,
     coalesce((d1->'periodo'->'all'->'mix'->'combos'->>'flowpages+flowspy+flowtracking')::numeric, 0) - coalesce((d0->'periodo'->'all'->'mix'->'combos'->>'flowpages+flowspy+flowtracking')::numeric, 0));
   insert into _chk values ('mix filtro Flow Spy: clientes com Spy (K, L)', 2,

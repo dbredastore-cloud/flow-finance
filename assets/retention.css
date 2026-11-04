@@ -46,8 +46,10 @@
 .rm-card small { font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
 .rm-card b { font-size: 24px; font-weight: 600; line-height: 1.15; text-shadow: var(--text-glow); overflow-wrap: anywhere; }
 .rm-card > span { font-size: 12px; line-height: 1.45; color: var(--text-dim); }
+.rm-card > span b { font-size: inherit; font-weight: 700; line-height: inherit; text-shadow: none; color: var(--warning); }
 .rm-insuf { display: inline-block; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--warning); text-shadow: none; line-height: 1.3; }
 .rm-warn { color: var(--warning); }
+.rm-parcial { font-family: var(--font-body); font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; vertical-align: middle; color: var(--warning); border: 1px solid var(--warning); text-shadow: none; }
 .rm-how { margin-top: 4px; font-size: 11.5px; color: var(--text-muted); }
 .rm-how summary { cursor: pointer; color: var(--accent); list-style: none; }
 .rm-how summary::-webkit-details-marker { display: none; }
