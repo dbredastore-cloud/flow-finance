@@ -10,7 +10,10 @@
   var TOOLS = [["flowtracking", "Flow Tracking"], ["flowpages", "Flow Pages"], ["flowspy", "Flow Spy"]];
   var SCOPES = [["all", "Consolidado"]].concat(TOOLS);
   var TOOL_NAME = { all: "Consolidado", flowtracking: "Flow Tracking", flowpages: "Flow Pages", flowspy: "Flow Spy" };
-  var PERIODS = [["30", "30 dias"], ["90", "90 dias"], ["180", "180 dias"], ["365", "365 dias"], ["mes", "Mês atual"], ["mes_ant", "Mês anterior"], ["custom", "Personalizado"]];
+  var PERIODS = [["30", "30 dias"], ["90", "90 dias"], ["180", "180 dias"], ["365", "365 dias"], ["ano", "Este ano"], ["mes", "Mês atual"], ["mes_ant", "Mês anterior"], ["total", "Período total"], ["custom", "Personalizado"]];
+  // 1ª venda paga (fora teste/cortesia): o "Período total" começa aqui. A data real vem do banco (periodo.<escopo>.primeira_venda);
+  // esta só é usada antes da 1ª resposta. Cada ferramenta só tem dados a partir da própria 1ª venda.
+  var PRIMEIRA_VENDA = "2025-06-16";
   var PLANS = [["todos", "Todos os planos"], ["mensal", "Mensal"], ["anual", "Anual"], ["semestral", "Semestral/trimestral"], ["vitalicio", "Vitalício"]];
   var PLAN_LABEL = { todos: "todos os planos", mensal: "mensal", anual: "anual", semestral: "semestral/trimestral", vitalicio: "vitalício" };
   var MARCOS = [["1", "D30"], ["3", "D90"], ["6", "D180"], ["12", "D365"]];
@@ -52,6 +55,11 @@
     var today = new Date(); today.setHours(0, 0, 0, 0);
     var ini, fim = new Date(today);
     if (S.period === "mes") ini = new Date(today.getFullYear(), today.getMonth(), 1);
+    else if (S.period === "ano") ini = new Date(today.getFullYear(), 0, 1);
+    else if (S.period === "total") {
+      var pv = S.data && S.data.periodo && S.data.periodo.all && S.data.periodo.all.primeira_venda;
+      ini = parseIso(pv ? iso(new Date(pv)) : PRIMEIRA_VENDA);
+    }
     else if (S.period === "mes_ant") { ini = new Date(today.getFullYear(), today.getMonth() - 1, 1); fim = new Date(today.getFullYear(), today.getMonth(), 0); }
     else if (S.period === "custom") {
       ini = S.from ? parseIso(S.from) : new Date(today.getFullYear(), today.getMonth() - 2, 1);
@@ -90,13 +98,34 @@
     return (h.serie || []).filter(function (x) { return x.mes === key; })[0] || null;
   }
 
+  // Churn mensal médio nos meses do período: Σ clientes que saíram ÷ Σ base que podia sair no início de cada mês.
+  // (Dividir o churn de um período longo pela base do 1º dia passa de 100%, porque a base cresce no caminho.)
+  // Mês só em parte dentro do período (o 1º, o último ou o mês corrente) entra na proporção dos dias cobertos:
+  // wb = fração do mês exposta (base × meses); wc = fração dos dias já observados no mês (no mês corrente o churn
+  // do histórico só cobre os dias que passaram).
+  var MOTIVOS = ["voluntario", "chargeback", "involuntario", "nao_identificado"];
+  function monthlyChurn(h, planoKey) {
+    var r = range(), mIni = r.ini.slice(0, 7) + "-01", mFim = r.fim.slice(0, 7) + "-01", dIni = parseIso(r.ini), dFim = parseIso(r.fim);
+    var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    var cm = { total: 0, base: 0, meses: 0, voluntario: 0, chargeback: 0, involuntario: 0, nao_identificado: 0 };
+    ((h && h.churn_mes) || []).forEach(function (x) {
+      if (x.plano !== planoKey || x.mes < mIni || x.mes > mFim) return;
+      var m0 = parseIso(x.mes), m1 = new Date(m0.getFullYear(), m0.getMonth() + 1, 0), dias = m1.getDate();
+      var a = dIni > m0 ? dIni : m0, z = dFim < m1 ? dFim : m1, cob = Math.max(0, Math.round((z - a) / 864e5) + 1);
+      var obs = Math.round(((hoje < m1 ? hoje : m1) - m0) / 864e5) + 1, wb = cob / dias, wc = obs > 0 ? Math.min(1, cob / obs) : 0;
+      cm.total += num(x.total) * wc; cm.base += num(x.base_ini) * wb; cm.meses += wb;
+      MOTIVOS.forEach(function (k) { cm[k] += num(x[k]) * wc; });
+    });
+    return cm;
+  }
+
   // Indicadores derivados de um escopo (usado nos cards e na comparação entre ferramentas).
   function metrics(scope) {
     var p = per(scope), h = hist(scope);
     if (!p) return null;
     var b = p.base || {}, plano = S.plano;
     var ren = (p.renovacao || []).filter(function (r) { return r.plano === "anual"; })[0] || { devidas: 0, renovadas: 0 };
-    var ch = churnRow(p.churn, plano === "todos" ? "todos" : plano) || { base_ini: 0, total: 0, voluntario: 0, involuntario: 0, nao_identificado: 0 };
+    var ch = churnRow(p.churn, plano === "todos" ? "todos" : plano) || { base_ini: 0, total: 0, voluntario: 0, chargeback: 0, involuntario: 0, nao_identificado: 0 };
     var sr = lastSerie(scope) || {};
     var arpu = b.pagantes > 0 ? num(b.mrr) / b.pagantes : null;
     var margem = sr.margem != null ? Number(sr.margem) : null;
@@ -112,22 +141,7 @@
       ret[m[0]] = { taxa: ratio(ok, tot), clientes: tot, coortes: n };
     });
     var mix = p.mix || { clientes: 0, por_qtd: {}, combos: {} };
-    // Churn mensal médio nos meses do período: Σ clientes que saíram ÷ Σ base que podia sair no início de cada mês.
-    // (Dividir o churn de um período longo pela base do 1º dia passa de 100%, porque a base cresce no caminho.)
-    var r = range(), mIni = r.ini.slice(0, 7) + "-01", mFim = r.fim.slice(0, 7) + "-01", cm = { total: 0, base: 0, meses: 0, voluntario: 0, involuntario: 0, nao_identificado: 0 };
-    // Mês só em parte dentro do período (o 1º, o último ou o mês corrente) entra na proporção dos dias cobertos.
-    var dIni = parseIso(r.ini), dFim = parseIso(r.fim);
-    ((h && h.churn_mes) || []).forEach(function (x) {
-      if (x.plano !== (plano === "todos" ? "todos" : plano) || x.mes < mIni || x.mes > mFim) return;
-      var m0 = parseIso(x.mes), m1 = new Date(m0.getFullYear(), m0.getMonth() + 1, 0), dias = m1.getDate();
-      // wb: fração do mês exposta (base × meses); wc: fração dos dias já observados no mês (no mês corrente o churn
-      // do histórico só cobre os dias que passaram).
-      var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-      var a = dIni > m0 ? dIni : m0, z = dFim < m1 ? dFim : m1, cob = Math.max(0, Math.round((z - a) / 864e5) + 1);
-      var obs = Math.round(((hoje < m1 ? hoje : m1) - m0) / 864e5) + 1, wb = cob / dias, wc = obs > 0 ? Math.min(1, cob / obs) : 0;
-      cm.total += num(x.total) * wc; cm.base += num(x.base_ini) * wb; cm.meses += wb;
-      cm.voluntario += num(x.voluntario) * wc; cm.involuntario += num(x.involuntario) * wc; cm.nao_identificado += num(x.nao_identificado) * wc;
-    });
+    var cm = monthlyChurn(h, plano === "todos" ? "todos" : plano);
     return {
       p: p, b: b, ren: ren, renTaxa: ratio(ren.renovadas, ren.devidas), ch: ch, cm: cm, churnTaxa: ratio(cm.total, cm.base),
       arpu: arpu, margem: margem, perm: perm, churnMedio: sr.churn_medio != null ? Number(sr.churn_medio) : null, ltv: ltv,
@@ -189,7 +203,11 @@
     if (S.period === "custom") { $("rm-from").value = S.from || ""; $("rm-to").value = S.to || ""; }
     var r = range();
     $("rm-fnote").innerHTML = "Período: <b>" + fmtDay(r.ini) + " a " + fmtDay(r.fim) + "</b> · " + esc(PLAN_LABEL[S.plano]) + " · " + esc(TOOL_NAME[S.scope]) +
-      '. Cards do período usam a situação de cada cliente na data (início e fim do período), não a de hoje. Gráficos mostram o histórico mês a mês desde jun/2025.';
+      '. Cards do período usam a situação de cada cliente na data (início e fim do período), não a de hoje. Gráficos mostram o histórico mês a mês desde jun/2025.' +
+      (S.period === "total" ? " <b>Período total</b>: desde a 1ª venda paga — " + TOOLS.concat([["all", "consolidado"]]).map(function (t) {
+        var pv = S.data && S.data.periodo && S.data.periodo[t[0]] && S.data.periodo[t[0]].primeira_venda;
+        return esc(t[1]) + " " + (pv ? new Date(pv).toLocaleDateString("pt-BR") : "—");
+      }).join(" · ") + ". Cada ferramenta só tem dados a partir da própria 1ª venda." : "");
   }
   function renderStatus(err) {
     var el = $("rm-sources");
@@ -318,22 +336,26 @@
     var churnCards = isVit
       ? card("Churn", insuf("Não se aplica"), "O combo vitalício não vence, então não tem churn.", "")
       : card("Churn total (média mensal)", base > 0 ? fmtPct(m.churnTaxa, 2) : insuf(), fmtInt(total) + " clientes saíram no período · média de " + fmtDec(cm.meses, 1) + " mês(es)", how, "hl") +
-        card("Voluntário", fmtInt(ch.voluntario), base > 0 ? fmtPct(ratio(cm.voluntario, base), 2) + " ao mês · " + fmtPct(ratio(ch.voluntario, total)) + " do churn" : "",
-          "O cliente pediu reembolso ou abriu chargeback da ferramenta entre 45 dias antes e 3 dias depois do fim da vigência.") +
-        card("Involuntário", fmtInt(ch.involuntario), base > 0 ? fmtPct(ratio(cm.involuntario, base), 2) + " ao mês · " + fmtPct(ratio(ch.involuntario, total)) + " do churn" : "",
+        card("Voluntário (reembolso)", fmtInt(ch.voluntario), base > 0 ? fmtPct(ratio(cm.voluntario, base), 2) + " ao mês · " + fmtPct(ratio(ch.voluntario, total)) + " do churn" : "",
+          "O cliente pediu reembolso da ferramenta entre 45 dias antes e 3 dias depois do fim da vigência.") +
+        card("Chargeback", fmtInt(ch.chargeback || 0), base > 0 ? fmtPct(ratio(cm.chargeback, base), 2) + " ao mês · " + fmtPct(ratio(ch.chargeback || 0, total)) + " do churn" : "",
+          "O cliente contestou a cobrança no cartão (chargeback) entre 45 dias antes e 3 dias depois do fim da vigência. Se também pediu reembolso, conta como voluntário.") +
+        card("Involuntário (falha de pagamento)", fmtInt(ch.involuntario), base > 0 ? fmtPct(ratio(cm.involuntario, base), 2) + " ao mês · " + fmtPct(ratio(ch.involuntario, total)) + " do churn" : "",
           "Houve tentativa de cobrança da renovação que foi recusada ou ficou sem pagamento (cartão recusado, boleto/Pix não pago) entre 10 dias antes e 3 dias depois do vencimento.") +
         card("Motivo não identificado", fmtInt(ch.nao_identificado), base > 0 ? fmtPct(ratio(cm.nao_identificado, base), 2) + " ao mês · " + fmtPct(ratio(ch.nao_identificado, total)) + " do churn" : "",
           "Nenhuma tentativa de cobrança nem reembolso perto do vencimento: o cliente desligou a renovação ou o plano não era recorrente. A Kiwify não informa o pedido de cancelamento, então o motivo não é inventado.") +
         card("Em carência agora", fmtInt(m.b.em_carencia), "venceram há até 3 dias e ainda podem renovar", "Ainda não contam como ativos nem como churn. Se renovarem em até 3 dias depois do vencimento, continuam no mesmo período; depois disso viram churn na data do vencimento.");
-    var check = isVit ? "" : '<p class="rm-check' + (ch.voluntario + ch.involuntario + ch.nao_identificado === total ? " ok" : " bad") + '">Conferência: voluntário ' + fmtInt(ch.voluntario) + " + involuntário " + fmtInt(ch.involuntario) +
-      " + não identificado " + fmtInt(ch.nao_identificado) + " = " + fmtInt(ch.voluntario + ch.involuntario + ch.nao_identificado) + " · churn total " + fmtInt(total) + "</p>";
+    var soma = ch.voluntario + (ch.chargeback || 0) + ch.involuntario + ch.nao_identificado;
+    var check = isVit ? "" : '<p class="rm-check' + (soma === total ? " ok" : " bad") + '">Conferência: voluntário ' + fmtInt(ch.voluntario) + " + chargeback " + fmtInt(ch.chargeback || 0) + " + involuntário " + fmtInt(ch.involuntario) +
+      " + não identificado " + fmtInt(ch.nao_identificado) + " = " + fmtInt(soma) + " · churn total " + fmtInt(total) + "</p>";
     // Gráfico: churn por motivo, mês a mês (plano do filtro).
-    var cm = (h.churn_mes || []).filter(function (r) { return r.plano === (S.plano === "todos" ? "todos" : S.plano); });
+    var cmRows = (h.churn_mes || []).filter(function (r) { return r.plano === (S.plano === "todos" ? "todos" : S.plano); });
     var meses = (h.serie || []).map(function (s) { return s.mes; });
-    var byMes = {}; cm.forEach(function (r) { byMes[r.mes] = r; });
+    var byMes = {}; cmRows.forEach(function (r) { byMes[r.mes] = r; });
     var lbl = meses.map(fmtMes);
     var g1 = isVit ? null : bars(lbl, [
-      { name: "Voluntário", color: c.d, values: meses.map(function (k) { return (byMes[k] || {}).voluntario || 0; }) },
+      { name: "Voluntário (reembolso)", color: c.d, values: meses.map(function (k) { return (byMes[k] || {}).voluntario || 0; }) },
+      { name: "Chargeback", color: c.b, values: meses.map(function (k) { return (byMes[k] || {}).chargeback || 0; }) },
       { name: "Involuntário", color: c.c, values: meses.map(function (k) { return (byMes[k] || {}).involuntario || 0; }) },
       { name: "Não identificado", color: c.mut, values: meses.map(function (k) { return (byMes[k] || {}).nao_identificado || 0; }) }
     ], { label: "Churn por mês", line: { name: "Taxa de churn", color: c.crit, fmt: function (v) { return fmtPct(v); }, values: meses.map(function (k) { var r = byMes[k]; return r && r.base_ini > 0 ? r.total / r.base_ini : null; }) } });
@@ -343,7 +365,7 @@
       return "<tr><td>" + esc(fmtMes(k)) + "</td>" + planCols.map(function (pc) {
         var r = (h.churn_mes || []).filter(function (x) { return x.mes === k && x.plano === pc[0]; })[0];
         if (!r || (!r.base_ini && !r.total)) return '<td class="num muted">—</td>';
-        return '<td class="num" title="' + esc("Saíram " + r.total + " de " + r.base_ini + " · vol. " + r.voluntario + " · invol. " + r.involuntario + " · não ident. " + r.nao_identificado) + '">' +
+        return '<td class="num" title="' + esc("Saíram " + r.total + " de " + r.base_ini + " · reembolso " + r.voluntario + " · chargeback " + (r.chargeback || 0) + " · falha " + r.involuntario + " · não ident. " + r.nao_identificado) + '">' +
           (r.base_ini > 0 ? fmtPct(r.total / r.base_ini) : "—") + ' <small class="muted">' + fmtInt(r.total) + "/" + fmtInt(r.base_ini) + "</small></td>";
       }).join("") + "</tr>";
     }).join("");
@@ -359,9 +381,43 @@
     return section("rm-b1", "1", "Renovação e churn", "Quem renovou o plano anual e quem saiu, mês a mês, separado por motivo e por plano.",
       '<div class="rm-cards">' + renCard + churnCards + "</div>" + check +
       '<div class="rm-grid2">' +
-        chartBox("Churn por motivo, mês a mês", "barras: clientes que saíram · linha: taxa de churn", g1, g1 ? legend([["Voluntário", c.d], ["Involuntário", c.c], ["Não identificado", c.mut], ["Taxa de churn", c.crit]]) : "") +
+        chartBox("Churn por motivo, mês a mês", "barras: clientes que saíram · linha: taxa de churn", g1, g1 ? legend([["Voluntário (reembolso)", c.d], ["Chargeback", c.b], ["Involuntário", c.c], ["Não identificado", c.mut], ["Taxa de churn", c.crit]]) : "") +
         chartBox("Renovação anual, mês do vencimento", "barras: assinaturas anuais vencidas · linha: % renovadas", g2 || '<div class="rm-empty">Ainda sem histórico de renovação anual</div>', g2 ? legend([["Renovaram", c.a], ["Não renovaram", c.mut], ["Em carência (ainda podem renovar)", c.c], ["Taxa de renovação (parcial nos meses com carência)", c.b]]) : "") +
-      "</div>" + tab);
+      "</div>" + periodicityTable() + tab);
+  }
+
+  // Renovação e churn lado a lado por periodicidade (mensal, semestral, anual), em cada ferramenta e no consolidado.
+  // Não depende do filtro de plano: mostra os três de uma vez, no período escolhido.
+  function periodicityTable() {
+    var PER = [["mensal", "Mensal"], ["semestral", "Semestral/trim."], ["anual", "Anual"], ["todos", "Total"]];
+    var body = SCOPES.map(function (sc) {
+      var p = per(sc[0]), h = hist(sc[0]);
+      if (!p) return "";
+      var rows = PER.map(function (pp) {
+        var rv = pp[0] === "todos"
+          ? (p.renovacao || []).reduce(function (a, r) { a.fechadas += num(r.fechadas); a.renovadas_fechadas += num(r.renovadas_fechadas); a.pendentes += num(r.pendentes); return a; }, { fechadas: 0, renovadas_fechadas: 0, pendentes: 0 })
+          : (p.renovacao || []).filter(function (r) { return r.plano === pp[0]; })[0] || { fechadas: 0, renovadas_fechadas: 0, pendentes: 0 };
+        var ch = churnRow(p.churn, pp[0]) || { total: 0, voluntario: 0, chargeback: 0, involuntario: 0, nao_identificado: 0 };
+        var cm = monthlyChurn(h, pp[0]);
+        if (!num(rv.fechadas) && !num(rv.pendentes) && !ch.total && !cm.base) return "";
+        var cnt = function (k) { return '<td class="num">' + fmtInt(ch[k] || 0) + (ch.total ? ' <small class="muted">' + fmtPct((ch[k] || 0) / ch.total, 0) + "</small>" : "") + "</td>"; };
+        return "<tr" + (pp[0] === "todos" ? ' class="rm-tot"' : "") + "><td>" + pp[1] + "</td>" +
+          '<td class="num">' + (num(rv.fechadas) ? fmtPct(rv.renovadas_fechadas / rv.fechadas) + ' <small class="muted">' + fmtInt(rv.renovadas_fechadas) + "/" + fmtInt(rv.fechadas) + "</small>" : '<span class="muted">—</span>') +
+            (num(rv.pendentes) ? ' <small class="rm-warn">+' + fmtInt(rv.pendentes) + " em carência</small>" : "") + "</td>" +
+          '<td class="num">' + (cm.base > 0 ? fmtPct(cm.total / cm.base, 2) : "—") + "</td>" +
+          '<td class="num">' + fmtInt(ch.total) + "</td>" + cnt("voluntario") + cnt("chargeback") + cnt("involuntario") + cnt("nao_identificado") + "</tr>";
+      }).join("");
+      var head = '<tr class="rm-grp"><td colspan="8"><span class="rm-dot" style="background:' + toolColor(sc[0]) + '"></span>' + esc(sc[1]) + "</td></tr>";
+      return rows ? head + rows : head + '<tr><td colspan="8" class="muted">' + INSUF + " no período</td></tr>";
+    }).join("");
+    return '<div class="rm-chart"><div class="rm-chart-h"><h4>Renovação e churn por periodicidade</h4><span class="muted">no período escolhido · os planos lado a lado (o filtro de plano não se aplica)</span></div>' +
+      '<div class="table-scroll"><table class="rm-table rm-per"><thead><tr><th>Plano</th>' +
+      '<th title="Renovadas ÷ oportunidades com os 3 dias de tolerância já encerrados (vencimentos do período)">Renovação</th>' +
+      '<th title="Σ clientes que saíram ÷ Σ base no início de cada mês do período">Churn mensal médio</th><th>Saíram</th>' +
+      '<th title="Reembolso pedido pelo cliente">Voluntário</th><th title="Contestação no cartão">Chargeback</th><th title="Cobrança recusada ou não paga">Involuntário</th><th>Não identificado</th></tr></thead><tbody>' +
+      body + "</tbody></table></div>" +
+      '<p class="rm-fnote">Renovação = renovadas ÷ oportunidades encerradas: assinaturas que venceram no período e já passaram dos 3 dias de tolerância. As que ainda estão na carência aparecem à parte. ' +
+      "Churn por plano = plano da última cobrança antes de sair; no consolidado, o cliente só conta quando perde todas as ferramentas. Percentuais pequenos = parte do churn daquela linha.</p></div>";
   }
 
   // ---------- 2. Base ativa e retenção ----------

@@ -13,6 +13,7 @@
 --   D  Tracking mensal em N−3m e a cobrança seguinte reembolsada              → churn voluntário
 --   E  Tracking mensal em N−3m e a cobrança seguinte recusada                 → churn involuntário
 --   F  Tracking mensal em N−3m, sem nada depois                              → churn não identificado
+--   P  Tracking mensal em N−3m e chargeback da cobrança seguinte              → churn por chargeback
 --   G  Pages anual em N−14m (vence) + Tracking anual em N−6m (ativo)          → churn só na ferramenta, não no consolidado
 --   H  Pages anual em N−14m + Tracking anual 5 dias depois, nenhum renova     → 1 churn no consolidado, 1 em cada ferramenta
 --   I  Pages anual em N−11m (vence daqui a 1 mês)                             → ativo (cancelamento agendado não é churn)
@@ -55,6 +56,8 @@ begin
     ('rmt-e1', p_ft, 'e@rm-teste.invalid', n - interval '3 months', 'paid', 'Plano Mensal', 130),
     ('rmt-e2', p_ft, 'e@rm-teste.invalid', n - interval '2 months' + interval '1 day', 'refused', 'Plano Mensal', 130),
     ('rmt-f1', p_ft, 'f@rm-teste.invalid', n - interval '3 months', 'paid', 'Plano Mensal', 130),
+    ('rmt-p1', p_ft, 'p@rm-teste.invalid', n - interval '3 months', 'paid', 'Plano Mensal', 130),
+    ('rmt-p2', p_ft, 'p@rm-teste.invalid', n - interval '2 months', 'chargedback', 'Plano Mensal', 130),
     ('rmt-g1', p_fp, 'g@rm-teste.invalid', n - interval '14 months', 'paid', 'Plano Anual', 400),
     ('rmt-g2', p_ft, 'g@rm-teste.invalid', n - interval '6 months', 'paid', 'Plano Anual', 500),
     ('rmt-h1', p_fp, 'h@rm-teste.invalid', n - interval '14 months', 'paid', 'Plano Anual', 400),
@@ -87,21 +90,26 @@ begin
        - coalesce(((select c from jsonb_array_elements(d0->'periodo'->sc->'churn') c where c->>'plano' = 'todos')->>k)::numeric, 0)
     from (values
       ('flowpages', 'total', 4), ('flowpages', 'nao_identificado', 4), ('flowpages', 'voluntario', 0), ('flowpages', 'involuntario', 0),
-      ('flowtracking', 'total', 4), ('flowtracking', 'voluntario', 1), ('flowtracking', 'involuntario', 1), ('flowtracking', 'nao_identificado', 2),
+      ('flowpages', 'chargeback', 0),
+      ('flowtracking', 'total', 5), ('flowtracking', 'voluntario', 1), ('flowtracking', 'chargeback', 1), ('flowtracking', 'involuntario', 1), ('flowtracking', 'nao_identificado', 2),
       ('flowspy', 'total', 0),
-      ('all', 'total', 6), ('all', 'voluntario', 1), ('all', 'involuntario', 1), ('all', 'nao_identificado', 4)) v(sc, k, esp);
+      ('all', 'total', 7), ('all', 'voluntario', 1), ('all', 'chargeback', 1), ('all', 'involuntario', 1), ('all', 'nao_identificado', 4)) v(sc, k, esp);
   -- churn por plano
   insert into _chk
   select 'churn ' || sc || ' plano ' || pl, esp,
          coalesce(((select c from jsonb_array_elements(d1->'periodo'->sc->'churn') c where c->>'plano' = pl)->>'total')::numeric, 0)
        - coalesce(((select c from jsonb_array_elements(d0->'periodo'->sc->'churn') c where c->>'plano' = pl)->>'total')::numeric, 0)
-    from (values ('flowpages', 'anual', 4), ('flowtracking', 'mensal', 3), ('flowtracking', 'anual', 1), ('all', 'mensal', 3), ('all', 'anual', 3)) v(sc, pl, esp);
+    from (values ('flowpages', 'anual', 4), ('flowtracking', 'mensal', 4), ('flowtracking', 'anual', 1), ('all', 'mensal', 4), ('all', 'anual', 3)) v(sc, pl, esp);
+  -- chargeback por periodicidade (P é mensal)
+  insert into _chk values ('chargeback flowtracking plano mensal', 1,
+    coalesce(((select c from jsonb_array_elements(d1->'periodo'->'flowtracking'->'churn') c where c->>'plano' = 'mensal')->>'chargeback')::numeric, 0)
+  - coalesce(((select c from jsonb_array_elements(d0->'periodo'->'flowtracking'->'churn') c where c->>'plano' = 'mensal')->>'chargeback')::numeric, 0));
   -- filtro de plano mensal: o churn do período vem só do mensal
   insert into _chk values ('filtro mensal: churn flowtracking',
-    3, coalesce(((select c from jsonb_array_elements(men1->'periodo'->'flowtracking'->'churn') c where c->>'plano' = 'mensal')->>'total')::numeric, 0)
+    4, coalesce(((select c from jsonb_array_elements(men1->'periodo'->'flowtracking'->'churn') c where c->>'plano' = 'mensal')->>'total')::numeric, 0)
      - coalesce(((select c from jsonb_array_elements(men0->'periodo'->'flowtracking'->'churn') c where c->>'plano' = 'mensal')->>'total')::numeric, 0));
-  insert into _chk values ('filtro mensal: novos flowtracking (D, E, F)',
-    3, (men1->'periodo'->'flowtracking'->>'novos')::numeric - (men0->'periodo'->'flowtracking'->>'novos')::numeric);
+  insert into _chk values ('filtro mensal: novos flowtracking (D, E, F, P)',
+    4, (men1->'periodo'->'flowtracking'->>'novos')::numeric - (men0->'periodo'->'flowtracking'->>'novos')::numeric);
   -- renovação anual
   insert into _chk
   select 'renovação anual ' || sc || ' ' || k, esp,
@@ -136,14 +144,14 @@ begin
   -- novos clientes no período (1ª compra paga)
   insert into _chk
   select 'novos ' || sc, esp, (d1->'periodo'->sc->>'novos')::numeric - (d0->'periodo'->sc->>'novos')::numeric
-    from (values ('flowpages', 2), ('flowtracking', 5), ('flowspy', 2), ('all', 6)) v(sc, esp);
+    from (values ('flowpages', 2), ('flowtracking', 6), ('flowspy', 2), ('all', 7)) v(sc, esp);
   -- retenção por coorte: D30 da coorte mensal de D/E/F (nenhum renovou) e D365 da coorte anual (só A)
   insert into _chk
   select 'coorte ' || sc || ' ' || to_char(m, 'YYYY-MM') || ' ' || k, esp,
          coalesce((select case when k = 'clientes' then (c->>'clientes')::numeric else (c->'marcos'->>k)::numeric end from jsonb_array_elements(h1->'escopos'->sc->'coortes') c where c->>'coorte' = to_char(m, 'YYYY-MM-DD')), 0)
        - coalesce((select case when k = 'clientes' then (c->>'clientes')::numeric else (c->'marcos'->>k)::numeric end from jsonb_array_elements(h0->'escopos'->sc->'coortes') c where c->>'coorte' = to_char(m, 'YYYY-MM-DD')), 0)
     from (values
-      ('flowtracking', date_trunc('month', (n - interval '3 months') at time zone 'America/Sao_Paulo'), 'clientes', 3),
+      ('flowtracking', date_trunc('month', (n - interval '3 months') at time zone 'America/Sao_Paulo'), 'clientes', 4),
       ('flowtracking', date_trunc('month', (n - interval '3 months') at time zone 'America/Sao_Paulo'), '1', 0),
       ('flowpages', date_trunc('month', (n - interval '14 months') at time zone 'America/Sao_Paulo'), 'clientes', 4),
       ('flowpages', date_trunc('month', (n - interval '14 months') at time zone 'America/Sao_Paulo'), '12', 1)) v(sc, m, k, esp);
@@ -166,9 +174,17 @@ begin
     + (select coalesce(sum((r->>'devidas')::numeric), 0) from jsonb_array_elements(d1->'periodo'->'flowspy'->'renovacao') r where r->>'plano' = 'anual'),
     (select coalesce(sum((r->>'devidas')::numeric), 0) from jsonb_array_elements(d1->'periodo'->'all'->'renovacao') r where r->>'plano' = 'anual'));
   -- soma dos motivos = churn total, em todo o histórico mensal e em todos os escopos
-  insert into _chk values ('histórico: voluntário + involuntário + não identificado = total', 0,
+  insert into _chk values ('histórico: voluntário + chargeback + involuntário + não identificado = total', 0,
     (select count(*) from jsonb_each(h1->'escopos') e, jsonb_array_elements(e.value->'churn_mes') c
-      where (c->>'voluntario')::int + (c->>'involuntario')::int + (c->>'nao_identificado')::int <> (c->>'total')::int));
+      where (c->>'voluntario')::int + (c->>'chargeback')::int + (c->>'involuntario')::int + (c->>'nao_identificado')::int <> (c->>'total')::int));
+  insert into _chk values ('período: voluntário + chargeback + involuntário + não identificado = total (todos os escopos e planos)', 0,
+    (select count(*) from jsonb_each(d1->'periodo') e, jsonb_array_elements(e.value->'churn') c
+      where (c->>'voluntario')::int + (c->>'chargeback')::int + (c->>'involuntario')::int + (c->>'nao_identificado')::int <> (c->>'total')::int));
+  -- "Período total": 1ª venda paga de cada escopo
+  insert into _chk select 'primeira venda ' || sc, 0,
+    abs(extract(epoch from (d1->'periodo'->sc->>'primeira_venda')::timestamptz
+        - (select min(ts) from public.rm_charges where sc = 'all' or tool = sc)))
+    from (values ('all'), ('flowpages'), ('flowtracking'), ('flowspy')) v(sc);
   -- 1 + 2 + 3 ferramentas = clientes (100%)
   insert into _chk values ('mix: 1 + 2 + 3 = clientes', (d1->'periodo'->'all'->'mix'->>'clientes')::numeric,
     (select sum(v::numeric) from jsonb_each_text(d1->'periodo'->'all'->'mix'->'por_qtd') x(k, v)));

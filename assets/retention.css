@@ -82,6 +82,9 @@
 .rm-heat td.num { border: 1px solid var(--bg); text-align: center; }
 .rm-bar-td { width: 30%; min-width: 80px; }
 .rm-bar-td i { display: block; height: 8px; border-radius: 999px; background: var(--accent); }
+.rm-per tr.rm-grp td { padding-top: 12px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); }
+.rm-per tr.rm-tot td { font-weight: 600; }
+.rm-per td small { font-size: 10.5px; }
 .rm-cmp tr.on td { background: rgba(var(--accent-rgb), .08); }
 .rm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 .rm-dist { display: flex; height: 12px; border-radius: 999px; overflow: hidden; margin: 0 0 8px; background: var(--track-bg); }
