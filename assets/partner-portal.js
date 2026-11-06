@@ -845,7 +845,9 @@
     var avg = longs.length ? sum(longs, function (v) { return v.views; }) / longs.length : null;
     var eng = (function () { var v = sum(longs, function (x) { return x.views; }); return v ? sum(longs, function (x) { return (x.likes || 0) + (x.comments || 0); }) / v : null; })();
     var flowRe = /flow[\s\-_.]*(pages?|track(ing)?|spy)/i;
-    var flow90 = vids.filter(function (v) { return now - v.ms <= 90 * DAY && flowRe.test((v.title || "") + " " + (v.description || "")); });
+    // Cita a Flow: escrito no título/descrição ou marcado pelo influencer na aba Conteúdo (falou só dentro do vídeo).
+    var cites = function (v) { return (v.flow_tools || []).length > 0 || flowRe.test((v.title || "") + " " + (v.description || "")); };
+    var flow90 = vids.filter(function (v) { return now - v.ms <= 90 * DAY && cites(v); });
     var sn = S.yt.snaps || [], first = sn.filter(function (x) { return Date.parse(x.day + "T12:00:00") >= now - 30 * DAY; })[0];
     var growth = first && ch.subscribers != null && first.subscribers != null ? ch.subscribers - first.subscribers : null;
     el.hidden = false;
@@ -862,9 +864,12 @@
       '<div class="pp-vids">' + vids.slice(0, 6).map(function (v) {
         return '<a class="pp-vid" href="https://www.youtube.com/' + (v.short ? "shorts/" : "watch?v=") + encodeURIComponent(v.video_id) + '" target="_blank" rel="noopener noreferrer">' +
           (v.thumbnail_url ? '<img src="' + esc(v.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") +
-          "<b>" + esc(v.title) + "</b><span>" + short(v.views) + " views · " + dt(v.published_at) + (v.short ? " · Short" : "") + (flowRe.test((v.title || "") + " " + (v.description || "")) ? ' · <em>cita a Flow</em>' : "") + "</span></a>";
-      }).join("") + "</div>";
+          "<b>" + esc(v.title) + "</b><span>" + short(v.views) + " views · " + dt(v.published_at) + (v.short ? " · Short" : "") + (cites(v) ? ' · <em>cita a Flow</em>' : "") + "</span></a>";
+      }).join("") + "</div>" +
+      (S.me && S.me.has_contract ? '<p class="muted pp-hint">Falou das ferramentas Flow só dentro do vídeo, sem escrever na descrição? Marque o vídeo na aba <a href="#" id="yt-go-content">Conteúdo</a> para ele contar como menção e como entrega.</p>' : "");
     $("open-dash").addEventListener("click", openDash);
+    var go = $("yt-go-content");
+    if (go) go.addEventListener("click", function (e) { e.preventDefault(); openTab("content"); });
   }
   function openDash() {
     var ch = S.yt.channel, ok = S.sales.filter(function (s) { return groupOf(s.status) === "ok"; });

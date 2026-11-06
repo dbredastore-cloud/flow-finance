@@ -58,11 +58,13 @@ window.InfluencerDash = (function () {
     var a = Math.max(0, m.index - 80), b = Math.min(text.length, m.index + m[0].length + 110);
     return (a > 0 ? "…" : "") + text.slice(a, b).replace(/\s+/g, " ").trim() + (b < text.length ? "…" : "");
   }
-  function flowOf(v) {
+  // w: "d" descrição, "t" título, "m" marcado pelo influencer no portal (falou dentro do vídeo, sem escrever).
+  function flowOf(v, marks) {
     var desc = String(v.description || ""), title = String(v.title || ""), urls = desc.match(URL_RE) || [], out = [];
     FLOW.forEach(function (f) {
       var d = excerpt(desc, f[1]), t = excerpt(title, f[1]);
       if (d || t) out.push({ n: f[0], w: d ? "d" : "t", x: (d || t).slice(0, 280), l: urls.some(function (u) { return f[1].test(u); }) });
+      else if (marks && marks.indexOf(f[0]) >= 0) out.push({ n: f[0], w: "m", x: "", l: false });
     });
     return out;
   }
@@ -92,12 +94,21 @@ window.InfluencerDash = (function () {
   }
   function build() {
     var w = window_(), now = Date.now(), c = S.ctx.c;
+    // Ferramentas que o influencer marcou no vídeo (aba Conteúdo do portal): na equipe vêm de content_tool_tags,
+    // no portal vêm em flow_tools (slugs) de portal_youtube.
+    var marked = {}, SLUG = { flowpages: "FlowPages", flowtracking: "FlowTracking", flowspy: "FlowSpy" };
+    ((S.portal && S.portal.tags) || []).forEach(function (t) {
+      if (t.kind === "youtube" && t.tools && t.tools.name) (marked[t.content_id] = marked[t.content_id] || []).push(t.tools.name);
+    });
+    (S.videos || []).forEach(function (v) {
+      if (v.flow_tools && v.flow_tools.length && !marked[v.video_id]) marked[v.video_id] = v.flow_tools.map(function (x) { return SLUG[x] || x; });
+    });
     var vids = (S.videos || []).map(function (v) {
       var ms = Date.parse(v.published_at), short = v.is_short != null ? v.is_short : (v.duration_s != null && v.duration_s <= SHORT_MAX);
       var views = Number(v.views) || 0, age = Math.max((now - ms) / DAY, 0);
       var o = Object.assign({}, v, { ms: ms, short: short, views: views, age: age, vpd: views / Math.max(age, 1),
         eng: views > 0 && v.likes != null ? ((Number(v.likes) || 0) + (Number(v.comments) || 0)) / views : null });
-      o.fx = flowOf(o); o.domains = domainsOf(v.description);
+      o.fx = flowOf(o, marked[v.video_id]); o.domains = domainsOf(v.description);
       o.inC = ms >= w.start && ms <= w.end;
       return o;
     }).filter(function (v) { return isFinite(v.ms); }).sort(function (a, b) { return b.ms - a.ms; });
@@ -293,7 +304,7 @@ window.InfluencerDash = (function () {
       kf("Curtidas", fmtN(A_.likes), fmtN(A_.n ? A_.likes / A_.n : null) + " por vídeo") + kf("Comentários", fmtN(A_.comments), fmtN(A_.n ? A_.comments / A_.n : null) + " por vídeo") +
       kf("Engajamento", pct(A_.eng), "(curtidas + comentários) ÷ views") +
       kf("Mais visto", best ? fmtN(best.views) : "—", best ? esc(String(best.title).slice(0, 38)) : "sem vídeos") +
-      kf("Mencionam a Flow", fmtInt(vf.length) + " de " + fmtInt(A_.n), vf.length ? fmtN(fAgg.views) + " views nesses vídeos" : "nenhuma menção", "Vídeos com FlowPages, FlowTracking ou FlowSpy escrito no título ou na descrição.") +
+      kf("Mencionam a Flow", fmtInt(vf.length) + " de " + fmtInt(A_.n), vf.length ? fmtN(fAgg.views) + " views nesses vídeos" : "nenhuma menção", "Vídeos com FlowPages, FlowTracking ou FlowSpy escrito no título ou na descrição, ou marcados pelo influencer no portal.") +
       kf("Com menção × sem", fAgg.avg && rest.avg ? dec(fAgg.avg / rest.avg) + "×" : "—", "views médias dos que citam a Flow ÷ dos demais") +
       (noC ? "" : kf("Views por venda", tot.count ? fmtInt(A_.views / tot.count) : "—", "views da vigência ÷ vendas Flow")) +
       "</div></section>";
@@ -329,7 +340,7 @@ window.InfluencerDash = (function () {
     /* instagram */
     if (!S.ctx.hideInsta) body += instaSection(m);
     if (!noC && c.notes) body += '<section class="mr-fsec"><h3>Observações do contrato</h3><p style="margin:0;white-space:pre-wrap;color:var(--text-dim)">' + esc(c.notes) + "</p></section>";
-    body += '<p class="mr-hint" style="text-align:center">Dados da YouTube Data API: estatísticas públicas do canal e dos vídeos. As views são as de hoje (não por período). "Menciona a Flow" é lido de título e descrição; o que é falado dentro do vídeo não é detectado.</p>';
+    body += '<p class="mr-hint" style="text-align:center">Dados da YouTube Data API: estatísticas públicas do canal e dos vídeos. As views são as de hoje (não por período). "Menciona a Flow" é lido de título e descrição, ou vem da marcação do influencer no portal (para o que ele falou dentro do vídeo).</p>';
     $("fd-body").innerHTML = body;
 
     if (m.inC.length) drawViews(m);
@@ -472,10 +483,10 @@ window.InfluencerDash = (function () {
       var list = vf.filter(function (v) { return v.fx.some(function (x) { return x.n === n; }); });
       return kf(n, list.length + (list.length === 1 ? " vídeo" : " vídeos"), list.length ? fmtN(sum(list, function (v) { return v.views; })) + " views" : (nc() ? "sem menção" : "sem menção na vigência"));
     }).join("") + "</div>";
-    if (!vf.length) return head + per + '<p class="mr-hint">Nenhum vídeo ' + (nc() ? 'baixado' : 'da vigência') + ' escreve FlowPages, FlowTracking ou FlowSpy no título ou na descrição.</p></section>';
+    if (!vf.length) return head + per + '<p class="mr-hint">Nenhum vídeo ' + (nc() ? 'baixado' : 'da vigência') + ' cita FlowPages, FlowTracking ou FlowSpy no título ou na descrição, nem foi marcado pelo influencer no portal.</p></section>';
     return head + per + '<div class="mr-flowlist">' + vf.map(function (v) {
-      var chips = v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "Escrito na descrição" : "Escrito no título") + (x.l ? ", dentro de um link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + " <small>" + (x.w === "d" ? "descrição" : "título") + "</small></span>"; }).join("");
-      var ex = v.fx.map(function (x) { return '<p class="mr-flowx"><span>' + (x.w === "d" ? "Na descrição" : "No título") + ":</span> " + hlFlow(x.x) + "</p>"; }).join("");
+      var chips = v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "Escrito na descrição" : x.w === "m" ? "Marcado pelo influencer no portal (citado dentro do vídeo)" : "Escrito no título") + (x.l ? ", dentro de um link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + " <small>" + (x.w === "d" ? "descrição" : x.w === "m" ? "marcado" : "título") + "</small></span>"; }).join("");
+      var ex = v.fx.filter(function (x) { return x.w !== "m"; }).map(function (x) { return '<p class="mr-flowx"><span>' + (x.w === "d" ? "Na descrição" : "No título") + ":</span> " + hlFlow(x.x) + "</p>"; }).join("");
       return '<article class="mr-flowcard"><a class="mr-flowthumb" href="' + vidUrl(v) + '" target="_blank" rel="noopener noreferrer">' + (v.thumbnail_url ? '<img src="' + esc(v.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") + "</a>" +
         '<div class="mr-flowmain"><a class="mr-flowtitle" href="' + vidUrl(v) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + "</a>" +
         '<div class="mr-flowmeta">' + fmtDate(v.ms) + " · " + ago(v.age) + (v.short ? " · Short" : "") + " · " + fmtDur(v.duration_s) + " · <b>" + fmtInt(v.views) + "</b> views · " +
@@ -928,7 +939,7 @@ window.InfluencerDash = (function () {
         (v.short ? '<span class="mr-badge k">Short</span>' : "") + (v.inC ? "" : '<span class="mr-badge">' + (fav() ? "antes do acesso" : "fora da vigência") + "</span>") + "</div></div></div></td>" +
         '<td class="l num">' + fmtDate(v.ms) + '<div class="muted" style="font-family:inherit;font-size:11px">' + ago(v.age) + "</div></td>" +
         '<td class="num">' + fmtDur(v.duration_s) + '</td><td class="num">' + fmtInt(v.views) + '</td><td class="num">' + (v.likes == null ? "—" : fmtInt(v.likes)) + '</td><td class="num">' + (v.comments == null ? "—" : fmtInt(v.comments)) + '</td><td class="num">' + pct(v.eng) + '</td><td class="num">' + fmtN(v.vpd) + "</td>" +
-        '<td class="l mr-divulga">' + (v.fx.length ? v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "na descrição" : "no título") + (x.l ? ", com link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td></tr>";
+        '<td class="l mr-divulga">' + (v.fx.length ? v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "na descrição" : x.w === "m" ? "marcado pelo influencer" : "no título") + (x.l ? ", com link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td></tr>";
       if (open) row += '<tr class="fd-vdetail"><td colspan="' + COLS.length + '">' + videoDetail(v) + "</td></tr>";
       return row;
     }).join("") : '<tr><td colspan="' + COLS.length + '" class="empty">Nenhum vídeo com esses filtros.</td></tr>';
