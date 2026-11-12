@@ -3,10 +3,11 @@
    antes isso virava erro na tela. Agora:
    - 57014 (consulta cancelada por tempo): o banco desfez tudo, então é seguro repetir qualquer chamada;
    - 502/503/504 ou queda de rede: só repete leituras (GET), para nunca gravar duas vezes.
-   Até 2 novas tentativas, com espera crescente (1,2 s e 3 s). */
+   Só 1 nova tentativa, depois de 2 a 4 s (sorteado): repetir mais vezes, ou todos ao mesmo tempo, piora o banco
+   quando ele já está sobrecarregado (visto em 12/11/2026). */
 window.flowFetch = (function () {
-  var WAITS = [1200, 3000];
-  function sleep(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+  var WAITS = [2000];
+  function sleep(ms) { return new Promise(function (ok) { setTimeout(ok, ms + Math.random() * 2000); }); }
   async function isTimeout(res) {
     if (res.status !== 500) return false;
     try { var b = await res.clone().json(); return !!b && b.code === "57014"; } catch (e) { return false; }

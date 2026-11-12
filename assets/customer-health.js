@@ -125,8 +125,9 @@
     if (c.low >= c.inactive) c.low = Math.max(1, c.inactive - 1);
     return c;
   }
-  // Alunos e acessos não dependem dos critérios: carregam uma vez, os dois juntos e junto com o resumo.
+  // Alunos e acessos não dependem dos critérios: carregam uma vez, um depois do outro, sem travar a tela.
   // Mostra na hora a última leitura guardada no navegador e atualiza em seguida.
+  // Um de cada vez de propósito: em 12/11/2026 as 6 consultas juntas sobrecarregaram o banco (respostas de 20–40 s).
   async function loadSide() {
     var k = S.stu.plat, p = S.ta.plat;
     if (S.side || S.sideDone) return; // uma vez por abertura da tela; as abas carregam ao trocar
@@ -134,29 +135,31 @@
     try {
       if (!S.stu.data[k]) { var c = fc().get(stuCacheKey(k)); if (c) { S.stu.data[k] = c; renderStudents(); } }
       if (!S.ta.data[p]) { var t = fc().get("ch_ta_cache:" + p); if (t) { S.ta.data[p] = t; renderToolAccess(); } }
-      await Promise.all([
-        loadStudents(k).then(renderStudents),
-        loadToolAccess(p).then(renderToolAccess)
-      ]);
+      await loadStudents(k); renderStudents();
+      await loadToolAccess(p); renderToolAccess();
       S.sideDone = !S.stu.err[k];
     } finally { S.side = false; }
   }
-  // Resumo, lista e alunos/acessos saem juntos (antes era um depois do outro). O topo aparece na hora
-  // com a última leitura guardada, se houver.
-  async function refreshAll() {
+  // O topo aparece na hora com a última leitura guardada (se houver); as consultas saem uma depois da outra
+  // (resumo → lista → alunos/acessos), para não disputarem o banco.
+  var refreshing = null;
+  function refreshAll() {
+    if (refreshing) return refreshing; // já está carregando: não dispara tudo de novo
+    refreshing = doRefresh().finally(function () { refreshing = null; });
+    return refreshing;
+  }
+  async function doRefresh() {
     S.loading = true;
     var hadCache = showCachedTop();
-    var sum = loadSummary();
-    var list = loadList(sum);
-    loadSide();
     try {
-      if (await sum) renderTop();
+      if (await loadSummary()) renderTop();
+      await loadList();
+      loadSide();
     } catch (e) {
       console.warn("Saúde dos clientes:", e);
       var msg = window.flowErrMsg ? window.flowErrMsg(e) : (e.message || e);
       A.toast((hadCache ? "Mostrando a última leitura guardada. " : "") + "Não foi possível carregar a saúde dos clientes: " + msg, true);
-    }
-    try { await list; } finally { S.loading = false; }
+    } finally { S.loading = false; }
   }
 
   /* ---------------- agregação do software escolhido ---------------- */
