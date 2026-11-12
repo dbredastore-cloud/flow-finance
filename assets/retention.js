@@ -354,6 +354,7 @@
         card("Involuntário (falha de pagamento)", fmtInt(ch.involuntario), base > 0 ? fmtPct(ratio(cm.involuntario, base), 2) + " ao mês · " + fmtPct(ratio(ch.involuntario, total)) + " do churn" : "",
           "Houve tentativa de cobrança da renovação que foi recusada ou ficou sem pagamento (cartão recusado, boleto/Pix não pago) entre 10 dias antes e 7 dias depois do vencimento.") +
         card("Em carência agora", fmtInt(m.b.em_carencia), "venceram há até 7 dias e ainda podem renovar", "Ainda não contam como ativos nem como churn. Se renovarem em até 7 dias depois do vencimento, continuam no mesmo período; depois disso viram churn na data do vencimento.");
+    if (!isVit) churnCards += desistCard(m);
     var soma = ch.voluntario + (ch.chargeback || 0) + ch.involuntario + ch.nao_identificado;
     var check = isVit ? "" : '<p class="rm-check' + (soma === total ? " ok" : " bad") + '">Conferência: voluntário ' + fmtInt(volN(ch)) + " (não renovou " + fmtInt(ch.nao_identificado) + " + pediu reembolso " + fmtInt(ch.voluntario) + ")" +
       " + chargeback " + fmtInt(ch.chargeback || 0) + " + involuntário " + fmtInt(ch.involuntario) + " = " + fmtInt(soma) + " · churn total " + fmtInt(total) + "</p>";
@@ -393,6 +394,20 @@
         chartBox("Churn por motivo, mês a mês", "barras: clientes que saíram · linha: taxa de churn", g1, g1 ? legend([["Voluntário · não renovou", c.mut], ["Voluntário · pediu reembolso", c.d], ["Chargeback", c.b], ["Involuntário", c.c], ["Taxa de churn", c.crit]]) : "") +
         chartBox("Renovação anual, mês do vencimento", "barras: assinaturas anuais vencidas · linha: % renovadas", g2 || '<div class="rm-empty">Ainda sem histórico de renovação anual</div>', g2 ? legend([["Renovaram", c.a], ["Não renovaram", c.mut], ["Em carência (ainda podem renovar)", c.c], ["Taxa de renovação (parcial nos meses com carência)", c.b]]) : "") +
       "</div>" + periodicityTable() + tab);
+  }
+
+  // Quem pediu reembolso (ou chargeback) na 1ª compra: fica fora da base e do churn, mas aparece aqui.
+  function desistCard(m) {
+    var d = m.p.desistencia;
+    if (!d) return "";
+    var tot = num(d.total), compras = num(m.p.novos) + tot;
+    return card("Desistiram na 1ª compra", fmtInt(tot),
+      (compras > 0 ? fmtPct(ratio(tot, compras)) + " das primeiras compras · " : "") +
+        "pediu reembolso " + fmtInt(d.reembolso) + " · chargeback " + fmtInt(d.chargeback),
+      "Compraram a assinatura pela primeira vez no período (data da compra) e desistiram dessa mesma compra. <b>Não entram na base nem no churn</b>: só cobrança paga vira cliente. " +
+        "<b>Pediu reembolso</b>: pediu o dinheiro de volta na garantia. <b>Chargeback</b>: contestou a compra no cartão. " +
+        "Não separamos \"até 7 dias / depois\" porque a Kiwify grava a data em que o reembolso foi processado, não a do pedido (desde agosto/2026 quase sempre no 7º–8º dia). " +
+        "% = desistências ÷ (clientes novos + desistências) no período. Conta o e-mail uma vez" + (S.scope === "all" ? " (no consolidado, só quem nunca tinha pago nenhuma ferramenta)" : "") + ". Fonte: Kiwify.");
   }
 
   // Renovação e churn lado a lado por periodicidade (mensal, semestral, anual), em cada ferramenta e no consolidado.
