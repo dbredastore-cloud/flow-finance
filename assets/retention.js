@@ -624,15 +624,18 @@
       "Referências: margem acima de 70%, LTV/CAC acima de 3x e retorno do CAC em até 12 meses são as faixas mais usadas para negócios de assinatura. Servem de norte, não de regra fixa.");
   }
 
+  // Ferramenta sem nenhuma saída no período: churn 0% e D90 100% só refletem que nada venceu ainda.
+  function semVenc(m) { return !num(m.ch.total); }
+
   function compareSummary() {
     var tm = TOOLS.map(function (t) { return [t[1], metrics(t[0])]; }).filter(function (r) { return r[1]; });
     var defs = [
       ["Clientes ativos", "pessoas com acesso pago ou vitalício no fim do período.", null],
       ["Assinaturas", "um cliente com as 3 ferramentas conta 3 assinaturas.", null],
       ["Renovação anual", "dos planos anuais que venceram, quantos pagaram de novo. Maior é melhor.", function (m) { return m.ren.devidas ? m.renTaxa : null; }, 1, fmtPct],
-      ["Churn mensal médio", "quanto da base sai por mês. Menor é melhor.", function (m) { return m.cm.base ? m.churnTaxa : null; }, -1, function (v) { return fmtPct(v, 2); }],
-      ["D90", "dos clientes que entraram, quantos ainda estavam ativos 90 dias depois. Maior é melhor.", function (m) { return m.ret["3"].clientes ? m.ret["3"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
-      ["D365", "o mesmo, 1 ano depois. Mostra quem ficou de verdade.", function (m) { return m.ret["12"].clientes ? m.ret["12"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
+      ["Churn mensal médio", "quanto da base sai por mês. Menor é melhor.", function (m) { return semVenc(m) ? null : m.cm.base ? m.churnTaxa : null; }, -1, function (v) { return fmtPct(v, 2); }],
+      ["D90", "dos clientes que entraram, quantos ainda estavam ativos 90 dias depois. Maior é melhor.", function (m) { return semVenc(m) ? null : m.ret["3"].clientes ? m.ret["3"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
+      ["D365", "o mesmo, 1 ano depois. Mostra quem ficou de verdade.", function (m) { return semVenc(m) ? null : m.ret["12"].clientes ? m.ret["12"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
       ["ARPU", "receita média por cliente pagante, por mês. Maior é melhor.", function (m) { return m.arpu; }, 1, function (v) { return fmtBRL(v, 0); }],
       ["LTV", "quanto o cliente deixa de lucro bruto na vida toda. Maior é melhor.", function (m) { return m.ltv; }, 1, function (v) { return fmtBRL(v, 0); }],
       ["CAC", "quanto custa conquistar 1 cliente novo. Menor é melhor.", function (m) { return m.cac; }, -1, function (v) { return fmtBRL(v, 0); }],
@@ -646,9 +649,11 @@
       vals.sort(function (a, b) { return (b[1] - a[1]) * d[3]; });
       var best = vals[0], worst = vals[vals.length - 1];
       return txt + " " + (best[1] === worst[1] ? '<span class="muted">Empate entre as ferramentas.</span>'
-        : tag("good", "melhor: " + best[0] + " " + d[4](best[1])) + " " + tag("bad", "pior: " + worst[0] + " " + d[4](worst[1])));
+        : tag("good", "melhor: " + best[0] + " " + d[4](best[1])) + " " + tag("neu", "mais fraca: " + worst[0] + " " + d[4](worst[1])));
     });
-    return readBox("Como ler esta tabela", li, "Melhor e pior comparam só as três ferramentas, no mesmo período e plano. O consolidado fica de fora porque junta todas.");
+    var fora = tm.filter(function (r) { return semVenc(r[1]); }).map(function (r) { return r[0]; });
+    return readBox("Como ler esta tabela", li, "Melhor e mais fraca comparam só as três ferramentas, no mesmo período e plano. O consolidado fica de fora porque junta todas." +
+      (fora.length ? " " + esc(fora.join(" e ")) + (fora.length > 1 ? " ficam" : " fica") + " fora de churn, D90 e D365: ninguém saiu no período (quase todos os clientes têm combo vitalício ou plano que ainda não venceu), então 0% de churn ali não quer dizer retenção melhor." : ""));
   }
 
   // ---------- Comparação entre ferramentas ----------

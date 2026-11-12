@@ -102,6 +102,7 @@
 .rm-tag.good { color: var(--good); }
 .rm-tag.ok { color: var(--warning); }
 .rm-tag.bad { color: var(--critical); }
+.rm-tag.neu { color: var(--text-muted); }
 .rm-cmp tr.on td { background: rgba(var(--accent-rgb), .08); }
 .rm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 .rm-dist { display: flex; height: 12px; border-radius: 999px; overflow: hidden; margin: 0 0 8px; background: var(--track-bg); }
