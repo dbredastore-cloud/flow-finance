@@ -82,10 +82,16 @@
 .rm-heat td.num { border: 1px solid var(--bg); text-align: center; }
 .rm-bar-td { width: 30%; min-width: 80px; }
 .rm-bar-td i { display: block; height: 8px; border-radius: 999px; background: var(--accent); }
-.rm-per tr.rm-grp td { padding-top: 12px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); }
+.rm-per td { padding: 4px 8px; line-height: 1.35; }
+.rm-per tr.rm-grp td { padding-top: 10px; padding-bottom: 4px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); }
 .rm-per tr.rm-tot td { font-weight: 600; }
 .rm-per td small { font-size: 10.5px; }
-.rm-per td small.rm-sub { display: block; font-weight: 400; white-space: nowrap; line-height: 1.35; }
+.rm-per td small.rm-pct { display: inline-block; min-width: 30px; margin-left: 2px; font-weight: 400; }
+.rm-per .rm-det { display: none; font-size: 10.5px; font-weight: 400; line-height: 1.3; color: var(--text-muted); white-space: nowrap; }
+.rm-per.rm-open .rm-det { display: block; }
+.rm-per .rm-det.rm-warn { color: var(--warning, var(--text-muted)); }
+.rm-det-btn { margin-left: 8px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-dim); font: inherit; font-size: 11px; cursor: pointer; }
+.rm-det-btn:hover { color: var(--text); border-color: var(--text-muted); }
 .rm-cmp tr.on td { background: rgba(var(--accent-rgb), .08); }
 .rm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 .rm-dist { display: flex; height: 12px; border-radius: 999px; overflow: hidden; margin: 0 0 8px; background: var(--track-bg); }

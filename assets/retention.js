@@ -188,8 +188,9 @@
     if (kv[0] === "period") { S.period = kv[1]; savePrefs(); renderFilters(); if (S.period !== "custom" || (S.from && S.to)) load(); }
     else if (kv[0] === "plan") { S.plano = kv[1]; savePrefs(); renderFilters(); load(); }
     else if (kv[0] === "scope") { S.scope = kv[1]; savePrefs(); renderFilters(); renderBody(); }
+    else if (kv[0] === "perdet") { S.perDet = !S.perDet; savePrefs(); renderBody(); }
   }
-  function savePrefs() { safeSet(PREF, JSON.stringify({ period: S.period, from: S.from, to: S.to, plano: S.plano, scope: S.scope })); }
+  function savePrefs() { safeSet(PREF, JSON.stringify({ period: S.period, from: S.from, to: S.to, plano: S.plano, scope: S.scope, perDet: !!S.perDet })); }
   function loadPrefs() {
     try {
       var p = JSON.parse(safeGet(PREF) || "null");
@@ -197,7 +198,7 @@
       if (PERIODS.some(function (x) { return x[0] === p.period; })) S.period = p.period;
       if (PLANS.some(function (x) { return x[0] === p.plano; })) S.plano = p.plano;
       if (SCOPES.some(function (x) { return x[0] === p.scope; })) S.scope = p.scope;
-      S.from = p.from || ""; S.to = p.to || "";
+      S.from = p.from || ""; S.to = p.to || ""; S.perDet = !!p.perDet;
     } catch (e) {}
   }
   function pills(list, kind, cur) {
@@ -410,36 +411,38 @@
         if (!num(rv.fechadas) && !num(rv.pendentes) && !ch.total && !cm.base) return "";
         // Cada motivo em duas leituras: parte do churn (motivo ÷ quem saiu) e taxa sobre a base (motivo ÷ base de cada mês).
         // Voluntário = não renovou + pediu reembolso (a divisão aparece embaixo do total).
+        // Fechado: número + % do churn na mesma linha. Aberto ("Ver detalhes"): divisão do voluntário e % da base ao mês.
         var cnt = function (k) {
           var n = k === "vol" ? volN(ch) : num(ch[k]), nb = k === "vol" ? volN(cm) : num(cm[k]);
-          var parte = ch.total ? fmtPct(n / ch.total, 0) + " do churn" : "";
-          var taxa = cm.base > 0 ? fmtPct(nb / cm.base, 2) + " ao mês" : "";
-          return '<td class="num">' + fmtInt(n) +
-            (k === "vol" && n ? '<small class="muted rm-sub">não renovou ' + fmtInt(ch.nao_identificado) + " · reembolso " + fmtInt(ch.voluntario) + "</small>" : "") +
-            (parte ? '<small class="muted rm-sub" title="' + esc(fmtInt(n) + " de " + fmtInt(ch.total) + " que saíram") + '">' + parte + "</small>" : "") +
-            (taxa ? '<small class="muted rm-sub" title="Σ saídas por este motivo ÷ Σ base no início de cada mês do período">' + taxa + "</small>" : "") + "</td>";
+          var parte = ch.total ? '<small class="muted rm-pct" title="' + esc(fmtInt(n) + " de " + fmtInt(ch.total) + " que saíram") + '">' + fmtPct(n / ch.total, 0) + "</small>" : "";
+          var det = [];
+          if (k === "vol" && n) det.push("não renovou " + fmtInt(ch.nao_identificado) + " · reembolso " + fmtInt(ch.voluntario));
+          if (cm.base > 0) det.push(fmtPct(nb / cm.base, 2) + " da base/mês");
+          return '<td class="num">' + fmtInt(n) + (parte ? " " + parte : "") +
+            (det.length ? '<span class="rm-det">' + det.join("<br>") + "</span>" : "") + "</td>";
         };
         return "<tr" + (pp[0] === "todos" ? ' class="rm-tot"' : "") + "><td>" + pp[1] + "</td>" +
           '<td class="num">' + (num(rv.fechadas) ? fmtPct(rv.renovadas_fechadas / rv.fechadas) + ' <small class="muted">' + fmtInt(rv.renovadas_fechadas) + "/" + fmtInt(rv.fechadas) + "</small>" : '<span class="muted">—</span>') +
-            (num(rv.pendentes) ? ' <small class="rm-warn">+' + fmtInt(rv.pendentes) + " em carência</small>" : "") + "</td>" +
+            (num(rv.pendentes) ? '<span class="rm-det rm-warn">+' + fmtInt(rv.pendentes) + " em carência</span>" : "") + "</td>" +
           '<td class="num">' + (cm.base > 0 ? fmtPct(cm.total / cm.base, 2) : "—") + "</td>" +
           '<td class="num">' + fmtInt(ch.total) + "</td>" + cnt("vol") + cnt("chargeback") + cnt("involuntario") + "</tr>";
       }).join("");
       var head = '<tr class="rm-grp"><td colspan="7"><span class="rm-dot" style="background:' + toolColor(sc[0]) + '"></span>' + esc(sc[1]) + "</td></tr>";
       return rows ? head + rows : head + '<tr><td colspan="7" class="muted">' + INSUF + " no período</td></tr>";
     }).join("");
-    return '<div class="rm-chart"><div class="rm-chart-h"><h4>Renovação e churn por periodicidade</h4><span class="muted">no período escolhido · os planos lado a lado (o filtro de plano não se aplica)</span></div>' +
-      '<div class="table-scroll"><table class="rm-table rm-per"><thead><tr><th>Plano</th>' +
+    return '<div class="rm-chart"><div class="rm-chart-h"><h4>Renovação e churn por periodicidade</h4>' +
+      '<span class="muted">no período escolhido · os planos lado a lado (o filtro de plano não se aplica)' +
+      ' <button type="button" class="rm-det-btn" data-rm="perdet:toggle" aria-expanded="' + !!S.perDet + '">' + (S.perDet ? "Ocultar detalhes ▴" : "Ver detalhes ▾") + "</button></span></div>" +
+      '<div class="table-scroll"><table class="rm-table rm-per' + (S.perDet ? " rm-open" : "") + '"><thead><tr><th>Plano</th>' +
       '<th title="Renovadas ÷ oportunidades com os 7 dias de tolerância já encerrados (vencimentos do período)">Renovação</th>' +
       '<th title="Σ clientes que saíram ÷ Σ base no início de cada mês do período">Churn mensal médio</th><th>Saíram</th>' +
-      '<th title="O cliente decidiu sair: não renovou (venceu sem tentativa de cobrança nem reembolso — desligou a renovação ou não pagou o Pix/boleto) + pediu reembolso. Embaixo: a divisão, % do churn e % da base ao mês.">Voluntário</th>' +
-      '<th title="Contestação no cartão. Embaixo: % do churn e % da base ao mês.">Chargeback</th>' +
-      '<th title="Queria continuar, mas a cobrança da renovação foi recusada ou não paga. Embaixo: % do churn e % da base ao mês.">Involuntário</th></tr></thead><tbody>' +
+      '<th title="O cliente decidiu sair: não renovou (venceu sem tentativa de cobrança nem reembolso — desligou a renovação ou não pagou o Pix/boleto) + pediu reembolso. Ao lado: % do churn.">Voluntário</th>' +
+      '<th title="Contestação no cartão. Ao lado: % do churn.">Chargeback</th>' +
+      '<th title="Queria continuar, mas a cobrança da renovação foi recusada ou não paga. Ao lado: % do churn.">Involuntário</th></tr></thead><tbody>' +
       body + "</tbody></table></div>" +
-      '<p class="rm-fnote">Renovação = renovadas ÷ oportunidades encerradas: assinaturas que venceram no período e já passaram dos 7 dias de tolerância. As que ainda estão na carência aparecem à parte. ' +
-      "Churn por plano = plano da última cobrança antes de sair; no consolidado, o cliente só conta quando perde todas as ferramentas.</p>" +
-      '<p class="rm-fnote">Em cada motivo: <b>“% do churn”</b> = motivo ÷ total que saiu naquela linha (do que saiu, quanto foi por esse motivo; as três colunas somam 100%). ' +
-      "<b>“% ao mês”</b> = saídas por esse motivo ÷ base de clientes no início de cada mês (quanto da base se perde por mês por esse motivo; somadas dão o churn mensal médio).</p></div>";
+      '<p class="rm-fnote">Ao lado de cada motivo: <b>% do churn</b> (do que saiu na linha, quanto foi por esse motivo; somam 100%). ' +
+      (S.perDet ? "Nos detalhes: <b>% da base/mês</b> = saídas por esse motivo ÷ base no início de cada mês (somadas dão o churn mensal médio). " : "") +
+      "Renovação = renovadas ÷ vencidas que já passaram dos 7 dias de tolerância. No consolidado, o cliente só conta quando perde todas as ferramentas.</p></div>";
   }
 
   // ---------- 2. Base ativa e retenção ----------
