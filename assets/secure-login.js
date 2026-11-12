@@ -1,3 +1,44 @@
+/* fetch do cliente Supabase com nova tentativa automática (createClient(url, key, { global: { fetch: window.flowFetch } })).
+   O banco cancela consultas que passam do limite de tempo (erro 57014) quando está ocupado com as rotinas de sync;
+   antes isso virava erro na tela. Agora:
+   - 57014 (consulta cancelada por tempo): o banco desfez tudo, então é seguro repetir qualquer chamada;
+   - 502/503/504 ou queda de rede: só repete leituras (GET), para nunca gravar duas vezes.
+   Até 2 novas tentativas, com espera crescente (1,2 s e 3 s). */
+window.flowFetch = (function () {
+  var WAITS = [1200, 3000];
+  function sleep(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+  async function isTimeout(res) {
+    if (res.status !== 500) return false;
+    try { var b = await res.clone().json(); return !!b && b.code === "57014"; } catch (e) { return false; }
+  }
+  return async function (input, init) {
+    var method = ((init && init.method) || (input && input.method) || "GET").toUpperCase();
+    var read = method === "GET" || method === "HEAD";
+    for (var i = 0; ; i++) {
+      var res;
+      try { res = await fetch(input, init); }
+      catch (e) {
+        if (!read || i >= WAITS.length || (init && init.signal && init.signal.aborted)) throw e;
+        await sleep(WAITS[i]);
+        continue;
+      }
+      if (i >= WAITS.length) return res;
+      var retry = (read && (res.status === 502 || res.status === 503 || res.status === 504)) || await isTimeout(res);
+      if (!retry) return res;
+      await sleep(WAITS[i]);
+    }
+  };
+})();
+
+/* Mensagem de erro legível para a tela (em vez do texto técnico do banco). */
+window.flowErrMsg = function (err) {
+  var code = err && err.code, msg = (err && err.message) || String(err || "");
+  if (code === "57014" || /statement timeout/i.test(msg)) return "O banco está ocupado com uma atualização automática e não respondeu a tempo. Tente de novo em alguns segundos.";
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) return "Sem conexão com o servidor. Confira a internet e tente de novo.";
+  if (/jwt expired|invalid jwt/i.test(msg)) return "Sua sessão expirou. Recarregue a página e entre de novo.";
+  return msg;
+};
+
 /* Login do painel pela Edge Function auth-login (registro de tentativas, bloqueio por
    força bruta e aviso no Telegram), em vez de chamar o Supabase Auth direto.
    Devolve o mesmo formato de sb.auth.signInWithPassword: { data, error }. */

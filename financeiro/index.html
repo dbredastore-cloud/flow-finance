@@ -25,8 +25,8 @@
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
-<script src="../assets/customer-health.js?v=20261103c"></script>
-<script src="../assets/retention.js?v=20261104h"></script>
+<script src="../assets/customer-health.js?v=20261112"></script>
+<script src="../assets/retention.js?v=20261112"></script>
 <script src="../assets/alert-refunds.js"></script>
 <script src="../assets/alerts.js"></script>
 <script src="../assets/fin-analysis.js?v=20261030"></script>
@@ -34,7 +34,7 @@
 <script src="../assets/dev-hours.js?v=20261102"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="../assets/secure-login.js"></script>
+<script src="../assets/secure-login.js?v=20261112"></script>
 </head>
 <body>
 
@@ -304,7 +304,8 @@
 
   var SUPABASE_URL = "https://jagmnogcpxeujtsrrotd.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
-  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: window.flowFetch } });
+  var flowErrMsg = window.flowErrMsg || function (e) { return (e && e.message) || String(e); };
 
   var MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   var MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -746,7 +747,7 @@
 
   async function loadExpenseDetail(toolId, year, month) {
     var res = await sb.from("monthly_expenses").select("id, amount, category_id, split_total, split_parts, charged_on, paid_via, note").eq("tool_id", toolId).eq("year", year).eq("month", month);
-    if (res.error) { toast("Erro ao carregar despesas: " + res.error.message, true); return []; }
+    if (res.error) { toast("Erro ao carregar despesas: " + flowErrMsg(res.error), true); return []; }
     return (res.data || []).map(function (e) {
       var cat = state.categories.find(function (c) { return c.id === e.category_id; });
       return { id: e.id, amount: e.amount, category_id: e.category_id, category_name: cat ? cat.name : "?", split_total: e.split_total, split_parts: e.split_parts, charged_on: e.charged_on, paid_via: e.paid_via || null, note: e.note || null };
@@ -1859,7 +1860,7 @@
     var range = state.range;
     var data;
     try { data = await loadHome(range); }
-    catch (e) { toast("Erro ao carregar a Home: " + (e && e.message ? e.message : e), true); return; }
+    catch (e) { toast("Erro ao carregar a Home: " + flowErrMsg(e), true); return; }
     if (state.view !== "home" || !sameRange(range, state.range)) return;
     state.home = data;
     renderHome();
@@ -2092,7 +2093,7 @@
   async function loadHealth() {
     var year = state.activeYear;
     var res = await sb.rpc("flow_health", { p_year: year });
-    if (res.error) { toast("Erro ao carregar o Flow Health: " + res.error.message, true); return; }
+    if (res.error) { toast("Erro ao carregar o Flow Health: " + flowErrMsg(res.error), true); return; }
     if (year !== state.activeYear || !state.healthMode) return;
     state.health = res.data;
     finCache.health = finCache.health || {};
@@ -2667,7 +2668,7 @@
     state.userId = session.user.id;
     // Acesso por menu: quem não tem nenhum menu do Financeiro vai para o painel que pode ver.
     try { await FlowAccess.load(sb, session.user.id); } catch (e) {
-      showStatus("Erro ao carregar o acesso", (e && e.message) ? e.message : String(e), true);
+      showStatus("Erro ao carregar o acesso", flowErrMsg(e), true);
       return;
     }
     if (!FlowAccess.has()) { showStatus("Sem acesso", "Sua conta ainda não tem acesso aos painéis. Peça a um admin para liberar na tela Equipe.", false); return; }
@@ -2683,7 +2684,7 @@
       loadTools().then(renderSidebar).catch(function () {});
     } else {
       try { await loadTools(); } catch (e) {
-        showStatus("Erro ao carregar dados", (e && e.message) ? e.message : String(e), true);
+        showStatus("Erro ao carregar dados", flowErrMsg(e), true);
         return;
       }
     }

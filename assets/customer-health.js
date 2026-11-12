@@ -361,7 +361,6 @@
   try { var savedTa = safeGet("flow_ch_tool_access"); if (TA_PLAT.some(function (p) { return p[0] === savedTa; })) S.ta.plat = savedTa; } catch (e) {}
   async function loadToolAccess(plat) {
     var r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
-    if (r.error) r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
     if (!r.error) { S.ta.data[plat] = r.data; safeSet("ch_ta_cache:" + plat, JSON.stringify(r.data)); }
   }
   function taRow(label, n, total, tip, cls) {

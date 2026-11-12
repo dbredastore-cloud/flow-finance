@@ -115,7 +115,7 @@
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="../assets/secure-login.js"></script>
+<script src="../assets/secure-login.js?v=20261112"></script>
 </head>
 <body>
 
@@ -245,7 +245,7 @@
   "use strict";
   var SUPABASE_URL = "https://jagmnogcpxeujtsrrotd.supabase.co";
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
-  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: window.flowFetch } });
   var me = null, data = { members: [], others: [] };
 
   function $(id) { return document.getElementById(id); }

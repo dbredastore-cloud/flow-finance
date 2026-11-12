@@ -78,11 +78,11 @@
     try { cached = JSON.parse(safeGet(key, sessionStorage) || "null"); } catch (e) {}
     if (cached) { S.data = cached; render(); }
     S.loading = true; renderStatus();
+    // Consulta cancelada por tempo é repetida sozinha pelo flowFetch (secure-login.js).
     var res = await A.sb.rpc("rm_dashboard", { p_ini: r.ini, p_fim: r.fim, p_plano: S.plano });
-    if (res.error) { await new Promise(function (ok) { setTimeout(ok, 900); }); res = await A.sb.rpc("rm_dashboard", { p_ini: r.ini, p_fim: r.fim, p_plano: S.plano }); }
     if (seq !== S.seq) return;
     S.loading = false;
-    if (res.error) { renderStatus(res.error.message); if (!cached) A.toast("Erro ao carregar Retenção e Monetização: " + res.error.message, true); return; }
+    if (res.error) { var em = window.flowErrMsg ? window.flowErrMsg(res.error) : res.error.message; renderStatus(em); if (!cached) A.toast("Erro ao carregar Retenção e Monetização: " + em, true); return; }
     S.data = res.data;
     safeSet(key, JSON.stringify(res.data), sessionStorage);
     render();
