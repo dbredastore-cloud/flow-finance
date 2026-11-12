@@ -85,6 +85,7 @@
 .rm-per tr.rm-grp td { padding-top: 12px; font-weight: 700; color: var(--text); border-bottom: 1px solid var(--border); }
 .rm-per tr.rm-tot td { font-weight: 600; }
 .rm-per td small { font-size: 10.5px; }
+.rm-per td small.rm-sub { display: block; font-weight: 400; white-space: nowrap; line-height: 1.35; }
 .rm-cmp tr.on td { background: rgba(var(--accent-rgb), .08); }
 .rm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 .rm-dist { display: flex; height: 12px; border-radius: 999px; overflow: hidden; margin: 0 0 8px; background: var(--track-bg); }

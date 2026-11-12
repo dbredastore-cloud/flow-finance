@@ -10,8 +10,8 @@
   var ASS = [
     ["ativo", "Assinatura em dia", "Cobertura vigente e faltam mais de 30 dias para vencer.", "--accent"],
     ["vence_30", "Vence em 30 dias", "Cobertura vigente, mas vence em até 30 dias: hora de trabalhar a renovação.", "--warning"],
-    ["carencia", "Em carência", "Venceu há até 15 dias e ainda pode renovar.", "--accent-2"],
-    ["cancelou", "Cancelou", "Venceu há mais de 15 dias sem nova compra (não conta teste/cortesia; quem tem o combo vitalício está em Vitalício).", "--critical"],
+    ["carencia", "Em carência", "Venceu há até 7 dias e ainda pode renovar.", "--accent-2"],
+    ["cancelou", "Cancelou", "Venceu há mais de 7 dias sem nova compra (não conta teste/cortesia; quem tem o combo vitalício está em Vitalício).", "--critical"],
     ["vitalicio", "Vitalício", "Tem o combo vitalício (Kiwify, TMB ou Hotmart): acesso às três ferramentas, sem vencimento.", "--accent-3"],
     ["teste", "Teste ou cortesia", "Compra de teste ou cortesia (plano Teste ou menos de R$ 5): fora da conta de cancelamento.", "--text-muted"]
   ];
@@ -32,8 +32,10 @@
   var S = {
     ready: false, loading: false, sum: null, crit: Object.assign({}, DEFAULT_CRIT),
     sw: "all", f: { ass: "", uso: "", ultimo: "", freq: "", plano: "", q: "" },
-    page: 0, order: "ultima_compra", desc: true, list: { total: 0, rows: [] }, listSeq: 0, qTimer: null, critTimer: null
+    page: 0, order: "ultima_compra", desc: true, list: { total: 0, rows: [] }, listSeq: 0, sumSeq: 0, qTimer: null, critTimer: null
   };
+  // Caches antigos de alunos/acessos (fora do flowCache, sem dono): agora ficam no flowCache.
+  try { Object.keys(localStorage).forEach(function (k) { if (/^ch_(stu|ta)_cache:/.test(k)) localStorage.removeItem(k); }); } catch (e) {}
 
   /* ---------------- utilidades ---------------- */
   function $(id) { return document.getElementById(id); }
@@ -58,15 +60,29 @@
 
   /* ---------------- dados ---------------- */
   function critParams() { return { p_high: S.crit.high, p_low: S.crit.low, p_inactive: S.crit.inactive }; }
-  // Só o essencial do topo; alunos e acessos por plataforma vêm depois (loadSide), para as consultas
-  // pesadas não disputarem o banco com o resumo e estourarem o limite de 8 s.
+  // Cache persistente (secure-login.js): a tela abre na hora com a última leitura e atualiza por trás.
+  // Só resumos; a lista de clientes (com e-mails) não vai para o cache.
+  function fc() { return window.flowCache || { get: function () { return null; }, set: function () {} }; }
+  function topKey() { return "ch_top:" + JSON.stringify(critParams()); }
+  function showCachedTop() {
+    if (S.sum) return false;
+    var c = fc().get(topKey());
+    if (!c || !c.sum) return false;
+    S.sum = c.sum; S.mix = c.mix; S.bundles = c.bundles || [];
+    renderTop();
+    return true;
+  }
+  // Resumo do topo. Consulta cancelada por tempo é repetida sozinha pelo flowFetch.
   async function loadSummary() {
-    var r = await Promise.all([A.sb.rpc("health_summary", critParams()), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation")]);
-    if (r[0].error) r[0] = await A.sb.rpc("health_summary", critParams()); // uma nova tentativa antes de mostrar o erro
+    var seq = ++S.sumSeq, key = topKey(), params = critParams();
+    var r = await Promise.all([A.sb.rpc("health_summary", params), A.sb.rpc("health_mix"), A.sb.rpc("bundle_allocation")]);
+    if (seq !== S.sumSeq) return false; // chegou um pedido mais novo (ex.: critérios mudaram)
     if (r[0].error) throw r[0].error;
     S.sum = r[0].data;
     S.mix = r[1].error ? null : r[1].data; // quantos softwares cada cliente usa (por cliente, não por software)
     S.bundles = r[2].error ? [] : r[2].data || []; // rateio dos combos por item
+    fc().set(key, { sum: S.sum, mix: S.mix, bundles: S.bundles });
+    return true;
   }
   function listParams(extra) {
     var f = S.f, p = Object.assign({
@@ -76,22 +92,32 @@
     }, critParams());
     return Object.assign(p, extra || {});
   }
-  async function loadList() {
+  // before: promessa a esperar antes de desenhar (a lista usa o resumo); o pedido sai na hora, em paralelo.
+  async function loadList(before) {
     var seq = ++S.listSeq;
     $("ch-body").style.opacity = ".55";
     var r = await A.sb.rpc("health_customers", listParams());
+    if (before) await before.catch(function () {});
     if (seq !== S.listSeq) return; // chegou uma consulta mais nova
     $("ch-body").style.opacity = "";
     if (r.error) { A.toast("Erro ao carregar a lista: " + r.error.message, true); return; }
     S.list = r.data || { total: 0, rows: [] };
     renderList();
   }
-  async function loadCriteria() {
+  // Critérios guardados neste navegador (devolve true se havia).
+  function loadLocalCriteria() {
     var local = null;
     try { local = JSON.parse(safeGet("ch_criteria")); } catch (e) {}
     if (local) S.crit = cleanCrit(local);
+    return !!local;
+  }
+  // Critérios salvos na conta (ui_prefs). Devolve true se mudaram em relação aos que estão em uso.
+  async function syncCriteria() {
     var r = await A.sb.from("ui_prefs").select("value").eq("key", CRIT_KEY).maybeSingle();
-    if (!r.error && r.data && !S.critTimer) { S.crit = cleanCrit(r.data.value); safeSet("ch_criteria", JSON.stringify(S.crit)); }
+    if (r.error || !r.data || S.critTimer) return false;
+    var next = cleanCrit(r.data.value), changed = JSON.stringify(next) !== JSON.stringify(S.crit);
+    S.crit = next; safeSet("ch_criteria", JSON.stringify(S.crit));
+    return changed;
   }
   function cleanCrit(raw) {
     var c = {};
@@ -99,31 +125,38 @@
     if (c.low >= c.inactive) c.low = Math.max(1, c.inactive - 1);
     return c;
   }
-  // Alunos e acessos não dependem dos critérios: carregam uma vez, um depois do outro, sem travar a tela.
+  // Alunos e acessos não dependem dos critérios: carregam uma vez, os dois juntos e junto com o resumo.
   // Mostra na hora a última leitura guardada no navegador e atualiza em seguida.
   async function loadSide() {
     var k = S.stu.plat, p = S.ta.plat;
     if (S.side || S.sideDone) return; // uma vez por abertura da tela; as abas carregam ao trocar
     S.side = true;
     try {
-      if (!S.stu.data[k]) { var c = readCache(stuCacheKey(k)); if (c) { S.stu.data[k] = c; renderStudents(); } }
-      if (!S.ta.data[p]) { var t = readCache("ch_ta_cache:" + p); if (t) { S.ta.data[p] = t; renderToolAccess(); } }
-      await loadStudents(k); renderStudents();
-      await loadToolAccess(p); renderToolAccess();
+      if (!S.stu.data[k]) { var c = fc().get(stuCacheKey(k)); if (c) { S.stu.data[k] = c; renderStudents(); } }
+      if (!S.ta.data[p]) { var t = fc().get("ch_ta_cache:" + p); if (t) { S.ta.data[p] = t; renderToolAccess(); } }
+      await Promise.all([
+        loadStudents(k).then(renderStudents),
+        loadToolAccess(p).then(renderToolAccess)
+      ]);
       S.sideDone = !S.stu.err[k];
     } finally { S.side = false; }
   }
+  // Resumo, lista e alunos/acessos saem juntos (antes era um depois do outro). O topo aparece na hora
+  // com a última leitura guardada, se houver.
   async function refreshAll() {
     S.loading = true;
+    var hadCache = showCachedTop();
+    var sum = loadSummary();
+    var list = loadList(sum);
+    loadSide();
     try {
-      await loadSummary();
-      renderTop();
-      await loadList();
-      loadSide();
+      if (await sum) renderTop();
     } catch (e) {
       console.warn("Saúde dos clientes:", e);
-      A.toast("Não foi possível carregar a saúde dos clientes: " + (e.message || e), true);
-    } finally { S.loading = false; }
+      var msg = window.flowErrMsg ? window.flowErrMsg(e) : (e.message || e);
+      A.toast((hadCache ? "Mostrando a última leitura guardada. " : "") + "Não foi possível carregar a saúde dos clientes: " + msg, true);
+    }
+    try { await list; } finally { S.loading = false; }
   }
 
   /* ---------------- agregação do software escolhido ---------------- */
@@ -239,7 +272,7 @@
         tile("Clientes", fmtInt(s.clientes), "com assinatura paga ou combo vitalício", "") +
         tile("Assinatura em dia", fmtInt(s.ass_ativo), pct(s.ass_ativo, s.clientes) + " da base", "ass:ativo", ASS[0][2]) +
         tile("Vencem em 30 dias", fmtInt(s.ass_vence_30), pct(s.ass_vence_30, s.clientes) + " da base", "ass:vence_30", ASS[1][2]) +
-        tile("Em carência", fmtInt(s.ass_carencia), "venceram há até 15 dias", "ass:carencia", ASS[2][2]) +
+        tile("Em carência", fmtInt(s.ass_carencia), "venceram há até 7 dias", "ass:carencia", ASS[2][2]) +
         tile("Vitalício", fmtInt(s.ass_vitalicio), fmtInt(s.vit_migraram) + " vieram da assinatura · " + fmtInt(s.vit_novos) + " entraram já no combo", "ass:vitalicio", ASS[4][2]) +
         tile("Cancelaram", fmtInt(s.ass_cancelou), pct(s.ass_cancelou, s.clientes) + " da base · fora: " + fmtInt(s.ass_teste) + " teste", "ass:cancelou", ASS[3][2]) +
         tile("Renovaram", fmtInt(s.renovaram), "2 ou mais pagamentos", "ass:renovou", "Clientes com mais de um pagamento neste software.") +
@@ -361,7 +394,7 @@
   try { var savedTa = safeGet("flow_ch_tool_access"); if (TA_PLAT.some(function (p) { return p[0] === savedTa; })) S.ta.plat = savedTa; } catch (e) {}
   async function loadToolAccess(plat) {
     var r = await A.sb.rpc("tool_access_summary", { p_platform: plat === "todas" ? null : plat });
-    if (!r.error) { S.ta.data[plat] = r.data; safeSet("ch_ta_cache:" + plat, JSON.stringify(r.data)); }
+    if (!r.error) { S.ta.data[plat] = r.data; fc().set("ch_ta_cache:" + plat, r.data); }
   }
   function taRow(label, n, total, tip, cls) {
     return '<div class="ch-ta-row' + (cls ? " " + cls : "") + '"' + (tip ? ' title="' + esc(tip) + '"' : "") + "><span>" + label + '</span><b class="num">' + fmtInt(n) + '</b><small class="num">' + pct(n, total) + "</small></div>";
@@ -403,8 +436,8 @@
               taRow("↳ entraram já no vitalício", t.vitalicio_novos, tot, "Primeiro acesso à ferramenta veio pelo combo vitalício.", "sub") +
               taRow("Renovaram (2+ pagamentos)", t.renovaram, ass, "Assinantes em dia que já pagaram mais de uma vez. % sobre a assinatura em dia.") +
               taRow("Vencem em 30 dias", t.vence_30, ass, "Assinatura em dia que vence nos próximos 30 dias. % sobre a assinatura em dia.", "warn") +
-              taRow("Em carência", t.carencia, t.clientes, "Venceu há até 15 dias. % sobre todos que já tiveram acesso.", "warn") +
-              taRow("Cancelaram (venceu)", t.cancelaram, t.clientes, "Venceu há mais de 15 dias sem renovar (não conta teste/cortesia). % sobre todos que já tiveram acesso.", "neg") +
+              taRow("Em carência", t.carencia, t.clientes, "Venceu há até 7 dias. % sobre todos que já tiveram acesso.", "warn") +
+              taRow("Cancelaram (venceu)", t.cancelaram, t.clientes, "Venceu há mais de 7 dias sem renovar (não conta teste/cortesia). % sobre todos que já tiveram acesso.", "neg") +
               taRow("Reembolso ou chargeback", t.devolveram, t.clientes, "Todas as compras da ferramenta (ou do combo) foram reembolsadas ou contestadas: saiu sem acesso. % sobre todos que já tiveram acesso.", "neg") +
               taRow("Total de saídas", t.saidas, t.clientes, "Cancelaram por vencimento + reembolso ou chargeback.", "neg tot") +
             "</div></div>";
@@ -459,17 +492,14 @@
   // A última leitura de cada aba (e seleção de produtos) fica no navegador: aparece na hora e é trocada
   // pela nova quando ela chega. Falha tenta mais uma vez; se ainda falhar, mantém o que já estava na tela.
   function stuCacheKey(k) { return "ch_stu_cache:" + k + ":" + JSON.stringify(stuParams(k).p_products || null); }
-  function readCache(key) { try { return JSON.parse(safeGet(key)); } catch (e) { return null; } }
   async function loadStudents(only) {
     var keys = only ? [only] : Object.keys(STU);
     var res = await Promise.all(keys.map(async function (k) {
-      var r = await A.sb.rpc(STU[k].rpc, stuParams(k));
-      if (r.error) { await new Promise(function (ok) { setTimeout(ok, 800); }); r = await A.sb.rpc(STU[k].rpc, stuParams(k)); }
-      return r;
+      return A.sb.rpc(STU[k].rpc, stuParams(k)); // timeout é repetido pelo flowFetch
     }));
     keys.forEach(function (k, i) {
       var r = res[i];
-      if (!r.error) { S.stu.data[k] = r.data; S.stu.err[k] = null; safeSet(stuCacheKey(k), JSON.stringify(r.data)); }
+      if (!r.error) { S.stu.data[k] = r.data; S.stu.err[k] = null; fc().set(stuCacheKey(k), r.data); }
       else { S.stu.err[k] = r.error.message; if (!S.stu.data[k]) S.stu.data[k] = null; }
     });
   }
@@ -1077,7 +1107,12 @@
   /* ---------------- API pública ---------------- */
   async function show() {
     if (!A) return;
-    if (!S.ready) { S.ready = true; await loadCriteria().catch(function () {}); }
+    if (!S.ready) {
+      S.ready = true;
+      // Com critérios guardados neste navegador, abre já com eles e confere os da conta por trás.
+      if (loadLocalCriteria()) syncCriteria().then(function (changed) { if (changed) refreshAll(); }).catch(function () {});
+      else await syncCriteria().catch(function () {});
+    }
     await refreshAll();
   }
   window.CustomerHealth = {

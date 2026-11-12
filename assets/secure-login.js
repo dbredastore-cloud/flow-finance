@@ -30,6 +30,46 @@ window.flowFetch = (function () {
   };
 })();
 
+/* Cache persistente das telas (localStorage): a tela abre na hora com a última leitura e atualiza por trás.
+   Só para resumos/agregados — nunca listas com e-mails de clientes.
+   bind(uid) apaga tudo quando quem está logado muda; clear() no logout. Entradas com mais de 7 dias são ignoradas. */
+window.flowCache = (function () {
+  var P = "flowc:", MAX_AGE = 7 * 864e5;
+  function keys() { var out = []; try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(P) === 0) out.push(k); } } catch (e) {} return out; }
+  function clear() { keys().forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} }); }
+  function get(key) {
+    try {
+      var o = JSON.parse(localStorage.getItem(P + key) || "null");
+      return o && Date.now() - o.t < MAX_AGE ? o.v : null;
+    } catch (e) { return null; }
+  }
+  function set(key, v) {
+    var s;
+    try { s = JSON.stringify({ t: Date.now(), v: v }); } catch (e) { return; }
+    try { localStorage.setItem(P + key, s); }
+    catch (e) { // cheio: recomeça do zero (mantendo o dono)
+      var owner = null;
+      try { owner = localStorage.getItem(P + "owner"); } catch (e1) {}
+      clear();
+      try { if (owner !== null) localStorage.setItem(P + "owner", owner); localStorage.setItem(P + key, s); } catch (e2) {}
+    }
+  }
+  function bind(uid) {
+    var owner = null;
+    try { owner = localStorage.getItem(P + "owner"); } catch (e) {}
+    if (owner === String(uid || "")) { // mesmo usuário: só tira o que já venceu
+      keys().forEach(function (k) {
+        if (k === P + "owner") return;
+        try { var o = JSON.parse(localStorage.getItem(k) || "null"); if (!o || !(Date.now() - o.t < MAX_AGE)) localStorage.removeItem(k); } catch (e) {}
+      });
+      return;
+    }
+    clear();
+    try { localStorage.setItem(P + "owner", String(uid || "")); } catch (e) {}
+  }
+  return { get: get, set: set, bind: bind, clear: clear };
+})();
+
 /* Mensagem de erro legível para a tela (em vez do texto técnico do banco). */
 window.flowErrMsg = function (err) {
   var code = err && err.code, msg = (err && err.message) || String(err || "");

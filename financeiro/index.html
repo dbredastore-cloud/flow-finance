@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/customer-health.css?v=20261030e">
-<link rel="stylesheet" href="../assets/retention.css?v=20261104h">
+<link rel="stylesheet" href="../assets/retention.css?v=20261112c">
 <link rel="stylesheet" href="../assets/alerts.css">
 <link rel="stylesheet" href="../assets/fin-analysis.css?v=20261030">
 <link rel="stylesheet" href="../assets/ai-insights.css">
@@ -25,8 +25,8 @@
 <script src="../assets/flow-hud.js"></script>
 <script src="../assets/flow-nav.js"></script>
 <script src="../assets/flow-access.js"></script>
-<script src="../assets/customer-health.js?v=20261112"></script>
-<script src="../assets/retention.js?v=20261112"></script>
+<script src="../assets/customer-health.js?v=20261112b"></script>
+<script src="../assets/retention.js?v=20261112c"></script>
 <script src="../assets/alert-refunds.js"></script>
 <script src="../assets/alerts.js"></script>
 <script src="../assets/fin-analysis.js?v=20261030"></script>
@@ -34,7 +34,7 @@
 <script src="../assets/dev-hours.js?v=20261102"></script>
 <link rel="prefetch" href="../afiliados/">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="../assets/secure-login.js?v=20261112"></script>
+<script src="../assets/secure-login.js?v=20261112b"></script>
 </head>
 <body>
 
@@ -217,7 +217,7 @@
           <ul>
             <li><strong>Cliente</strong>: e-mail distinto por ferramenta com pelo menos uma compra paga (fonte: Kiwify, horário de Brasília).</li>
             <li><strong>Novo cliente</strong>: a primeira compra paga daquele e-mail na ferramenta. Renovações não contam como cliente novo.</li>
-            <li><strong>Ativo</strong>: o último pagamento ainda cobre o período do plano (mensal = 1 mês, semestral = 6, anual = 12). <strong>Em carência</strong>: venceu há até 15 dias. <strong>Cancelou (churn)</strong>: venceu há mais de 15 dias sem nova compra, sem contar compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício. <strong>Involuntário</strong>: houve cobrança recusada ou pendente perto do vencimento; <strong>voluntário</strong>: nenhuma tentativa. <strong>Reembolso (saíram)</strong>: reembolso ou chargeback de quem não ficou com nenhuma compra paga; conta à parte.</li>
+            <li><strong>Ativo</strong>: o último pagamento ainda cobre o período do plano (mensal = 1 mês, semestral = 6, anual = 12). <strong>Em carência</strong>: venceu há até 7 dias. <strong>Cancelou (churn)</strong>: venceu há mais de 7 dias sem nova compra, sem contar compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício. <strong>Involuntário</strong>: houve cobrança recusada ou pendente perto do vencimento; <strong>voluntário</strong>: nenhuma tentativa. <strong>Reembolso (saíram)</strong>: reembolso ou chargeback de quem não ficou com nenhuma compra paga; conta à parte.</li>
             <li><strong>Taxa de renovação</strong>: dos pagamentos que já venceram, quantos tiveram um novo pagamento do mesmo cliente até 45 dias depois. <strong>Churn</strong> = 100% − renovação.</li>
             <li><strong>LTV histórico</strong>: receita líquida total ÷ clientes. <strong>LTV projetado</strong>: ticket líquido médio × pagamentos esperados por cliente (1 ÷ churn).</li>
             <li><strong>MRR</strong>: receita recorrente mensal dos ativos (valor líquido do último pagamento ÷ meses do plano). <strong>ARR</strong> = MRR × 12.</li>
@@ -306,6 +306,7 @@
   var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZ21ub2djcHhldWp0c3Jyb3RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MDAxNjgsImV4cCI6MjEwNTA3NjE2OH0.Mz7ZAXDupXhkb0x3LhfKq7xyvAhowR2sAGcJ3S9o6KI";
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { fetch: window.flowFetch } });
   var flowErrMsg = window.flowErrMsg || function (e) { return (e && e.message) || String(e); };
+  var flowCache = window.flowCache || { get: function () { return null; }, set: function () {}, bind: function () {}, clear: function () {} };
 
   var MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   var MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -618,6 +619,7 @@
   });
 
   document.getElementById("logout-btn").addEventListener("click", async function () {
+    flowCache.clear();
     await sb.auth.signOut();
     showLogin();
   });
@@ -2086,7 +2088,8 @@
     state.healthFin = {}; // recarrega o resumo financeiro (as despesas podem ter mudado desde a última vez)
     setHealthMode(true);
     document.getElementById("year-label").textContent = state.activeYear;
-    var cached = finCache.health && finCache.health[state.activeYear];
+    // Abre na hora com a última leitura (desta aba ou de uma visita anterior) e atualiza por trás.
+    var cached = (finCache.health && finCache.health[state.activeYear]) || flowCache.get("fin_health:" + state.activeYear);
     if (cached) { state.health = cached; renderHealth(); }
     await loadHealth();
   }
@@ -2099,6 +2102,7 @@
     finCache.health = finCache.health || {};
     finCache.health[year] = res.data;
     saveFinCache();
+    flowCache.set("fin_health:" + year, res.data);
     renderHealth();
   }
 
@@ -2340,8 +2344,8 @@
     rows.push(combine(all));
     var th = function (l, tip) { return "<th" + (tip ? ' title="' + escHtml(tip) + '"' : "") + ">" + l + "</th>"; };
     document.getElementById("health-tools").innerHTML =
-      "<thead><tr>" + th("Ferramenta") + th("Clientes") + th("Ativos") + th("Em carência", "Venceu há até 15 dias.") +
-      th("Cancelaram", "Venceu há mais de 15 dias sem nova compra. Não conta compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício (segue com acesso).") +
+      "<thead><tr>" + th("Ferramenta") + th("Clientes") + th("Ativos") + th("Em carência", "Venceu há até 7 dias.") +
+      th("Cancelaram", "Venceu há mais de 7 dias sem nova compra. Não conta compra de teste/cortesia (menos de R$ 5) nem quem tem o combo vitalício (segue com acesso).") +
       th("Voluntário", "Cancelou sem nenhuma tentativa de cobrança no vencimento.") +
       th("Involuntário", "Cancelou com cobrança recusada ou pendente entre 10 dias antes e 45 dias depois do vencimento (cartão, Pix…).") +
       th("Reembolso (saíram)", "Reembolso ou chargeback de quem não tem nenhuma compra paga da ferramenta. Não entra em Cancelaram.") +
@@ -2666,6 +2670,7 @@
     if (!session) { showLogin(); return; }
     document.getElementById("user-email").textContent = session.user.email;
     state.userId = session.user.id;
+    flowCache.bind(session.user.id); // outro usuário neste navegador: descarta o cache persistente do anterior
     // Acesso por menu: quem não tem nenhum menu do Financeiro vai para o painel que pode ver.
     try { await FlowAccess.load(sb, session.user.id); } catch (e) {
       showStatus("Erro ao carregar o acesso", flowErrMsg(e), true);
