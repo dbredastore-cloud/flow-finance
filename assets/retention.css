@@ -92,6 +92,16 @@
 .rm-per .rm-det.rm-warn { color: var(--warning, var(--text-muted)); }
 .rm-det-btn { margin-left: 8px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-dim); font: inherit; font-size: 11px; cursor: pointer; }
 .rm-det-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.rm-read { margin: 12px 0 0; padding: 12px 16px; border-radius: var(--radius-sm); border-left: 3px solid var(--accent); background: var(--inset-bg); font-size: 12.5px; line-height: 1.6; color: var(--text-dim); }
+.rm-read h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--text); }
+.rm-read ul { margin: 0; padding-left: 18px; }
+.rm-read li { margin: 5px 0; }
+.rm-read li b { color: var(--text); }
+.rm-read p { margin: 8px 0 0; font-size: 11.5px; line-height: 1.5; }
+.rm-tag { display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.6; white-space: nowrap; }
+.rm-tag.good { color: var(--good); }
+.rm-tag.ok { color: var(--warning); }
+.rm-tag.bad { color: var(--critical); }
 .rm-cmp tr.on td { background: rgba(var(--accent-rgb), .08); }
 .rm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 .rm-dist { display: flex; height: 12px; border-radius: 999px; overflow: hidden; margin: 0 0 8px; background: var(--track-bg); }

@@ -581,7 +581,74 @@
       '<div class="rm-grid2">' +
         chartBox("Evolução do LTV e do CAC", "por mês · CAC só nos meses com custos", g1, g1 ? legend([["LTV", c.a], ["CAC", c.d]]) : "") +
         chartBox("Evolução do LTV/CAC", "por mês", g2, "") +
-      "</div>");
+      "</div>" + valueSummary(m, mktFalta));
+  }
+
+  /* ---------- Leitura em linguagem simples (depois dos gráficos) ----------
+     As faixas de "bom/ruim" são referências comuns de mercado para assinaturas (SaaS): servem de norte, não de regra. */
+  function tag(cls, txt) { return '<span class="rm-tag ' + cls + '">' + esc(txt) + "</span>"; }
+  function scopeName(sc) { var f = SCOPES.filter(function (x) { return x[0] === sc; })[0]; return f ? f[1] : sc; }
+  function readBox(title, items, foot) {
+    if (!items.length) return "";
+    return '<div class="rm-read"><h4>' + esc(title) + "</h4><ul>" + items.map(function (i) { return "<li>" + i + "</li>"; }).join("") + "</ul>" +
+      (foot ? '<p class="muted">' + foot + "</p>" : "") + "</div>";
+  }
+
+  function valueSummary(m, mktFalta) {
+    if (S.plano === "vitalicio") return "";
+    var li = [];
+    if (m.arpu != null) li.push("<b>ARPU (receita média por cliente): " + fmtBRL(m.arpu) + " por mês.</b> É quanto cada cliente pagante deixa, em média, todo mês, já sem as taxas da Kiwify. Plano anual entra dividido por 12.");
+    if (m.margem != null) li.push("<b>Margem bruta: " + fmtPct(m.margem) + ".</b> De cada R$ 100 que entram, sobram cerca de " + fmtBRL(100 * m.margem, 0) + " depois de pagar infraestrutura e suporte. " +
+      (m.margem >= 0.7 ? tag("good", "boa para software") : m.margem >= 0.5 ? tag("ok", "razoável") : tag("bad", "baixa")));
+    if (m.perm != null) li.push("<b>Permanência média: " + fmtDec(m.perm, 1) + " meses.</b> Com o churn atual (" + fmtPct(m.churnMedio, 2) + " dos clientes saem por mês), um cliente fica em média esse tempo antes de sair. " +
+      (m.churnMedio <= 0.03 ? tag("good", "churn baixo") : m.churnMedio <= 0.06 ? tag("ok", "churn comum para assinatura de valor baixo") : tag("bad", "churn alto")));
+    if (m.ltv != null) li.push("<b>LTV (quanto o cliente vale na vida toda): " + fmtBRL(m.ltv, 0) + ".</b> Somando todos os meses em que ele fica, cada cliente deixa esse lucro bruto (ARPU × margem × permanência).");
+    if (m.cac != null) li.push("<b>CAC (custo para conquistar 1 cliente): " + fmtBRL(m.cac, 0) + ".</b> Comissão de afiliados + despesas de Marketing do período ÷ clientes novos." +
+      (mktFalta ? ' <span class="rm-warn">Atenção: ' + esc(mktFalta) + ", então o CAC pode estar baixo demais.</span>" : ""));
+    if (m.ltvCac != null) {
+      var x = m.ltvCac, v;
+      if (x < 1) v = tag("bad", "prejuízo") + " Cada cliente custa mais para conquistar do que devolve. Cada venda nova aumenta o prejuízo.";
+      else if (x < 3) v = tag("ok", "apertado") + " O cliente paga o custo de conquistá-lo, mas sobra pouco. O padrão de mercado é ficar acima de 3x.";
+      else if (x <= 5) v = tag("good", "saudável") + " Está acima de 3x, que é o padrão de mercado para um negócio de assinatura saudável.";
+      else v = tag("good", "muito bom") + " Conquistar clientes está barato perto do que eles devolvem. Isso costuma indicar espaço para investir mais em marketing e afiliados e crescer mais rápido.";
+      if (x > 10) v += " Um número tão alto também pede uma conferência: o CAC aqui só soma comissão de afiliados e despesas lançadas no grupo Marketing. Se houver custo de aquisição em outra categoria (equipe, ferramentas, tráfego pago), o CAC real é maior e este número cai.";
+      li.push("<b>LTV/CAC: " + fmtX(x) + ".</b> Cada R$ 1 gasto para trazer um cliente volta como cerca de " + fmtBRL(x) + " de lucro bruto ao longo da vida dele. " + v);
+    }
+    if (m.cac != null && m.arpu != null && m.margem != null && m.arpu * m.margem > 0) {
+      var pb = m.cac / (m.arpu * m.margem);
+      li.push("<b>Retorno do CAC: " + fmtDec(pb, 1) + " " + (pb < 2 ? "mês" : "meses") + ".</b> É o tempo para o lucro bruto do cliente pagar o que custou trazê-lo. " +
+        (pb <= 6 ? tag("good", "rápido") : pb <= 12 ? tag("ok", "normal") : tag("bad", "lento")) +
+        (m.perm != null && pb > m.perm ? ' <span class="rm-warn">O cliente costuma sair (' + fmtDec(m.perm, 1) + " meses) antes de pagar o próprio custo.</span>" : ""));
+    }
+    return readBox("O que esses números dizem · " + scopeName(S.scope), li,
+      "Referências: margem acima de 70%, LTV/CAC acima de 3x e retorno do CAC em até 12 meses são as faixas mais usadas para negócios de assinatura. Servem de norte, não de regra fixa.");
+  }
+
+  function compareSummary() {
+    var tm = TOOLS.map(function (t) { return [t[1], metrics(t[0])]; }).filter(function (r) { return r[1]; });
+    var defs = [
+      ["Clientes ativos", "pessoas com acesso pago ou vitalício no fim do período.", null],
+      ["Assinaturas", "um cliente com as 3 ferramentas conta 3 assinaturas.", null],
+      ["Renovação anual", "dos planos anuais que venceram, quantos pagaram de novo. Maior é melhor.", function (m) { return m.ren.devidas ? m.renTaxa : null; }, 1, fmtPct],
+      ["Churn mensal médio", "quanto da base sai por mês. Menor é melhor.", function (m) { return m.cm.base ? m.churnTaxa : null; }, -1, function (v) { return fmtPct(v, 2); }],
+      ["D90", "dos clientes que entraram, quantos ainda estavam ativos 90 dias depois. Maior é melhor.", function (m) { return m.ret["3"].clientes ? m.ret["3"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
+      ["D365", "o mesmo, 1 ano depois. Mostra quem ficou de verdade.", function (m) { return m.ret["12"].clientes ? m.ret["12"].taxa : null; }, 1, function (v) { return fmtPct(v, 0); }],
+      ["ARPU", "receita média por cliente pagante, por mês. Maior é melhor.", function (m) { return m.arpu; }, 1, function (v) { return fmtBRL(v, 0); }],
+      ["LTV", "quanto o cliente deixa de lucro bruto na vida toda. Maior é melhor.", function (m) { return m.ltv; }, 1, function (v) { return fmtBRL(v, 0); }],
+      ["CAC", "quanto custa conquistar 1 cliente novo. Menor é melhor.", function (m) { return m.cac; }, -1, function (v) { return fmtBRL(v, 0); }],
+      ["LTV/CAC", "quantas vezes o cliente devolve o que custou trazê-lo. Acima de 3x é saudável.", function (m) { return m.ltvCac; }, 1, fmtX]
+    ];
+    var li = defs.map(function (d) {
+      var txt = "<b>" + esc(d[0]) + "</b>: " + d[1];
+      if (!d[2]) return txt;
+      var vals = tm.map(function (r) { return [r[0], d[2](r[1])]; }).filter(function (r) { return r[1] != null && isFinite(r[1]); });
+      if (vals.length < 2) return txt;
+      vals.sort(function (a, b) { return (b[1] - a[1]) * d[3]; });
+      var best = vals[0], worst = vals[vals.length - 1];
+      return txt + " " + (best[1] === worst[1] ? '<span class="muted">Empate entre as ferramentas.</span>'
+        : tag("good", "melhor: " + best[0] + " " + d[4](best[1])) + " " + tag("bad", "pior: " + worst[0] + " " + d[4](worst[1])));
+    });
+    return readBox("Como ler esta tabela", li, "Melhor e pior comparam só as três ferramentas, no mesmo período e plano. O consolidado fica de fora porque junta todas.");
   }
 
   // ---------- Comparação entre ferramentas ----------
@@ -603,7 +670,8 @@
           td(m.ret["3"].clientes ? fmtPct(m.ret["3"].taxa, 0) : "—") + td(m.ret["12"].clientes ? fmtPct(m.ret["12"].taxa, 0) : "—") +
           td(m.arpu != null ? fmtBRL(m.arpu, 0) : "—") + td(m.ltv != null ? fmtBRL(m.ltv, 0) : "—") + td(m.cac != null ? fmtBRL(m.cac, 0) : "—") + td(m.ltvCac != null ? fmtX(m.ltvCac) : "—") + "</tr>";
       }).join("") + "</tbody></table></div>" +
-      '<p class="rm-check' + (sumAss === allAss ? " ok" : " bad") + '">Conferência: assinaturas Flow Tracking + Flow Pages + Flow Spy = ' + fmtInt(sumAss) + " · consolidado " + fmtInt(allAss) + "</p></section>";
+      '<p class="rm-check' + (sumAss === allAss ? " ok" : " bad") + '">Conferência: assinaturas Flow Tracking + Flow Pages + Flow Spy = ' + fmtInt(sumAss) + " · consolidado " + fmtInt(allAss) + "</p>" +
+      compareSummary() + "</section>";
   }
 
   /* ---------------- API pública ---------------- */
