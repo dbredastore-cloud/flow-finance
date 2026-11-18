@@ -193,6 +193,12 @@ window.InfluencerDash = (function () {
       if (S !== my) return;
       my.portal = { tags: rp[0].error ? [] : (rp[0].data || []), stories: rp[1].error ? [] : (rp[1].data || []) };
     }
+    // Clientes novos × já clientes (seção restrita: o banco só devolve dados para quem está em owner_features).
+    if (my.id && !nc()) {
+      var ro = await A.sb.rpc("influencer_customer_origin", { p_contract_id: my.id });
+      if (S !== my) return;
+      my.origin = ro.error ? null : ro.data;
+    }
     if (ch && ch.channel_id) {
       var r = await Promise.all([
         A.sb.from("youtube_videos").select("video_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short, description, tags")
@@ -260,6 +266,9 @@ window.InfluencerDash = (function () {
       kf("Custo por venda", tot.count ? fmtBRL(cost / tot.count) : "—", "custo total ÷ vendas") +
       kf("Meta do bônus", fmtInt(info.total) + " / " + fmtInt(c.bonus_sales_target), info.bonusMonth ? "🎉 meta batida" : "faltam " + fmtInt(Math.max(0, c.bonus_sales_target - info.total)) + " vendas") +
       "</div></section>";
+
+    /* clientes novos × já clientes (só para quem tem acesso) */
+    if (!noC && Array.isArray(S.origin)) body += originSection();
 
     if (S.portal) body += portalSection(m);
 
@@ -347,6 +356,55 @@ window.InfluencerDash = (function () {
     drawMonths(m); if (!noC) drawSales(); drawDow(m);
     renderDaily();
     renderTools(); renderTable();
+  }
+
+  /* ---------------- clientes novos × já clientes ----------------
+     Para cada venda paga das ferramentas Flow na vigência: o comprador já tinha comprado antes na empresa
+     (Kiwify em qualquer produto, Hotmart ou TMB)? Dados de influencer_customer_origin (restrita no banco). */
+  var ORIGIN = {
+    new: ["Cliente novo", "ok", "primeira compra na empresa"],
+    tool: ["Já cliente da ferramenta", "wait", "já tinha comprado a mesma ferramenta (renovação ou recompra)"],
+    company: ["Já cliente de outro produto", "co", "já tinha comprado outro produto da empresa"],
+    unknown: ["Sem e-mail", "", "venda sem e-mail do comprador"]
+  };
+  function originSection() {
+    var list = S.origin, f = S.originFilter || "all";
+    var by = { new: [], tool: [], company: [], unknown: [] };
+    list.forEach(function (x) { (by[x.origin] || by.unknown).push(x); });
+    var n = list.length, old = by.tool.length + by.company.length;
+    var amt = function (arr) { return sum(arr, function (x) { return x.amount; }); };
+    var custs = function (arr) { var o = {}; arr.forEach(function (x) { o[x.email || x.id] = 1; }); return Object.keys(o).length; };
+    var head = '<section class="mr-fsec fd-origin"><h3>Clientes novos × já clientes <small class="muted">vendas Flow na vigência · visível só para você</small></h3>';
+    if (!n) return head + '<div class="mr-fnote">Nenhuma venda das ferramentas Flow na vigência do contrato ainda.</div></section>';
+    var kpis = '<div class="mr-fkpis">' +
+      kf("Clientes novos", fmtInt(by.new.length) + ' <small class="muted">' + pct(by.new.length / n, 0) + "</small>", fmtBRL(amt(by.new)) + " · " + fmtInt(custs(by.new)) + " cliente(s)", ORIGIN.new[2]) +
+      kf("Já eram clientes", fmtInt(old) + ' <small class="muted">' + pct(old / n, 0) + "</small>", fmtBRL(amt(by.tool.concat(by.company))) + " · " + fmtInt(custs(by.tool.concat(by.company))) + " cliente(s)", "Tinham compra paga anterior em qualquer canal da empresa") +
+      kf("Da mesma ferramenta", fmtInt(by.tool.length), "renovação ou recompra", ORIGIN.tool[2]) +
+      kf("De outro produto", fmtInt(by.company.length), "cross-sell da base", ORIGIN.company[2]) +
+      kf("Vendas analisadas", fmtInt(n), (by.unknown.length ? by.unknown.length + " sem e-mail · " : "") + fmtBRL(amt(list))) + "</div>";
+    var seg = function (k, cls) { var v = by[k].length; return v ? '<span class="fd-or-seg ' + cls + '" style="flex:' + v + '" title="' + esc(ORIGIN[k][0]) + ": " + v + '"></span>' : ""; };
+    var bar = '<div class="fd-or-bar">' + seg("new", "new") + seg("tool", "tool") + seg("company", "company") + seg("unknown", "unk") + '</div>' +
+      '<p class="mr-hint"><span class="fd-or-dot new"></span>Novos <span class="fd-or-dot tool"></span>Já clientes da ferramenta <span class="fd-or-dot company"></span>Já clientes de outro produto</p>';
+    // por ferramenta
+    var tools = {};
+    list.forEach(function (x) { var t = tools[x.tool] = tools[x.tool] || { new: 0, tool: 0, company: 0, unknown: 0, n: 0 }; t[x.origin] = (t[x.origin] || 0) + 1; t.n++; });
+    var tt = '<div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Ferramenta</th><th>Vendas</th><th>Novos</th><th>Já clientes da ferramenta</th><th>Já clientes de outro produto</th><th>% novos</th></tr></thead><tbody>' +
+      Object.keys(tools).sort().map(function (k) { var t = tools[k]; return '<tr><td class="l">' + esc(k) + '</td><td class="num">' + t.n + '</td><td class="num">' + t.new + '</td><td class="num">' + t.tool + '</td><td class="num">' + t.company + '</td><td class="num">' + pct(t.new / t.n, 0) + "</td></tr>"; }).join("") +
+      "</tbody></table></div>";
+    var chip = function (k, l, c) { return '<button type="button" class="mr-chip' + (f === k ? " on" : "") + '" data-fd-origin="' + k + '">' + l + " (" + c + ")</button>"; };
+    var chips = '<div class="mr-chips" style="margin:14px 0 8px">' + chip("all", "Todas", n) + chip("new", "Novos", by.new.length) + chip("old", "Já clientes", old) +
+      chip("tool", "Da ferramenta", by.tool.length) + chip("company", "De outro produto", by.company.length) + "</div>";
+    var rows = list.filter(function (x) { return f === "all" || (f === "old" ? x.origin === "tool" || x.origin === "company" : x.origin === f); });
+    var tbl = '<div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Data</th><th class="l">Cliente</th><th class="l">Ferramenta</th><th>Valor</th><th class="l">Situação</th><th class="l">Primeira compra na empresa</th><th>Compras antes</th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (x) {
+        var o = ORIGIN[x.origin] || ORIGIN.unknown;
+        var first = x.first_at ? fmtDate(Date.parse(x.first_at)) + " · " + esc(x.first_product || "") + ' <small class="muted">' + esc(x.first_platform || "") + "</small>" : '<span class="muted">—</span>';
+        return '<tr><td class="l">' + fmtDate(Date.parse(x.at)) + '</td><td class="l">' + esc(x.customer || "—") + '<br><small class="muted">' + esc(x.email || "") + '</small></td><td class="l">' + esc(x.tool) +
+          '</td><td class="num">' + fmtBRL(x.amount) + '</td><td class="l"><span class="status ' + o[1] + '" title="' + esc(o[2]) + '">' + o[0] + '</span></td><td class="l">' + first +
+          (x.platforms && x.platforms.length > 1 ? '<br><small class="muted">comprou em: ' + esc(x.platforms.join(", ")) + "</small>" : "") + '</td><td class="num">' + fmtInt(x.prev_count) + "</td></tr>";
+      }).join("") : '<tr><td colspan="7" class="l muted">Nenhuma venda neste filtro.</td></tr>') + "</tbody></table></div>";
+    return head + kpis + bar + tt + chips + tbl +
+      '<p class="mr-hint">Já era cliente = o mesmo e-mail tinha uma compra paga <b>antes</b> desta venda em qualquer canal da empresa: Kiwify (qualquer produto, direto ou por qualquer afiliado), Hotmart ou TMB. Compras reembolsadas não contam. Cada linha é uma venda; um cliente que comprou duas vezes com o influencer aparece duas vezes (a segunda já como cliente).</p></section>';
   }
 
   /* ---------------- entregas no Portal ----------------
@@ -1038,6 +1096,13 @@ window.InfluencerDash = (function () {
       if (gr) { S.gran = gr.dataset.fdGran; renderDaily(); return; }
       var mt = e.target.closest("[data-fd-metric]");
       if (mt) { S.metric = mt.dataset.fdMetric; renderDaily(); return; }
+      var og = e.target.closest("[data-fd-origin]");
+      if (og) {
+        S.originFilter = og.dataset.fdOrigin;
+        var sec = box.querySelector(".fd-origin");
+        if (sec) { var tmp = document.createElement("div"); tmp.innerHTML = originSection(); sec.replaceWith(tmp.firstChild); }
+        return;
+      }
       var sc = e.target.closest("[data-fd-scope]");
       if (sc) { S.scope = sc.dataset.fdScope; renderTools(); renderTable(); return; }
       var ty = e.target.closest("[data-fd-type]");
