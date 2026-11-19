@@ -101,3 +101,15 @@ tr.fd-vdetail > td { padding: 0; background: var(--inset-bg); white-space: norma
 .fd-or-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 5px 0 10px; vertical-align: middle; }
 .fd-or-dot:first-child { margin-left: 0; }
 .fd-origin .mr-cmp + .mr-chips { margin-top: 16px; }
+
+/* Tempo assistido (YouTube Analytics) */
+.fd-yta .mr-fkpis .good, .fd-yta .mr-fkpis .bad { font-size: 11.5px; font-weight: 600; margin-left: 4px; }
+.fd-yta .good { color: var(--good); }
+.fd-yta .bad { color: var(--critical); }
+.fd-yta #fd-yta-daily { margin-top: 14px; }
+.fd-yta-pct { display: inline-block; width: 46px; height: 6px; border-radius: 999px; background: var(--border); margin-right: 6px; vertical-align: middle; overflow: hidden; }
+.fd-yta-pct i { display: block; height: 100%; background: var(--accent); }
+.fd-ret-sel { max-width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--field-bg); color: var(--text); font: inherit; font-size: 13px; }
+.fd-ret-stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-dim); margin-top: 6px; }
+.fd-ret-stats b { color: var(--text); font-family: var(--font-mono); }
+.fd-vd-ret { padding: 0 16px 16px; }

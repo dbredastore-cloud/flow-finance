@@ -109,6 +109,8 @@ window.InfluencerDash = (function () {
       var o = Object.assign({}, v, { ms: ms, short: short, views: views, age: age, vpd: views / Math.max(age, 1),
         eng: views > 0 && v.likes != null ? ((Number(v.likes) || 0) + (Number(v.comments) || 0)) / views : null });
       o.fx = flowOf(o, marked[v.video_id]); o.domains = domainsOf(v.description);
+      var va = S.yta && S.yta.byVideo[v.video_id];
+      o.avgs = va && va.avg_view_s != null ? Number(va.avg_view_s) : null; o.avgp = va && va.avg_view_pct != null ? Number(va.avg_view_pct) : null;
       o.inC = ms >= w.start && ms <= w.end;
       return o;
     }).filter(function (v) { return isFinite(v.ms); }).sort(function (a, b) { return b.ms - a.ms; });
@@ -169,6 +171,7 @@ window.InfluencerDash = (function () {
       try { d = await my.ctx.load(); } catch (e) { A.toast("Não foi possível ler os vídeos: " + (e.message || e), true); }
       if (S !== my) return;
       my.videos = (d && d.videos) || []; my.snaps = (d && d.snaps) || []; my.ig = (d && d.ig) || null;
+      my.yta = ytaFrom(d && d.yta, d && d.connection, true);
       render();
       return;
     }
@@ -209,6 +212,8 @@ window.InfluencerDash = (function () {
       my.videos = r[0].error ? [] : (r[0].data || []);
       my.snaps = r[1].error ? [] : (r[1].data || []);
       if (r[0].error) A.toast("Não foi possível ler os vídeos: " + r[0].error.message, true);
+      await loadYta(my, ch.channel_id);
+      if (S !== my) return;
     } else my.videos = [];
     render();
   }
@@ -297,6 +302,9 @@ window.InfluencerDash = (function () {
       kf("Views por inscrito", ch.subscribers && S.ctx.channel.long.avgViews != null ? dec(S.ctx.channel.long.avgViews / ch.subscribers * 100, 1) + "%" : "—", "média dos últimos vídeos ÷ inscritos") +
       "</div></section>";
 
+    /* tempo assistido (YouTube Analytics, com o canal conectado pelo influencer) */
+    body += ytaSection(m);
+
     /* métricas dia a dia (inscritos e alcance) */
     body += '<section class="mr-fsec" id="fd-daily"></section>';
 
@@ -354,8 +362,164 @@ window.InfluencerDash = (function () {
 
     if (m.inC.length) drawViews(m);
     drawMonths(m); if (!noC) drawSales(); drawDow(m);
-    renderDaily();
+    renderDaily(); drawYta();
     renderTools(); renderTable();
+  }
+
+  /* ---------------- tempo assistido (YouTube Analytics) ----------------
+     Só existe quando o influencer conecta o canal no Portal (yt-connect); a yt-analytics lê a cada 6 h. O YouTube entrega
+     médias e totais (nunca o tempo de cada espectador) e com 2 a 3 dias de atraso. */
+  function ytaFrom(y, conn, portal) {
+    if (!y && !conn) return null;
+    var out = { conn: conn || null, daily: (y && y.daily) || [], byVideo: {}, retention: {}, withRet: {}, portal: !!portal };
+    ((y && y.videos) || []).forEach(function (v) { out.byVideo[v.video_id] = v; if (v.retention_at) out.withRet[v.video_id] = 1; });
+    var r = (y && y.retention) || {};
+    Object.keys(r).forEach(function (k) { out.retention[k] = r[k].map(function (p) { return { x: p[0], w: p[1] == null ? null : Number(p[1]), r: p[2] == null ? null : Number(p[2]) }; }); out.withRet[k] = 1; });
+    return out;
+  }
+  async function loadYta(my, chId) {
+    var conn = null;
+    if (my.email) {
+      var rc = await A.sb.from("youtube_connections_public").select("channel_id, channel_title, connected_at, last_sync_at, status, error").eq("affiliate_email", my.email).maybeSingle();
+      conn = rc.error ? null : rc.data;
+    }
+    var cid = (conn && conn.channel_id) || chId;
+    var since = new Date(Date.now() - 400 * DAY).toISOString().slice(0, 10);
+    var r = await Promise.all([
+      A.sb.from("youtube_analytics_daily").select("day, views, minutes_watched, avg_view_s, avg_view_pct, subs_gained, subs_lost").eq("channel_id", cid).gte("day", since).order("day"),
+      A.sb.from("youtube_video_analytics").select("video_id, views, minutes_watched, avg_view_s, avg_view_pct, subs_gained, likes, shares, fetched_at, retention_at").eq("channel_id", cid).limit(1000)
+    ]);
+    var d = r[0].error ? [] : (r[0].data || []), v = r[1].error ? [] : (r[1].data || []);
+    my.yta = conn || d.length || v.length ? ytaFrom({ daily: d, videos: v }, conn, false) : null;
+  }
+  function ytaHas() { return !!(S && S.yta && (S.yta.daily.length || Object.keys(S.yta.byVideo).length)); }
+  function ytaAgg(days) {
+    var views = sum(days, function (d) { return d.views; }), mins = sum(days, function (d) { return d.minutes_watched; });
+    var pw = sum(days, function (d) { return (Number(d.avg_view_pct) || 0) * (Number(d.views) || 0); });
+    return { days: days.length, views: views, mins: mins, avgS: views ? mins * 60 / views : null, avgP: views ? pw / views : null,
+      subs: sum(days, function (d) { return d.subs_gained; }) - sum(days, function (d) { return d.subs_lost; }) };
+  }
+  function ytaRange(m) {
+    var key = S.ytaRange || "28", today = new Date(), to = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    if (key === "win") return { from: nc() && !fav() ? to - 365 * DAY : m.w.start, to: Math.min(m.w.end + DAY, to + DAY), label: fav() ? "desde o acesso" : nc() ? "12 meses" : "na vigência", prev: null };
+    var n = Number(key);
+    return { from: to - n * DAY, to: to + DAY, label: "últimos " + n + " dias", prev: { from: to - 2 * n * DAY, to: to - n * DAY } };
+  }
+  function daysIn(a, b) { return S.yta.daily.filter(function (d) { var t = Date.parse(d.day + "T12:00:00Z"); return t >= a && t < b; }); }
+  function deltaTxt(cur, prev, fmt) {
+    if (cur == null || prev == null || !prev) return "";
+    var d = (cur - prev) / prev;
+    return ' <span class="' + (d >= 0 ? "good" : "bad") + '">' + (d >= 0 ? "▲ " : "▼ ") + dec(Math.abs(d) * 100, 0) + "%</span>";
+  }
+  function ytaSection(m) {
+    var y = S.yta, conn = y && y.conn;
+    var head = '<section class="mr-fsec fd-yta"><h3>Tempo assistido <small class="muted">YouTube Analytics · canal conectado pelo influencer</small></h3>';
+    var connLine = conn ? '<p class="mr-hint">' + (conn.status === "expired" ? '<span class="bad">A autorização venceu ou foi retirada; o influencer precisa conectar de novo no Portal.</span> ' : conn.status === "error" ? '<span class="bad">Erro na última leitura: ' + esc(conn.error || "") + "</span> " : "") +
+      "Conectado em " + fmtDate(Date.parse(conn.connected_at)) + (conn.last_sync_at ? " · última leitura " + new Date(conn.last_sync_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "") +
+      (conn.channel_id && m.ch && m.ch.channel_id && conn.channel_id !== m.ch.channel_id ? ' · <span class="bad">o canal autorizado (' + esc(conn.channel_title || conn.channel_id) + ") não é o canal da ficha</span>" : "") + "</p>" : "";
+    if (!ytaHas()) {
+      if (conn) return head + connLine + '<div class="mr-fnote">Canal conectado. Os primeiros números aparecem depois da próxima leitura (a cada 6 h; o YouTube libera os dados com 2 a 3 dias de atraso).</div></section>';
+      if (fav() && !S.ctx.a.email) return "";
+      return head + '<div class="mr-fnote">' + (S.ctx.readOnly ? "Conecte o seu canal no portal (botão <b>Conectar YouTube</b>, em Seu canal no YouTube) para ver aqui quanto tempo as pessoas assistem cada vídeo e em que ponto elas saem."
+        : "O influencer ainda não conectou o YouTube no Portal do Afiliado. Tempo médio assistido, % do vídeo assistido e retenção são dados privados do canal: só aparecem com a autorização dele (botão <b>Conectar YouTube</b> no portal, em Seu canal no YouTube).") + "</div></section>";
+    }
+    var rg = ytaRange(m), cur = ytaAgg(daysIn(rg.from, rg.to)), prev = rg.prev ? ytaAgg(daysIn(rg.prev.from, rg.prev.to)) : null;
+    var chip = function (k, l) { return '<button type="button" class="pay-chip' + ((S.ytaRange || "28") === k ? " on" : "") + '" data-fd-yta="' + k + '">' + l + "</button>"; };
+    var ctl = '<div class="mr-tools fd-dctl"><span class="fd-dlbl">Período</span>' + chip("7", "7 dias") + chip("28", "28 dias") + chip("90", "90 dias") + chip("win", fav() ? "Desde o acesso" : nc() ? "12 meses" : "Vigência") + "</div>";
+    var lastDay = y.daily.length ? y.daily[y.daily.length - 1].day : null;
+    var kpis = '<div class="mr-fkpis">' +
+      kf("Tempo médio por view", fmtDur(cur.avgS == null ? null : Math.round(cur.avgS)) + deltaTxt(cur.avgS, prev && prev.avgS), rg.label, "Minutos assistidos ÷ views: quanto tempo, em média, cada visualização durou.") +
+      kf("% médio assistido", cur.avgP == null ? "—" : dec(cur.avgP, 1) + "%" + deltaTxt(cur.avgP, prev && prev.avgP), "do vídeo, em média", "Média do % de cada vídeo assistido, ponderada pelas views.") +
+      kf("Horas assistidas", fmtN(cur.mins / 60) + deltaTxt(cur.mins, prev && prev.mins), fmtInt(cur.mins) + " minutos") +
+      kf("Views (Analytics)", fmtN(cur.views) + deltaTxt(cur.views, prev && prev.views), "visualizações no período") +
+      kf("Inscritos ganhos", (cur.subs >= 0 ? "+" : "") + fmtInt(cur.subs) + deltaTxt(cur.subs, prev && prev.subs), "ganhos − perdidos") + "</div>";
+    // Vídeos: os que mais seguram o público e Flow × outros.
+    var withA = m.vids.filter(function (v) { return v.avgp != null && !v.short; });
+    var inWin = withA.filter(function (v) { return v.inC; });
+    var base = inWin.length >= 3 ? inWin : withA;
+    var wAvg = function (list, k) { var vv = sum(list, function (v) { var a = S.yta.byVideo[v.video_id]; return a ? a.views : 0; }); return vv ? sum(list, function (v) { var a = S.yta.byVideo[v.video_id]; return (a ? a.views : 0) * v[k]; }) / vv : null; };
+    var fl = base.filter(function (v) { return v.fx.length; }), ot = base.filter(function (v) { return !v.fx.length; });
+    var cmp = fl.length ? '<div class="mr-fkpis" style="margin-top:12px">' +
+      kf("Vídeos com a Flow", dec(wAvg(fl, "avgp"), 0) + "% assistido", fmtInt(fl.length) + " vídeo(s) · tempo médio " + fmtDur(Math.round(wAvg(fl, "avgs") || 0)), "Vídeos longos que citam ou foram marcados com FlowPages, FlowTracking ou FlowSpy.") +
+      kf("Outros vídeos", ot.length ? dec(wAvg(ot, "avgp"), 0) + "% assistido" : "—", fmtInt(ot.length) + " vídeo(s)" + (ot.length ? " · tempo médio " + fmtDur(Math.round(wAvg(ot, "avgs") || 0)) : "")) + "</div>" : "";
+    var top = base.slice().sort(function (a, b) { return b.avgp - a.avgp; }).slice(0, 8);
+    var tbl = top.length ? '<h4 class="mr-sub-h" style="margin-top:16px">Vídeos que mais seguram o público <small class="muted">' + (base === inWin ? (fav() ? "desde o acesso" : nc() ? "baixados" : "na vigência") : "todos com dados") + " · vídeos longos</small></h4>" +
+      '<div class="table-scroll"><table class="mr-cmp"><thead><tr><th class="l">Vídeo</th><th>Duração</th><th>Tempo médio</th><th>% assistido</th><th>Views</th><th>Horas</th><th>Inscritos</th></tr></thead><tbody>' +
+      top.map(function (v) { var a = S.yta.byVideo[v.video_id];
+        return '<tr><td class="l"><a href="' + vidUrl(v) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + "</a>" + (v.fx.length ? ' <span class="mr-tool mini flow">Flow</span>' : "") + "</td><td class=\"num\">" + fmtDur(v.duration_s) +
+          '</td><td class="num">' + fmtDur(Math.round(v.avgs)) + '</td><td class="num"><span class="fd-yta-pct"><i style="width:' + clamp(v.avgp, 0, 100) + '%"></i></span>' + dec(v.avgp, 0) + "%</td><td class=\"num\">" + fmtInt(a.views) +
+          '</td><td class="num">' + fmtN((Number(a.minutes_watched) || 0) / 60) + '</td><td class="num">' + (a.subs_gained == null ? "—" : "+" + fmtInt(a.subs_gained)) + "</td></tr>"; }).join("") + "</tbody></table></div>" : "";
+    // Retenção: escolhe um vídeo com a curva lida.
+    var retOpts = m.vids.filter(function (v) { return y.withRet[v.video_id]; });
+    if (!S.retVid || !y.withRet[S.retVid]) S.retVid = retOpts.length ? (retOpts.filter(function (v) { return v.fx.length; })[0] || retOpts[0]).video_id : null;
+    var ret = retOpts.length ? '<h4 class="mr-sub-h" style="margin-top:16px">Retenção: em que ponto do vídeo as pessoas saem</h4>' +
+      '<div class="mr-tools"><select id="fd-ret-sel" class="fd-ret-sel">' + retOpts.map(function (v) { return '<option value="' + esc(v.video_id) + '"' + (v.video_id === S.retVid ? " selected" : "") + ">" + (v.fx.length ? "★ " : "") + esc(String(v.title).slice(0, 90)) + " · " + fmtDate(v.ms) + "</option>"; }).join("") + "</select></div>" +
+      '<div class="mr-chart" id="fd-ret"></div><p class="mr-hint">Linha: parte de quem começou o vídeo que ainda estava assistindo em cada ponto (acima de 100% = trecho revisto). Tracejado: comparação com vídeos de duração parecida no YouTube (50% = na média). ★ = vídeo com a Flow.</p>' : "";
+    return head + connLine + ctl + kpis + '<div class="mr-chart" id="fd-yta-daily"></div>' + cmp + tbl + ret +
+      '<p class="mr-hint">Números do YouTube Analytics: médias e totais do canal (o YouTube não mostra o tempo de cada pessoa) e com 2 a 3 dias de atraso' + (lastDay ? "; último dia com dados: " + new Date(lastDay + "T12:00:00").toLocaleDateString("pt-BR") : "") + ". A variação compara com o período anterior do mesmo tamanho.</p></section>";
+  }
+  function rerenderYta() {
+    var sec = document.querySelector("#fd-body .fd-yta");
+    if (!sec) return;
+    var tmp = document.createElement("div"); tmp.innerHTML = ytaSection(build());
+    sec.replaceWith(tmp.firstChild); drawYta();
+  }
+  function drawYta() {
+    if (!ytaHas()) return;
+    var el = $("fd-yta-daily");
+    if (el) {
+      var rg = ytaRange(build()), days = daysIn(rg.from, rg.to);
+      if (!days.length) el.innerHTML = '<p class="mr-hint">Sem dias com dados neste período.</p>';
+      else {
+        var W = Math.max(el.clientWidth || 800, 320), H = 190, mg = { l: 46, r: 46, t: 12, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
+        var maxM = Math.max.apply(null, days.map(function (d) { return Number(d.minutes_watched) || 0; }).concat([1])) * 1.1;
+        var maxS = Math.max.apply(null, days.map(function (d) { return Number(d.avg_view_s) || 0; }).concat([1])) * 1.15;
+        var bw = iw / days.length, accC = FlowHud.tok("--accent"), wC = FlowHud.tok("--warning");
+        var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Minutos assistidos por dia">';
+        for (var t = 0; t <= 3; t++) { var yy = mg.t + ih - ih * t / 3; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + yy + '" y2="' + yy + '"/><text x="' + (mg.l - 6) + '" y="' + (yy + 3) + '" text-anchor="end">' + fmtN(maxM * t / 3 / 60) + 'h</text><text x="' + (W - mg.r + 6) + '" y="' + (yy + 3) + '">' + fmtDur(Math.round(maxS * t / 3)) + "</text>"; }
+        var pts = [];
+        days.forEach(function (d, i) {
+          var h = Math.max(1, (Number(d.minutes_watched) || 0) / maxM * ih), x = mg.l + i * bw + bw * 0.15;
+          s += '<rect x="' + x.toFixed(1) + '" y="' + (mg.t + ih - h).toFixed(1) + '" width="' + Math.max(1.5, bw * 0.7).toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + accC + '" opacity=".75"><title>' +
+            new Date(d.day + "T12:00:00").toLocaleDateString("pt-BR") + ": " + fmtN((Number(d.minutes_watched) || 0) / 60) + " h assistidas · " + fmtInt(d.views) + " views · tempo médio " + fmtDur(Math.round(Number(d.avg_view_s) || 0)) + " · " + dec(Number(d.avg_view_pct), 0) + "% assistido</title></rect>";
+          if (d.avg_view_s != null) pts.push((mg.l + i * bw + bw / 2).toFixed(1) + "," + (mg.t + ih - Number(d.avg_view_s) / maxS * ih).toFixed(1));
+        });
+        if (pts.length > 1) s += '<polyline points="' + pts.join(" ") + '" fill="none" stroke="' + wC + '" stroke-width="2"/>';
+        [0, days.length - 1].forEach(function (i, k) { s += '<text x="' + (mg.l + i * bw + bw / 2) + '" y="' + (H - 8) + '" text-anchor="' + (k ? "end" : "start") + '">' + new Date(days[i].day + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + "</text>"; });
+        el.innerHTML = s + '</svg><p class="mr-hint">Barras: horas assistidas por dia (escala à esquerda). Linha amarela: tempo médio por view (à direita). Passe o mouse numa barra para ver o dia.</p>';
+      }
+    }
+    var r = $("fd-ret");
+    if (r && S.retVid) drawRetentionInto(r, S.retVid);
+  }
+  async function drawRetentionInto(el, vid) {
+    var y = S && S.yta;
+    if (!y) return;
+    if (!y.retention[vid] && !y.portal && y.withRet[vid]) {
+      el.innerHTML = '<p class="mr-hint">Carregando a retenção…</p>';
+      var r = await A.sb.from("youtube_video_retention").select("x, watch_ratio, rel_perf").eq("video_id", vid).order("x");
+      if (!S || S.yta !== y) return;
+      y.retention[vid] = (r.data || []).map(function (p) { return { x: p.x, w: p.watch_ratio == null ? null : Number(p.watch_ratio), r: p.rel_perf == null ? null : Number(p.rel_perf) }; });
+    }
+    var pts = (y.retention[vid] || []).filter(function (p) { return p.w != null; });
+    if (!pts.length) { el.innerHTML = '<p class="mr-hint">A curva de retenção deste vídeo ainda não foi lida (é lida para os vídeos dos últimos 180 dias e os marcados com a Flow, uma vez por dia).</p>'; return; }
+    var v = (S.videos || []).filter(function (x) { return x.video_id === vid; })[0] || {}, dur = Number(v.duration_s) || null;
+    var W = Math.max(el.clientWidth || 700, 300), H = 200, mg = { l: 40, r: 12, t: 12, b: 26 }, iw = W - mg.l - mg.r, ih = H - mg.t - mg.b;
+    var maxY = Math.max(1, Math.max.apply(null, pts.map(function (p) { return p.w; }))) * 1.05;
+    var X = function (x) { return mg.l + x / 100 * iw; }, Y = function (w) { return mg.t + ih - w / maxY * ih; };
+    var accC = FlowHud.tok("--accent"), mutC = FlowHud.tok("--text-muted");
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Retenção do público">';
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (t) { if (t > maxY) return; s += '<line class="gridl" x1="' + mg.l + '" x2="' + (W - mg.r) + '" y1="' + Y(t) + '" y2="' + Y(t) + '"/><text x="' + (mg.l - 6) + '" y="' + (Y(t) + 3) + '" text-anchor="end">' + Math.round(t * 100) + "%</text>"; });
+    var line = pts.map(function (p) { return X(p.x).toFixed(1) + "," + Y(p.w).toFixed(1); });
+    s += '<polygon points="' + X(pts[0].x).toFixed(1) + "," + Y(0) + " " + line.join(" ") + " " + X(pts[pts.length - 1].x).toFixed(1) + "," + Y(0) + '" fill="' + accC + '" opacity=".14"/>';
+    s += '<polyline points="' + line.join(" ") + '" fill="none" stroke="' + accC + '" stroke-width="2.2"/>';
+    var rp = pts.filter(function (p) { return p.r != null; });
+    if (rp.length > 1) s += '<polyline points="' + rp.map(function (p) { return X(p.x).toFixed(1) + "," + Y(p.r * Math.min(maxY, 1)).toFixed(1); }).join(" ") + '" fill="none" stroke="' + mutC + '" stroke-width="1.4" stroke-dasharray="4 4"/>';
+    [0, 25, 50, 75, 100].forEach(function (x) { s += '<text x="' + X(x) + '" y="' + (H - 8) + '" text-anchor="' + (x === 0 ? "start" : x === 100 ? "end" : "middle") + '">' + (dur ? fmtDur(Math.round(dur * x / 100)) : x + "%") + "</text>"; });
+    var at = function (x) { var b = pts.reduce(function (best, p) { return Math.abs(p.x - x) < Math.abs(best.x - x) ? p : best; }, pts[0]); return b.w; };
+    var x30 = dur ? Math.min(100, 30 / dur * 100) : null;
+    el.innerHTML = s + '</svg><div class="fd-ret-stats">' + (x30 != null ? "<span>Aos 30 s: <b>" + dec(at(x30) * 100, 0) + "%</b></span>" : "") +
+      "<span>Na metade: <b>" + dec(at(50) * 100, 0) + "%</b></span><span>Aos 75%: <b>" + dec(at(75) * 100, 0) + "%</b></span><span>No fim: <b>" + dec(at(99) * 100, 0) + "%</b></span></div>";
   }
 
   /* ---------------- clientes novos × já clientes ----------------
@@ -964,7 +1128,10 @@ window.InfluencerDash = (function () {
 
   /* ---------------- tabela de vídeos ---------------- */
   var FILTERS = [["all", "Todos"], ["long", "Vídeos"], ["short", "Shorts"], ["flow", "Mencionam a Flow"]];
-  var COLS = [["title", "Vídeo", "l"], ["date", "Publicado", "l"], ["dur", "Duração", ""], ["views", "Views", ""], ["likes", "Curtidas", ""], ["comments", "Comentários", ""], ["eng", "Engaj.", ""], ["vpd", "Views/dia", ""], ["flow", "Flow", "l"]];
+  var COLS_BASE = [["title", "Vídeo", "l"], ["date", "Publicado", "l"], ["dur", "Duração", ""], ["views", "Views", ""], ["likes", "Curtidas", ""], ["comments", "Comentários", ""], ["eng", "Engaj.", ""], ["vpd", "Views/dia", ""], ["flow", "Flow", "l"]];
+  var COLS = COLS_BASE;
+  // Com o tempo assistido do canal (YouTube Analytics), a tabela ganha Tempo médio e % assistido.
+  function setCols() { COLS = ytaHas() ? COLS_BASE.slice(0, 8).concat([["avgs", "Tempo médio", ""], ["avgp", "% assistido", ""]], COLS_BASE.slice(8)) : COLS_BASE; }
   function renderTools() {
     var f = S;
     $("fd-tools").innerHTML = '<input type="search" id="fd-q" placeholder="Buscar no título ou na descrição…" aria-label="Buscar nos vídeos" value="' + esc(f.text) + '">' +
@@ -974,6 +1141,7 @@ window.InfluencerDash = (function () {
       FILTERS.map(function (x) { return '<button type="button" class="pay-chip' + (f.type === x[0] ? " on" : "") + '" data-fd-type="' + x[0] + '" aria-pressed="' + (f.type === x[0]) + '">' + x[1] + "</button>"; }).join("");
   }
   function renderTable() {
+    setCols();
     var m = build(), f = S, q = f.text.trim().toLowerCase();
     var pool = f.scope === "contract" ? m.inC : m.vids;
     var list = pool.filter(function (v) {
@@ -997,29 +1165,34 @@ window.InfluencerDash = (function () {
         (v.short ? '<span class="mr-badge k">Short</span>' : "") + (v.inC ? "" : '<span class="mr-badge">' + (fav() ? "antes do acesso" : "fora da vigência") + "</span>") + "</div></div></div></td>" +
         '<td class="l num">' + fmtDate(v.ms) + '<div class="muted" style="font-family:inherit;font-size:11px">' + ago(v.age) + "</div></td>" +
         '<td class="num">' + fmtDur(v.duration_s) + '</td><td class="num">' + fmtInt(v.views) + '</td><td class="num">' + (v.likes == null ? "—" : fmtInt(v.likes)) + '</td><td class="num">' + (v.comments == null ? "—" : fmtInt(v.comments)) + '</td><td class="num">' + pct(v.eng) + '</td><td class="num">' + fmtN(v.vpd) + "</td>" +
+        (ytaHas() ? '<td class="num">' + fmtDur(v.avgs == null ? null : Math.round(v.avgs)) + '</td><td class="num">' + (v.avgp == null ? "—" : dec(v.avgp, 0) + "%") + "</td>" : "") +
         '<td class="l mr-divulga">' + (v.fx.length ? v.fx.map(function (x) { return '<span class="mr-tool mini flow" title="' + (x.w === "d" ? "na descrição" : x.w === "m" ? "marcado pelo influencer" : "no título") + (x.l ? ", com link" : "") + '">✓ ' + esc(x.n) + (x.l ? " 🔗" : "") + "</span>"; }).join("") : '<span class="muted">—</span>') + "</td></tr>";
       if (open) row += '<tr class="fd-vdetail"><td colspan="' + COLS.length + '">' + videoDetail(v) + "</td></tr>";
       return row;
     }).join("") : '<tr><td colspan="' + COLS.length + '" class="empty">Nenhum vídeo com esses filtros.</td></tr>';
+    var rEl = document.querySelector("#fd-vbody [data-fd-ret]");
+    if (rEl) drawRetentionInto(rEl, rEl.getAttribute("data-fd-ret"));
     $("fd-vcount").textContent = list.length + " de " + pool.length + " vídeos" + (f.scope === "contract" ? (fav() ? " desde o acesso" : " na vigência") : " baixados") + ". Clique numa linha para ver a descrição, as tags e os links.";
   }
   function videoDetail(v) {
     var desc = String(v.description || "");
+    var ret = ytaHas() ? '<div class="fd-vd-ret"><h4 class="mr-sub-h">Retenção do público <small class="muted">' + (v.avgs != null ? "tempo médio " + fmtDur(Math.round(v.avgs)) + " · " + dec(v.avgp, 0) + "% assistido" : "sem dados do YouTube Analytics para este vídeo") + "</small></h4>" +
+      '<div class="mr-chart" data-fd-ret="' + esc(v.video_id) + '"></div></div>' : "";
     var links = (desc.match(URL_RE) || []).filter(function (u, i, arr) { return arr.indexOf(u) === i; }).slice(0, 12);
     return '<div class="fd-vd">' +
       '<div><h4 class="mr-sub-h">Descrição</h4>' + (desc ? '<div class="mr-desc mr-desc-full">' + hlFlow(desc) + "</div>" : '<span class="muted">Sem descrição (ou ainda não baixada: use ↻ Atualizar canal).</span>') + "</div>" +
       '<div><h4 class="mr-sub-h">Links na descrição</h4>' + (links.length ? '<div class="mr-links">' + links.map(function (u) { return '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 70)) + "</a>"; }).join("") + "</div>" : '<span class="muted">Nenhum.</span>') +
-      '<h4 class="mr-sub-h">Tags</h4>' + (v.tags && v.tags.length ? '<div class="mr-links">' + v.tags.map(function (t) { return '<span class="mr-tool soft">' + esc(t) + "</span>"; }).join("") + "</div>" : '<span class="muted">Sem tags.</span>') + "</div></div>";
+      '<h4 class="mr-sub-h">Tags</h4>' + (v.tags && v.tags.length ? '<div class="mr-links">' + v.tags.map(function (t) { return '<span class="mr-tool soft">' + esc(t) + "</span>"; }).join("") + "</div>" : '<span class="muted">Sem tags.</span>') + "</div></div>" + ret;
   }
 
   /* ---------------- ações ---------------- */
   function csvCell(v) { var s = v == null ? "" : String(v); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
   function exportCsv() {
     var m = build(), a = S.ctx.a;
-    var rows = [["Título", "URL", "Publicado", "Na vigência", "Tipo", "Duração (s)", "Views", "Curtidas", "Comentários", "Engajamento", "Views por dia", "Menciona a Flow", "Links"].map(csvCell).join(",")];
+    var rows = [["Título", "URL", "Publicado", "Na vigência", "Tipo", "Duração (s)", "Views", "Curtidas", "Comentários", "Engajamento", "Views por dia", "Tempo médio assistido (s)", "% médio assistido", "Menciona a Flow", "Links"].map(csvCell).join(",")];
     m.vids.forEach(function (v) {
       rows.push([v.title, vidUrl(v), new Date(v.ms).toISOString().slice(0, 10), v.inC ? "sim" : "não", v.short ? "Short" : "Vídeo", v.duration_s, v.views, v.likes, v.comments,
-        v.eng == null ? "" : v.eng.toFixed(4), Math.round(v.vpd), v.fx.map(function (x) { return x.n; }).join("; "), (String(v.description || "").match(URL_RE) || []).slice(0, 8).join(" ")].map(csvCell).join(","));
+        v.eng == null ? "" : v.eng.toFixed(4), Math.round(v.vpd), v.avgs == null ? "" : Math.round(v.avgs), v.avgp == null ? "" : v.avgp.toFixed(1), v.fx.map(function (x) { return x.n; }).join("; "), (String(v.description || "").match(URL_RE) || []).slice(0, 8).join(" ")].map(csvCell).join(","));
     });
     var blob = new Blob(["﻿" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }), el = document.createElement("a");
     el.href = URL.createObjectURL(blob); el.download = "youtube-" + String(a.name || a.email).replace(/[^\w\-]+/g, "_").slice(0, 40) + ".csv";
@@ -1103,6 +1276,8 @@ window.InfluencerDash = (function () {
         if (sec) { var tmp = document.createElement("div"); tmp.innerHTML = originSection(); sec.replaceWith(tmp.firstChild); }
         return;
       }
+      var yr = e.target.closest("[data-fd-yta]");
+      if (yr) { S.ytaRange = yr.dataset.fdYta; rerenderYta(); return; }
       var sc = e.target.closest("[data-fd-scope]");
       if (sc) { S.scope = sc.dataset.fdScope; renderTools(); renderTable(); return; }
       var ty = e.target.closest("[data-fd-type]");
@@ -1128,6 +1303,7 @@ window.InfluencerDash = (function () {
         S.range = { preset: "custom", from: Math.min(a, b), to: Math.max(a, b) };
         renderDaily();
       } else if (id === "fd-qdate" && S) { S.qdate = e.target.value; updateQdate(); }
+      else if (id === "fd-ret-sel" && S) { S.retVid = e.target.value; var el = $("fd-ret"); if (el) drawRetentionInto(el, S.retVid); }
     });
     box.addEventListener("mousemove", function (e) {
       var bar = e.target.closest ? e.target.closest(".mr-vbar[data-i]") : null;
@@ -1148,7 +1324,7 @@ window.InfluencerDash = (function () {
     window.addEventListener("resize", function () {
       if (!S || !S.videos || $("fd-full").hidden) return;
       clearTimeout(rt);
-      rt = setTimeout(function () { var m = build(); if (m.inC.length && $("fd-views")) drawViews(m); if ($("fd-months")) { drawMonths(m); if ($("fd-sales")) drawSales(); drawDow(m); drawDailyCharts(); } }, 150);
+      rt = setTimeout(function () { var m = build(); if (m.inC.length && $("fd-views")) drawViews(m); drawYta(); if ($("fd-months")) { drawMonths(m); if ($("fd-sales")) drawSales(); drawDow(m); drawDailyCharts(); } }, 150);
     });
   }
 

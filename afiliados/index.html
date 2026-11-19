@@ -316,7 +316,7 @@
 <link rel="stylesheet" href="../assets/flow-hud.css">
 <link rel="stylesheet" href="../assets/flow-nav.css">
 <link rel="stylesheet" href="../assets/market-radar.css">
-<link rel="stylesheet" href="../assets/influencer-dash.css?v=20261118a">
+<link rel="stylesheet" href="../assets/influencer-dash.css?v=20261119a">
 <link rel="stylesheet" href="../assets/yt-favorites.css">
 <link rel="stylesheet" href="../assets/ai-insights.css">
 <link rel="stylesheet" href="../assets/instagram-hub.css">
@@ -332,7 +332,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="../assets/secure-login.js?v=20261112c"></script>
 <script src="../assets/market-radar.js"></script>
-<script src="../assets/influencer-dash.js?v=20261118a"></script>
+<script src="../assets/influencer-dash.js?v=20261119a"></script>
 <script src="../assets/yt-favorites.js"></script>
 <script src="../assets/ai-insights.js"></script>
 <script src="../assets/instagram-perf.js"></script>
@@ -1497,13 +1497,26 @@
       fetchAll(function () {
         return sb.from("youtube_videos").select("video_id, channel_id, title, published_at, duration_s, views, likes, comments, thumbnail_url, is_short").order("published_at", { ascending: false });
       }),
-      sb.from("sync_state").select("value").eq("key", "youtube_last_run").maybeSingle()
+      sb.from("sync_state").select("value").eq("key", "youtube_last_run").maybeSingle(),
+      // Tempo assistido (YouTube Analytics): só dos canais que o influencer conectou no Portal.
+      sb.from("youtube_connections_public").select("affiliate_email, channel_id, channel_title, connected_at, last_sync_at, status, error"),
+      sb.from("youtube_analytics_daily").select("channel_id, day, views, minutes_watched, avg_view_pct, subs_gained, subs_lost").gte("day", new Date(Date.now() - 31 * DAY_MS).toISOString().slice(0, 10)),
+      fetchAll(function () { return sb.from("youtube_video_analytics").select("video_id, avg_view_s, avg_view_pct, minutes_watched").order("video_id"); }).catch(function () { return []; })
     ]);
     var ch = res[0], vids = res[1], lr = res[2];
     if (ch.error) throw ch.error;
+    var conns = {}, daily = {}, va = {};
+    ((res[3] && res[3].data) || []).forEach(function (c) { conns[c.affiliate_email] = c; });
+    ((res[4] && res[4].data) || []).forEach(function (d) { (daily[d.channel_id] = daily[d.channel_id] || []).push(d); });
+    (res[5] || []).forEach(function (v) { va[v.video_id] = v; });
+    state.yt.va = va;
     var byChannel = {};
     vids.forEach(function (v) { (byChannel[v.channel_id] = byChannel[v.channel_id] || []).push(v); });
-    state.yt.channels = (ch.data || []).map(function (c) { return ytMetrics(c, byChannel[c.channel_id] || []); });
+    state.yt.channels = (ch.data || []).map(function (c) {
+      var x = ytMetrics(c, byChannel[c.channel_id] || []), cn = conns[c.affiliate_email];
+      x.wt = watchMetrics(cn, daily[(cn && cn.channel_id) || c.channel_id] || []);
+      return x;
+    });
     state.yt.lastRun = lr.data && lr.data.value;
   }
 
@@ -1553,6 +1566,14 @@
     };
   }
 
+  // Tempo assistido dos últimos 28 dias (YouTube Analytics; o YouTube libera com 2 a 3 dias de atraso).
+  function watchMetrics(conn, days) {
+    var cut = Date.now() - 28 * DAY_MS;
+    var list = days.filter(function (d) { return Date.parse(d.day + "T12:00:00Z") >= cut; });
+    var views = 0, mins = 0, pw = 0, subs = 0;
+    list.forEach(function (d) { var v = Number(d.views) || 0; views += v; mins += Number(d.minutes_watched) || 0; pw += (Number(d.avg_view_pct) || 0) * v; subs += (Number(d.subs_gained) || 0) - (Number(d.subs_lost) || 0); });
+    return { conn: conn || null, has: list.length > 0, avgS: views ? Math.round(mins * 60 / views) : null, avgP: views ? pw / views / 100 : null, hours: list.length ? mins / 60 : null, subs: list.length ? subs : null };
+  }
   function fmtPct1(v) { return v == null || isNaN(v) ? "—" : (v * 100).toFixed(1).replace(".", ",") + "%"; }
   function fmtDec1(v) { return v == null || isNaN(v) ? "—" : v.toFixed(1).replace(".", ","); }
   function fmtDur(s) {
@@ -1585,18 +1606,21 @@
     { key: "video_count", label: "Envios", tip: "Total de vídeos + Shorts publicados no canal." },
     { key: "viewsPerSub", label: "Views/inscrito", tip: "Média de views dos últimos 10 vídeos (sem Shorts) ÷ inscritos. Mostra quanto da base assiste." }
   ].concat(typeCols("long", "vídeo")).concat(typeCols("shorts", "Short")).concat([
+    { key: "wt.avgS", label: "Tempo médio", tip: "Tempo médio assistido por view nos últimos 28 dias (YouTube Analytics). Só aparece quando o influencer conecta o YouTube no Portal do Afiliado.", group: "wt" },
+    { key: "wt.avgP", label: "% assistido", tip: "Parte média de cada vídeo que as pessoas assistem, ponderada pelas views, nos últimos 28 dias.", group: "wt" },
+    { key: "wt.hours", label: "Horas assistidas", tip: "Horas assistidas no canal nos últimos 28 dias.", group: "wt" },
     { key: "shortsPct", label: "% Shorts", tip: "Parte dos últimos 100 envios que são Shorts." },
     { key: "sales", label: "Vendas", tip: "Vendas do influencer no período e filtros do topo." },
     { key: "commission", label: "Comissão", tip: "Comissão do influencer no período e filtros do topo." }
   ]);
-  var YT_GROUPS = { long: "Vídeos", shorts: "Shorts" };
+  var YT_GROUPS = { long: "Vídeos", shorts: "Shorts", wt: "Tempo assistido · 28 dias" };
 
   /* Largura das colunas: padrão no código, ajuste do usuário em ui_prefs (e cópia em localStorage
      para a tabela já aparecer do jeito certo antes do banco responder). */
   var YT_PREF_KEY = "youtube_col_widths";
   var YT_MIN_W = 44, YT_MAX_W = 520;
   var YT_DEFAULT_W = { title: 230, subscribers: 92, total_views: 104, video_count: 72, viewsPerSub: 96, shortsPct: 82, sales: 74, commission: 104 };
-  var YT_TYPE_W = { lastDays: 104, perWeek: 82, in30: 82, avgViews: 94, medianViews: 104, engagement: 74 };
+  var YT_TYPE_W = { lastDays: 104, perWeek: 82, in30: 82, avgViews: 94, medianViews: 104, engagement: 74, avgS: 92, avgP: 92, hours: 104 };
   function ytDefaultW(key) {
     var dot = key.indexOf(".");
     return dot > 0 ? YT_TYPE_W[key.slice(dot + 1)] : YT_DEFAULT_W[key];
@@ -1687,7 +1711,7 @@
     if (key === "commission") return st ? st.commission : 0;
     if (key === "title") return (x.c.title || "").toLowerCase();
     var dot = key.indexOf(".");
-    var v = dot > 0 ? x[key.slice(0, dot)][key.slice(dot + 1)] : (key in x ? x[key] : x.c[key]);
+    var v = dot > 0 ? (x[key.slice(0, dot)] || {})[key.slice(dot + 1)] : (key in x ? x[key] : x.c[key]);
     return v == null ? null : Number(v);
   }
   function typeCells(m, first) {
@@ -1699,6 +1723,16 @@
       '<td class="num">' + (m.avgViews == null ? "—" : fmtInt(Math.round(m.avgViews))) + "</td>" +
       '<td class="num">' + (m.medianViews == null ? "—" : fmtInt(Math.round(m.medianViews))) + "</td>" +
       '<td class="num">' + fmtPct1(m.engagement) + "</td>";
+  }
+  function watchCells(w) {
+    w = w || {};
+    var sep = ' style="border-left:1px solid var(--border-strong)"';
+    if (!w.has) {
+      var why = !w.conn ? "não conectado" : w.conn.status === "expired" ? "autorização vencida" : w.conn.status === "error" ? "erro na leitura" : "aguardando dados";
+      var tip = !w.conn ? "O influencer ainda não conectou o YouTube no Portal do Afiliado (botão Conectar YouTube)." : w.conn.error || "Conectado; os números chegam na próxima leitura (a cada 6 h).";
+      return '<td class="l" colspan="3"' + sep + '><span class="muted" title="' + esc(tip) + '">' + why + "</span></td>";
+    }
+    return '<td class="num"' + sep + ">" + fmtDur(w.avgS) + '</td><td class="num">' + fmtPct1(w.avgP) + '</td><td class="num">' + fmtDec1(w.hours) + "</td>";
   }
   function ytRows() {
     var k = state.yt.sort.key, d = state.yt.sort.dir;
@@ -1770,7 +1804,7 @@
         '<td class="num">' + fmtInt(c.total_views) + "</td>" +
         '<td class="num">' + fmtInt(c.video_count) + "</td>" +
         '<td class="num">' + fmtPct1(x.viewsPerSub) + "</td>" +
-        typeCells(x.long) + typeCells(x.shorts) +
+        typeCells(x.long) + typeCells(x.shorts) + watchCells(x.wt) +
         '<td class="num" style="border-left:1px solid var(--border-strong)">' + fmtPct1(x.shortsPct) + "</td>" +
         '<td class="num">' + (st ? fmtInt(st.count) : '<span class="muted">0</span>') + "</td>" +
         '<td class="num">' + (st ? fmtBRL(st.commission) : '<span class="muted">—</span>') + "</td></tr>";
@@ -1796,7 +1830,7 @@
       '<div class="muted" style="margin:0 0 12px; font-size:12.5px; line-height:1.7;">' +
         bestLine("Vídeo com mais views", x.long.best) + bestLine("Short com mais views", x.shorts.best) +
       "</div>" +
-      '<table class="yt-videos"><thead><tr><th class="l">Vídeo</th><th class="l">Tipo</th><th class="l">Publicado</th><th>Duração</th><th>Views</th><th>Curtidas</th><th>Comentários</th><th>Engajamento</th></tr></thead><tbody>' +
+      '<table class="yt-videos"><thead><tr><th class="l">Vídeo</th><th class="l">Tipo</th><th class="l">Publicado</th><th>Duração</th><th>Views</th><th>Curtidas</th><th>Comentários</th><th>Engajamento</th><th title="Tempo médio assistido por view (YouTube Analytics, canal conectado)">Tempo médio</th><th title="% médio do vídeo assistido">% assistido</th></tr></thead><tbody>' +
       (list.length ? list.map(function (v) {
         var days = Math.floor((Date.now() - Date.parse(v.published_at)) / DAY_MS);
         var short = isShort(v);
@@ -1810,8 +1844,9 @@
           '<td class="num">' + fmtInt(v.views) + "</td>" +
           '<td class="num">' + (v.likes == null ? "—" : fmtInt(v.likes)) + "</td>" +
           '<td class="num">' + (v.comments == null ? "—" : fmtInt(v.comments)) + "</td>" +
-          '<td class="num">' + fmtPct1(e) + "</td></tr>";
-      }).join("") : '<tr><td colspan="8" class="empty">Nada publicado deste tipo entre os últimos envios.</td></tr>') +
+          '<td class="num">' + fmtPct1(e) + "</td>" +
+          (function () { var a = (state.yt.va || {})[v.video_id]; return '<td class="num">' + (a && a.avg_view_s != null ? fmtDur(Math.round(a.avg_view_s)) : '<span class="muted">—</span>') + '</td><td class="num">' + (a && a.avg_view_pct != null ? fmtPct1(a.avg_view_pct / 100) : '<span class="muted">—</span>') + "</td>"; })() + "</tr>";
+      }).join("") : '<tr><td colspan="10" class="empty">Nada publicado deste tipo entre os últimos envios.</td></tr>') +
       "</tbody></table></div>";
   }
 

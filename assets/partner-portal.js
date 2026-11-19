@@ -622,7 +622,8 @@
     var me = S.me;
     var r = await Promise.all([
       me.has_contract ? rpc("portal_contract").catch(function () { return null; }) : Promise.resolve(null),
-      me.has_channel ? rpc("portal_youtube").catch(function () { return null; }) : Promise.resolve(null),
+      // Sempre: mesmo sem canal na ficha, o painel mostra o botão "Conectar YouTube".
+      rpc("portal_youtube").catch(function () { return null; }),
       // Sempre: mesmo sem perfil lido, o painel mostra o botão "Conectar Instagram".
       rpc("portal_instagram").catch(function () { return null; }),
       // Entregas marcadas por ciclo (aba Conteúdo): alimentam a tabela do contrato e a bolinha do menu.
@@ -836,9 +837,84 @@
       '<p class="muted pp-hint">Vendas e comissões das ferramentas Flow (FlowPages, FlowTracking, FlowSpy) dentro da vigência. Stories, reels e vídeos contam quando você marca as ferramentas Flow na aba <b>Conteúdo</b> (Shorts, feed e carrossel são extras, fora da meta).</p>';
   }
 
+  /* ---------------- YouTube: conectar o canal (tempo assistido) ----------------
+     Login do Google (Edge Function yt-connect, só leitura); a yt-analytics lê o YouTube Analytics a cada 6 h. */
+  async function ytCall(action) {
+    var s = await sb.auth.getSession(), token = s.data && s.data.session && s.data.session.access_token;
+    var r = await fetch(SUPABASE_URL + "/functions/v1/yt-connect", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ action: action }) });
+    var js = await r.json().catch(function () { return {}; });
+    if (!r.ok || js.ok === false) throw new Error(js.error || ("HTTP " + r.status));
+    return js;
+  }
+  async function ytConnect(btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "Abrindo o Google…"; }
+    try { var js = await ytCall("start"); location.href = js.url; }
+    catch (e) { toast(e.message || String(e), true); if (btn) { btn.disabled = false; btn.textContent = "Conectar YouTube"; } }
+  }
+  async function ytDisconnect(btn) {
+    if (!window.confirm("Desconectar o seu YouTube? A Flow para de ler o tempo assistido e a retenção. O que já foi lido continua aqui.")) return;
+    btn.disabled = true;
+    try { await ytCall("disconnect"); toast("YouTube desconectado."); S.yt = await rpc("portal_youtube").catch(function () { return null; }); renderChannel(); }
+    catch (e) { toast(e.message || String(e), true); btn.disabled = false; }
+  }
+  // Volta do login do Google (?yt=conectado | cancelado | erro&motivo=…).
+  (function ytReturn() {
+    var v = qs.get("yt");
+    if (!v) return;
+    var motivo = qs.get("motivo");
+    qs.delete("yt"); qs.delete("motivo");
+    history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs : ""));
+    setTimeout(function () {
+      if (v === "conectado") toast("YouTube conectado! O tempo assistido aparece depois da primeira leitura (o YouTube libera os dados com 2 a 3 dias de atraso).");
+      else if (v === "cancelado") toast("Conexão cancelada. Você pode conectar quando quiser.");
+      else toast("Não foi possível conectar o YouTube" + (motivo ? ": " + motivo : "."), true);
+    }, 600);
+  })();
+  function ytConnectCard() {
+    var c = S.yt && S.yt.connection;
+    if (VER) return '<p class="muted pp-hint">' + (c ? "YouTube conectado pelo afiliado em " + dtt(c.connected_at) + (c.status === "expired" ? " (autorização vencida)" : "") + "." : "O afiliado ainda não conectou o YouTube; o tempo assistido não aparece.") + "</p>";
+    if (c && c.status === "expired") return '<div class="pp-igc warn"><div><b>A autorização do seu YouTube venceu</b><span>Conecte de novo para a Flow voltar a ler o tempo assistido dos seus vídeos.</span></div>' +
+      '<button type="button" class="btn btn-primary" data-yt="connect">Conectar de novo</button></div>';
+    if (c) return "";
+    return '<div class="pp-igc"><div><b>Veja quanto tempo assistem seus vídeos</b>' +
+      "<span>Conectando pelo login do Google, você vê aqui o tempo médio assistido, o % de cada vídeo que as pessoas assistem e em que ponto elas saem. A Flow só lê os números (permissão de leitura); nunca publica nada e nunca vê a sua senha.</span></div>" +
+      '<button type="button" class="btn btn-primary" data-yt="connect">Conectar YouTube</button></div>';
+  }
+  // Resumo do tempo assistido (últimos 28 dias × 28 anteriores).
+  function ytWatchKpis() {
+    var y = S.yt && S.yt.yta, d = (y && y.daily) || [];
+    if (!d.length) return S.yt && S.yt.connection && S.yt.connection.status !== "expired" ? '<p class="muted pp-hint">YouTube conectado. O tempo assistido aparece depois da primeira leitura (o YouTube libera os dados com 2 a 3 dias de atraso).</p>' : "";
+    var now = Date.now(), inR = function (a, b) { return d.filter(function (x) { var t = Date.parse(x.day + "T12:00:00Z"); return t >= now - a * DAY && t < now - b * DAY; }); };
+    var ag = function (list) { var v = sum(list, function (x) { return x.views; }), m = sum(list, function (x) { return x.minutes_watched; });
+      return { v: v, m: m, s: v ? m * 60 / v : null, p: v ? sum(list, function (x) { return (Number(x.avg_view_pct) || 0) * (Number(x.views) || 0); }) / v : null, g: sum(list, function (x) { return x.subs_gained; }) - sum(list, function (x) { return x.subs_lost; }) }; };
+    var c = ag(inR(28, 0)), p = ag(inR(56, 28));
+    var dd = function (a, b) { return a == null || !b ? "últimos 28 dias" : ((a - b) / b >= 0 ? "+" : "") + pct((a - b) / b) + " vs 28 dias antes"; };
+    var dur = function (sec) { if (sec == null) return "—"; sec = Math.round(sec); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };
+    return '<div class="pp-kpis pp-kpis-sm">' +
+      '<div class="pp-kpi static accent"><small>Tempo médio por view</small><b class="num">' + dur(c.s) + "</b><span>" + dd(c.s, p.s) + "</span></div>" +
+      '<div class="pp-kpi static"><small>% do vídeo assistido</small><b class="num">' + (c.p == null ? "—" : c.p.toFixed(0) + "%") + "</b><span>" + dd(c.p, p.p) + "</span></div>" +
+      '<div class="pp-kpi static"><small>Horas assistidas</small><b class="num">' + short(c.m / 60) + "</b><span>" + dd(c.m, p.m) + "</span></div>" +
+      '<div class="pp-kpi static"><small>Inscritos ganhos</small><b class="num">' + (c.g >= 0 ? "+" : "") + int(c.g) + "</b><span>ganhos − perdidos, 28 dias</span></div>" +
+      "</div>" + '<p class="muted pp-hint">Tempo assistido do YouTube Analytics (médias do canal, com 2 a 3 dias de atraso). Retenção de cada vídeo no painel completo do canal.</p>';
+  }
   function renderChannel() {
     var el = $("channel-panel");
-    if (!S.yt || !S.yt.channel) { el.hidden = true; return; }
+    if (!el._ytWired) {
+      el._ytWired = true;
+      el.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-yt]");
+        if (!b) return;
+        if (b.getAttribute("data-yt") === "connect") ytConnect(b);
+        else if (b.getAttribute("data-yt") === "disconnect") ytDisconnect(b);
+      });
+    }
+    if (!S.yt) { el.hidden = true; return; }
+    if (!S.yt.channel) {
+      if (VER && !S.yt.connection) { el.hidden = true; return; }
+      el.hidden = false;
+      el.innerHTML = '<div class="pp-head"><h2>Seu canal no YouTube</h2></div>' + ytConnectCard() + ytWatchKpis();
+      return;
+    }
     var ch = S.yt.channel, vids = (S.yt.videos || []).map(function (v) { return Object.assign({}, v, { ms: Date.parse(v.published_at), short: isShort(v) }); });
     var now = Date.now(), last30 = vids.filter(function (v) { return now - v.ms <= 30 * DAY; });
     var longs = vids.filter(function (v) { return !v.short; }).slice(0, 10);
@@ -851,7 +927,9 @@
     var sn = S.yt.snaps || [], first = sn.filter(function (x) { return Date.parse(x.day + "T12:00:00") >= now - 30 * DAY; })[0];
     var growth = first && ch.subscribers != null && first.subscribers != null ? ch.subscribers - first.subscribers : null;
     el.hidden = false;
-    el.innerHTML = '<div class="pp-head"><h2>Seu canal no YouTube</h2><button class="btn btn-primary" type="button" id="open-dash">⤢ Abrir painel completo do canal</button></div>' +
+    var ytLinked = S.yt.connection && S.yt.connection.status !== "expired";
+    el.innerHTML = '<div class="pp-head"><h2>Seu canal no YouTube</h2>' + (ytLinked ? '<span class="pp-st ok">conectado</span>' + (VER ? "" : '<button type="button" class="btn btn-ghost" data-yt="disconnect">Desconectar</button>') : "") +
+        '<button class="btn btn-primary" type="button" id="open-dash">⤢ Abrir painel completo do canal</button></div>' + ytConnectCard() +
       '<div class="pp-ch">' + (ch.thumbnail_url ? '<img src="' + esc(ch.thumbnail_url) + '" alt="" referrerpolicy="no-referrer">' : "") +
         "<div><b>" + esc(ch.title || "") + '</b><div class="muted">' + esc(ch.handle || "") + (ch.fetched_at ? " · atualizado em " + dtt(ch.fetched_at) : "") + "</div></div></div>" +
       '<div class="pp-kpis pp-kpis-sm">' +
@@ -860,7 +938,7 @@
         '<div class="pp-kpi static"><small>Publicados em 30 dias</small><b class="num">' + int(last30.length) + "</b><span>" + int(last30.filter(function (v) { return !v.short; }).length) + " vídeos · " + int(last30.filter(function (v) { return v.short; }).length) + " Shorts</span></div>" +
         '<div class="pp-kpi static"><small>Views médias</small><b class="num">' + short(avg) + "</b><span>últimos 10 vídeos · engajamento " + pct(eng, 1) + "</span></div>" +
         '<div class="pp-kpi static accent"><small>Citam a Flow (90 dias)</small><b class="num">' + int(flow90.length) + "</b><span>" + (flow90.length ? short(sum(flow90, function (v) { return v.views; })) + " views nesses vídeos" : "FlowPages, FlowTracking ou FlowSpy") + "</span></div>" +
-      "</div>" +
+      "</div>" + ytWatchKpis() +
       '<div class="pp-vids">' + vids.slice(0, 6).map(function (v) {
         return '<a class="pp-vid" href="https://www.youtube.com/' + (v.short ? "shorts/" : "watch?v=") + encodeURIComponent(v.video_id) + '" target="_blank" rel="noopener noreferrer">' +
           (v.thumbnail_url ? '<img src="' + esc(v.thumbnail_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : "") +
@@ -879,7 +957,7 @@
       socials: esc(S.me.name || ""), heroNote: "Seu canal no YouTube",
       sales: { count: ok.length, amount: sum(ok, function (s) { return s.amount; }), commission: sum(ok, function (s) { return s.commission; }), label: periodLabel() },
       backLabel: "← Voltar ao portal",
-      load: function () { return Promise.resolve({ videos: S.yt.videos || [], snaps: S.yt.snaps || [], ig: S.ig }); }
+      load: function () { return Promise.resolve({ videos: S.yt.videos || [], snaps: S.yt.snaps || [], ig: S.ig, yta: S.yt.yta, connection: S.yt.connection }); }
     });
   }
   window.InfluencerDash.init({
